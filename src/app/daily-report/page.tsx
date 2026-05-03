@@ -577,7 +577,8 @@ export default function DailyReportPage() {
           </div>
           <div className="text-right">
             <p>Generated via Bvlgari Dashboard</p>
-            <p>{new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })}</p>
+            <p className="font-bold text-slate-500">MRA Retail</p>
+            <p className="text-[7px] mt-0.5">{new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })}</p>
           </div>
         </div>
       </div>
