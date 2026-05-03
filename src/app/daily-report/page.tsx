@@ -82,21 +82,22 @@ export default function DailyReportPage() {
     // Create PDF
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    const pageHeight = pdf.internal.pageSize.getHeight();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
     
-    let heightLeft = pdfHeight;
-    let position = 0;
+    // Calculate dimensions to maintain aspect ratio
+    let drawWidth = pdfWidth;
+    let drawHeight = (canvas.height * pdfWidth) / canvas.width;
 
-    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - pdfHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pageHeight;
+    // Force fit onto 1 single page if it's too tall
+    if (drawHeight > pdfHeight) {
+      drawHeight = pdfHeight;
+      drawWidth = (canvas.width * pdfHeight) / canvas.height;
     }
+
+    // Center horizontally if scaled down
+    const xPos = (pdfWidth - drawWidth) / 2;
+
+    pdf.addImage(imgData, 'PNG', xPos, 0, drawWidth, drawHeight);
     
     pdf.save(`Bvlgari_Executive_Report_${date}.pdf`);
   };
