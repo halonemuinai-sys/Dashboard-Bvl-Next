@@ -370,7 +370,7 @@ export default function DailyReportPage() {
                     <thead>
                       <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100">
                         <th className="px-4 py-2">Category</th>
-                        <th className="px-4 py-2 text-center">Qty</th>
+                        <th className="px-4 py-2 text-center text-blue-600">Qty (Sold)</th>
                         <th className="px-4 py-2 text-right">Reg Sales</th>
                         <th className="px-4 py-2 text-right text-blue-600 bg-blue-50/50">SMI Sales</th>
                         <th className="px-4 py-2 text-center text-amber-600 bg-amber-50/50">Disc %</th>
@@ -496,7 +496,7 @@ export default function DailyReportPage() {
                 <thead>
                   <tr className="bg-gray-100 text-gray-700">
                     <th className="border border-gray-200 py-1 px-2">Category</th>
-                    <th className="border border-gray-200 py-1 px-2 text-center">Qty (Today)</th>
+                    <th className="border border-gray-200 py-1 px-2 text-center">Qty (Sold)</th>
                     <th className="border border-gray-200 py-1 px-2 text-right">Reg Sales</th>
                     <th className="border border-gray-200 py-1 px-2 text-right">SMI Sales</th>
                     <th className="border border-gray-200 py-1 px-2 text-center">Disc %</th>
