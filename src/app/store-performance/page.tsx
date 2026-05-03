@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { cn, formatCurrency, formatCompact } from '@/lib/utils';
 import { dashboardService, MonthlyOverviewData } from '@/services/dashboardService';
+import Amt from '@/components/Amt';
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const CAT_COLORS: Record<string,string> = { Jewelry:'#F59E0B', Watches:'#3B82F6', Accessories:'#EC4899', Perfume:'#10B981', Other:'#8B5CF6' };
@@ -116,19 +117,19 @@ export default function StorePerformancePage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Net Sales</p>
-          <h3 className="text-xl font-bold text-slate-900">{formatCompact(storeKpi.totalSales)}</h3>
+          <h3 className="text-xl font-bold text-slate-900"><Amt value={storeKpi.totalSales} compact /></h3>
         </div>
         <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Target</p>
-          <h3 className="text-xl font-bold text-blue-600">{formatCompact(storeKpi.target)}</h3>
-          <p className="text-[10px] text-slate-400 mt-1">Remaining: {formatCompact(Math.max(0, storeKpi.target - storeKpi.totalSales))}</p>
+          <h3 className="text-xl font-bold text-blue-600"><Amt value={storeKpi.target} compact /></h3>
+          <p className="text-[10px] text-slate-400 mt-1">Remaining: <Amt value={Math.max(0, storeKpi.target - storeKpi.totalSales)} compact /></p>
         </div>
         <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Achievement</p>
           <h3 className={cn("text-2xl font-black", achvClass)}>{fmtPct(storeKpi.achievement)}</h3>
           <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden mt-3">
-            <div className={cn("h-full rounded-full transition-all duration-1000 w-[var(--progress)]", achvBarClass)}
-              style={{ '--progress': `${Math.min(storeKpi.achievement, 100)}%` } as any} />
+            <div className={cn("h-full rounded-full transition-all duration-1000", achvBarClass)}
+              style={{ width: `${Math.min(storeKpi.achievement, 100)}%` as any }} />
           </div>
         </div>
         <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
