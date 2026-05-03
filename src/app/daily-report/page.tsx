@@ -299,7 +299,7 @@ export default function DailyReportPage() {
             </div>
 
             {/* Metrics Grid */}
-            <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
               {/* Target & Progress */}
               <div className="space-y-5">
                 <div>
@@ -334,7 +334,7 @@ export default function DailyReportPage() {
                 </div>
               </div>
 
-              {/* Efficiency */}
+              {/* Today's Metrics */}
               <div className="grid grid-cols-1 gap-4">
                 <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <div className="flex items-center gap-2">
@@ -360,6 +360,35 @@ export default function DailyReportPage() {
                     <span className="text-xs font-bold text-slate-700">Sales Qty</span>
                   </div>
                   <span className="text-sm font-black text-slate-900">{store.metrics.todayQty} pcs</span>
+                </div>
+              </div>
+
+              {/* MTD Metrics */}
+              <div className="grid grid-cols-1 gap-4">
+                <div className="flex justify-between items-center p-3 bg-rose-50/30 rounded-xl border border-rose-100/50">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-rose-500" />
+                    <span className="text-xs font-bold text-rose-700">MTD Cost %</span>
+                  </div>
+                  <span className={cn("text-sm font-black", store.metrics.mtdCostPct > 15 ? "text-rose-600" : "text-rose-700")}>
+                    {fmtPct(store.metrics.mtdCostPct)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-blue-50/30 rounded-xl border border-blue-100/50">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs font-bold text-blue-700">MTD MDR %</span>
+                  </div>
+                  <span className={cn("text-sm font-black", store.metrics.mtdMdrPct > 2 ? "text-blue-600" : "text-blue-700")}>
+                    {fmtPct(store.metrics.mtdMdrPct)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-amber-50/30 rounded-xl border border-amber-100/50">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-amber-500" />
+                    <span className="text-xs font-bold text-amber-700">AVG Disc MTD</span>
+                  </div>
+                  <span className="text-sm font-black text-amber-700">{fmtPct(store.metrics.avgDiscMtd)}</span>
                 </div>
               </div>
 
@@ -472,22 +501,34 @@ export default function DailyReportPage() {
               </div>
 
               {/* Store Metrics */}
-              <div className="grid grid-cols-4 gap-2 mb-2 text-[10px]">
+              <div className="grid grid-cols-7 gap-1.5 mb-2 text-[10px]">
                 <div className="border border-gray-100 p-1.5">
-                  <div className="text-gray-500 mb-0.5">MTD Sales</div>
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD Sales</div>
                   <div className="font-bold font-mono"><Amt value={store.metrics.mtdSales} /></div>
                 </div>
                 <div className="border border-gray-100 p-1.5">
-                  <div className="text-gray-500 mb-0.5">Target</div>
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">Target</div>
                   <div className="font-bold font-mono"><Amt value={store.metrics.target} /></div>
                 </div>
+                <div className="border border-gray-100 p-1.5 bg-rose-50/30">
+                  <div className="text-rose-500 mb-0.5 text-[9px] leading-tight">Rem. to Target</div>
+                  <div className="font-bold font-mono text-rose-600"><Amt value={store.metrics.remaining} /></div>
+                </div>
                 <div className="border border-gray-100 p-1.5">
-                  <div className="text-gray-500 mb-0.5">Today's Sales</div>
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">Today's Sales</div>
                   <div className="font-bold font-mono"><Amt value={store.metrics.todaySales} /></div>
                 </div>
                 <div className="border border-gray-100 p-1.5">
-                  <div className="text-gray-500 mb-0.5">Rem. to Target</div>
-                  <div className="font-bold font-mono text-red-600"><Amt value={store.metrics.remaining} /></div>
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD Cost %</div>
+                  <div className="font-bold font-mono text-rose-600">{fmtPct(store.metrics.mtdCostPct)}</div>
+                </div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD MDR %</div>
+                  <div className="font-bold font-mono">{fmtPct(store.metrics.mtdMdrPct)}</div>
+                </div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">AVG Disc MTD</div>
+                  <div className="font-bold font-mono text-amber-600">{fmtPct(store.metrics.avgDiscMtd)}</div>
                 </div>
               </div>
 
