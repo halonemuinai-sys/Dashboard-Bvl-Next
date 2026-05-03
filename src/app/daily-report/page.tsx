@@ -267,9 +267,17 @@ export default function DailyReportPage() {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Sales (Inc HO)</p>
                 <p className="text-lg font-black text-slate-800"><Amt value={data.globalKPIs.totalSales} /></p>
               </div>
-              <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 p-4 rounded-2xl border border-slate-200/60">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Store Sales (Exc HO)</p>
-                <p className="text-lg font-black text-slate-800"><Amt value={data.globalKPIs.storeSales} /></p>
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 p-4 rounded-2xl border border-slate-200/60 flex flex-col justify-between relative overflow-hidden">
+                <div className="flex justify-between items-start">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Store Sales (Exc HO)</p>
+                  <span className={cn(
+                    "text-[10px] font-black px-2 py-0.5 rounded-lg",
+                    data.globalKPIs.storeSalesGrowth >= 0 ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
+                  )}>
+                    {data.globalKPIs.storeSalesGrowth >= 0 ? '+' : ''}{data.globalKPIs.storeSalesGrowth.toFixed(1)}%
+                  </span>
+                </div>
+                <p className="text-lg font-black text-slate-800 mt-2"><Amt value={data.globalKPIs.storeSales} /></p>
               </div>
               <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 p-4 rounded-2xl border border-slate-200/60">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Global Target MTD</p>
