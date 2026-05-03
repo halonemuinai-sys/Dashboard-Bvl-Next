@@ -716,7 +716,7 @@ export const dashboardService = {
     const [{ data: rows, error }, { data: targetRows }, { data: stockRows }] = await Promise.all([
       supabase
         .from('clean_master')
-        .select('transaction_date, location, main_category, net_sales, qty, cost, gross_sales, type, comm')
+        .select('transaction_date, location, main_category, net_sales, qty, cost, gross_sales, type, comm, val_disc')
         .gte('transaction_date', mStart)
         .lte('transaction_date', mEnd),
       supabase
@@ -735,9 +735,21 @@ export const dashboardService = {
 
     if (error) throw error;
 
+    let globalTarget = 0;
     // Target map from Supabase
     const targetMap: Record<string, number> = {};
-    targetRows?.forEach((t: any) => { targetMap[t.store_name] = t.target_value || 0; });
+    targetRows?.forEach((t: any) => { 
+      targetMap[t.store_name] = t.target_value || 0; 
+      if (!t.store_name.toLowerCase().includes('head office') && t.store_name.toLowerCase() !== 'ho') {
+        globalTarget += (t.target_value || 0);
+      }
+    });
+
+    let globalStoreSales = 0;
+    let globalHOSales = 0;
+    let mtdGross = 0;
+    let mtdComm = 0;
+    let mtdValDisc = 0;
 
     type StoreAccum = {
       mtdNet: number; mtdQty: number;
@@ -745,7 +757,14 @@ export const dashboardService = {
       todayCost: number; todayGross: number;
       todayComm: number;
       todayRegNet: number; todaySmiNet: number;
-      categories: Record<string, { qty: number; netNonSMI: number; netSMI: number; stock: number }>;
+      categories: Record<string, { 
+        qty: number; 
+        netNonSMI: number; 
+        netSMI: number; 
+        stock: number;
+        valDisc: number;
+        gross: number;
+      }>;
     };
     const storeMap: Record<string, StoreAccum> = {};
 
@@ -760,13 +779,27 @@ export const dashboardService = {
 
     (rows || []).forEach(row => {
       const loc = (row.location || '').trim();
-      if (loc.toLowerCase().includes('head office')) return;
+      const net   = row.net_sales || 0;
+      const isHO = loc.toLowerCase().includes('head office') || loc.toLowerCase() === 'ho';
+
+      if (isHO) {
+        // Accumulate HO sales up to the selected day
+        const rowDate = new Date(row.transaction_date);
+        if (rowDate.getDate() <= day) {
+          globalHOSales += net;
+        }
+        return;
+      }
 
       const rowDate = new Date(row.transaction_date);
       const rowDay = rowDate.getDate();
       if (rowDay > day) return; // Only MTD
 
-      const net   = row.net_sales || 0;
+      globalStoreSales += net;
+      mtdGross += (row.gross_sales || 0);
+      mtdComm += (row.comm || 0);
+      mtdValDisc += (row.val_disc || 0);
+
       const qty   = row.qty || 0;
       const cost  = row.cost || 0;
       const gross = row.gross_sales || 0;
@@ -790,7 +823,7 @@ export const dashboardService = {
         // Find opening stock for this store/category
         const stockRow = stockRows?.find(sr => sr.location.toLowerCase() === loc.toLowerCase() && normalizeCat(sr.category) === normCat);
         const openingStock = stockRow ? (stockRow[currentMonthKey as keyof typeof stockRow] as number) : 0;
-        s.categories[normCat] = { qty: 0, netNonSMI: 0, netSMI: 0, stock: openingStock };
+        s.categories[normCat] = { qty: 0, netNonSMI: 0, netSMI: 0, stock: openingStock, valDisc: 0, gross: 0 };
       }
 
       // Deduct from stock (MTD)
@@ -805,6 +838,8 @@ export const dashboardService = {
         if (isSMI) s.todaySmiNet += net; else s.todayRegNet += net;
 
         s.categories[normCat].qty += qty;
+        s.categories[normCat].valDisc += (row.val_disc || 0);
+        s.categories[normCat].gross += gross;
         if (isSMI) s.categories[normCat].netSMI += net;
         else       s.categories[normCat].netNonSMI += net;
       }
@@ -851,9 +886,21 @@ export const dashboardService = {
       };
     });
 
+    const mtdCostPct = mtdGross > 0 ? ((mtdComm + mtdValDisc) / mtdGross) * 100 : 0;
+    const avgDiscMtd = mtdGross > 0 ? (mtdValDisc / mtdGross) * 100 : 0;
+    const globalAchievement = globalTarget > 0 ? (globalStoreSales / globalTarget) * 100 : 0;
+
     return {
       date: dateStr,
       monthName,
+      globalKPIs: {
+        storeSales: globalStoreSales,
+        totalSales: globalStoreSales + globalHOSales,
+        globalTarget,
+        globalAchievement,
+        mtdCostPct,
+        avgDiscMtd
+      },
       stores: storeResults
     };
   },

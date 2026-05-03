@@ -4,14 +4,15 @@ import { useState, useEffect } from 'react';
 import { 
   Calendar as CalendarIcon, 
   Store, 
-  TrendingUp, 
-  Clock, 
-  RefreshCw,
   ChevronRight,
   Info,
   Send,
   Mail,
-  CreditCard
+  CreditCard,
+  Download,
+  TrendingUp,
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
@@ -49,6 +50,21 @@ export default function DailyReportPage() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleDownloadPDF = async () => {
+    // @ts-ignore
+    const html2pdf = (await import('html2pdf.js')).default;
+    const element = document.getElementById('pdf-report-container');
+    if (!element) return;
+    const opt = {
+      margin:       [0.4, 0.4, 0.4, 0.4],
+      filename:     `Bvlgari_Daily_Report_${date}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save();
   };
 
   useEffect(() => {
@@ -152,6 +168,14 @@ export default function DailyReportPage() {
           </div>
           
           <button
+            onClick={handleDownloadPDF}
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold"
+          >
+            <Download className="w-4 h-4" />
+            PDF
+          </button>
+
+          <button
             onClick={handleSendEmail}
             disabled={sending}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold"
@@ -162,8 +186,49 @@ export default function DailyReportPage() {
         </div>
       </div>
 
-      {/* Store Cards Loop */}
-      <div className="grid grid-cols-1 gap-8">
+      <div id="pdf-report-container" className="space-y-6">
+        {/* Global KPI Overview */}
+        {data.globalKPIs && (
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <h2 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              Global Overview
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Sales (Inc HO)</p>
+                <p className="text-lg font-black text-slate-900"><Amt value={data.globalKPIs.totalSales} /></p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Store Sales (Exc HO)</p>
+                <p className="text-lg font-black text-blue-600"><Amt value={data.globalKPIs.storeSales} /></p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Global Target MTD</p>
+                <p className="text-lg font-black text-slate-900"><Amt value={data.globalKPIs.globalTarget} /></p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Achievement</p>
+                <p className={cn("text-lg font-black", data.globalKPIs.globalAchievement >= 100 ? "text-emerald-600" : "text-amber-600")}>
+                  {fmtPct(data.globalKPIs.globalAchievement)}
+                </p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">MTD Cost %</p>
+                <p className={cn("text-lg font-black", data.globalKPIs.mtdCostPct > 15 ? "text-rose-600" : "text-slate-900")}>
+                  {fmtPct(data.globalKPIs.mtdCostPct)}
+                </p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">AVG Disc MTD</p>
+                <p className="text-lg font-black text-amber-600">{fmtPct(data.globalKPIs.avgDiscMtd)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Store Cards Loop */}
+        <div className="grid grid-cols-1 gap-8">
         {data.stores.map((store: any) => (
           <div key={store.storeName} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
             {/* Store Header */}
@@ -273,6 +338,7 @@ export default function DailyReportPage() {
                         <th className="px-4 py-2 text-center">Qty</th>
                         <th className="px-4 py-2 text-right">Reg Sales</th>
                         <th className="px-4 py-2 text-right text-blue-600 bg-blue-50/50">SMI Sales</th>
+                        <th className="px-4 py-2 text-center text-amber-600 bg-amber-50/50">Disc %</th>
                         <th className="px-4 py-2 text-center text-rose-600 bg-rose-50/50">Rem. Stock</th>
                       </tr>
                     </thead>
@@ -283,6 +349,9 @@ export default function DailyReportPage() {
                           <td className="px-4 py-2 text-center font-mono text-slate-500">{vals.qty}</td>
                           <td className="px-4 py-2 text-right font-mono"><Amt value={vals.netNonSMI} /></td>
                           <td className="px-4 py-2 text-right font-mono text-blue-600 bg-blue-50/30"><Amt value={vals.netSMI} /></td>
+                          <td className="px-4 py-2 text-center font-bold text-amber-600 bg-amber-50/30">
+                            {vals.gross > 0 ? ((vals.valDisc / vals.gross) * 100).toFixed(1) : '0.0'}%
+                          </td>
                           <td className="px-4 py-2 text-center font-black text-rose-600 bg-rose-50/30">{vals.stock}</td>
                         </tr>
                       ))}
@@ -293,6 +362,7 @@ export default function DailyReportPage() {
             </div>
           </div>
         ))}
+      </div>
       </div>
     </div>
   );
