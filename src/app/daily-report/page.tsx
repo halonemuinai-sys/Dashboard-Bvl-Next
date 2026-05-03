@@ -436,10 +436,10 @@ export default function DailyReportPage() {
         style={{ minHeight: '1123px' }}
       >
         {/* Header */}
-        <div className="border-b-2 border-black pb-3 mb-4 text-center">
-          <h1 className="text-2xl font-serif uppercase tracking-[0.2em] text-black">Bvlgari</h1>
-          <h2 className="text-lg mt-1 font-semibold text-gray-800 tracking-wide uppercase">Daily Sales Performance Report</h2>
-          <p className="text-xs text-gray-500 mt-1">
+        <div className="bg-slate-900 text-white py-4 px-6 mb-4 -mx-8 -mt-8">
+          <h1 className="text-2xl font-serif uppercase tracking-[0.25em] text-white text-center">Bvlgari</h1>
+          <h2 className="text-sm mt-1 font-medium text-slate-300 tracking-widest uppercase text-center">Daily Sales Performance Report</h2>
+          <p className="text-[10px] text-slate-400 mt-1 text-center">
             {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
@@ -447,7 +447,7 @@ export default function DailyReportPage() {
         {/* Executive Summary */}
         {data.globalKPIs && (
         <div className="mb-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider border-b border-gray-300 pb-1 mb-2 text-black">Executive Summary</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1 mb-2">Executive Summary</h3>
           <div className="grid grid-cols-2 gap-6">
             <table className="w-full text-xs">
               <tbody>
@@ -487,16 +487,16 @@ export default function DailyReportPage() {
 
         {/* Store Breakdown */}
         <div className="mb-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider border-b border-gray-300 pb-1 mb-3 text-black">Boutique Performance Breakdown</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1 mb-3">Boutique Performance Breakdown</h3>
           
           {data.stores.map((store: any) => (
             <div key={store.storeName} className="mb-4">
               {/* Store Header */}
-              <div className="bg-gray-50 border border-gray-200 py-1.5 px-3 mb-2 flex justify-between items-center">
-                <h4 className="font-bold text-sm text-black">{store.storeName}</h4>
+              <div className="bg-slate-800 text-white py-1.5 px-3 mb-2 flex justify-between items-center">
+                <h4 className="font-bold text-sm">{store.storeName}</h4>
                 <div className="text-right text-[10px]">
-                  <span className="text-gray-500 mr-2">MTD Achievement:</span>
-                  <span className="font-bold text-black">{fmtPct(store.metrics.achievement)}</span>
+                  <span className="text-slate-300 mr-2">MTD Achievement:</span>
+                  <span className="font-bold text-white">{fmtPct(store.metrics.achievement)}</span>
                 </div>
               </div>
 
@@ -533,15 +533,15 @@ export default function DailyReportPage() {
               </div>
 
               {/* Store Table */}
-              <table className="w-full text-[10px] text-left border-collapse border border-gray-200">
+              <table className="w-full text-[10px] text-left border-collapse border border-slate-200">
                 <thead>
-                  <tr className="bg-gray-100 text-gray-700">
-                    <th className="border border-gray-200 py-1 px-2">Category</th>
-                    <th className="border border-gray-200 py-1 px-2 text-center">Qty (Sold)</th>
-                    <th className="border border-gray-200 py-1 px-2 text-right">Reg Sales</th>
-                    <th className="border border-gray-200 py-1 px-2 text-right">SMI Sales</th>
-                    <th className="border border-gray-200 py-1 px-2 text-center">Disc %</th>
-                    <th className="border border-gray-200 py-1 px-2 text-center">Rem. Stock</th>
+                  <tr className="bg-slate-800 text-white text-[9px] uppercase tracking-wider">
+                    <th className="border border-slate-700 py-1 px-2">Category</th>
+                    <th className="border border-slate-700 py-1 px-2 text-center">Qty (Sold)</th>
+                    <th className="border border-slate-700 py-1 px-2 text-right">Reg Sales</th>
+                    <th className="border border-slate-700 py-1 px-2 text-right">SMI Sales</th>
+                    <th className="border border-slate-700 py-1 px-2 text-center">Disc %</th>
+                    <th className="border border-slate-700 py-1 px-2 text-center">Rem. Stock</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -564,10 +564,10 @@ export default function DailyReportPage() {
         </div>
 
         {/* Footer */}
-        <div className="absolute bottom-6 left-8 right-8 pt-2 border-t border-gray-300 text-[9px] text-gray-400 flex justify-between items-center">
+        <div className="absolute bottom-6 left-8 right-8 pt-2 border-t border-slate-200 text-[9px] text-slate-400 flex justify-between items-center">
           <div>
-            <p className="font-bold text-gray-600 tracking-widest">CONFIDENTIAL</p>
-            <p>Internal Use Only - Bvlgari Indonesia</p>
+            <p className="font-bold text-slate-600 tracking-widest uppercase">Confidential</p>
+            <p>Internal Use Only — Bvlgari Indonesia</p>
           </div>
           <div className="text-right">
             <p>Generated via Bvlgari Dashboard</p>
