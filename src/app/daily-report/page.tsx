@@ -169,7 +169,7 @@ export default function DailyReportPage() {
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
                 date === new Date().toISOString().split('T')[0] 
-                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-200" 
+                  ? "bg-slate-900 text-white shadow-md shadow-slate-200" 
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
             >
@@ -184,7 +184,7 @@ export default function DailyReportPage() {
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
                 date === new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0]
-                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-200" 
+                  ? "bg-slate-900 text-white shadow-md shadow-slate-200" 
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
             >
@@ -195,9 +195,9 @@ export default function DailyReportPage() {
           <div className="relative">
             <div 
               onClick={() => setShowCalendar(!showCalendar)}
-              className="group flex items-center gap-3 bg-white border border-slate-200 p-1.5 pr-6 rounded-2xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all duration-300 cursor-pointer"
+              className="group flex items-center gap-3 bg-white border border-slate-200 p-1.5 pr-6 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all duration-300 cursor-pointer"
             >
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-500">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-900 flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white transition-colors duration-500">
                 <CalendarIcon className="w-5 h-5" />
               </div>
               <div className="flex flex-col">
@@ -246,7 +246,7 @@ export default function DailyReportPage() {
           <button
             onClick={handleSendEmail}
             disabled={sending}
-            className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-md shadow-indigo-200 transition-all text-sm font-bold"
+            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-md shadow-slate-200 transition-all text-sm font-bold"
           >
             {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {sending ? 'Sending...' : 'Send Report'}
@@ -259,16 +259,16 @@ export default function DailyReportPage() {
         {data.globalKPIs && (
           <div className="bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-3xl p-6 shadow-sm">
             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-indigo-600" />
+              <TrendingUp className="w-5 h-5 text-slate-900" />
               Global Overview
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className="bg-gradient-to-br from-indigo-50 to-violet-50 p-4 rounded-2xl border border-indigo-100/60">
-                <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Total Sales (Inc HO)</p>
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 p-4 rounded-2xl border border-slate-200/60">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Sales (Inc HO)</p>
                 <p className="text-lg font-black text-slate-800"><Amt value={data.globalKPIs.totalSales} /></p>
               </div>
-              <div className="bg-gradient-to-br from-indigo-50 to-violet-50 p-4 rounded-2xl border border-indigo-100/60">
-                <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Store Sales (Exc HO)</p>
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 p-4 rounded-2xl border border-slate-200/60">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Store Sales (Exc HO)</p>
                 <p className="text-lg font-black text-slate-800"><Amt value={data.globalKPIs.storeSales} /></p>
               </div>
               <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 p-4 rounded-2xl border border-slate-200/60">
@@ -300,9 +300,9 @@ export default function DailyReportPage() {
         {data.stores.map((store: any) => (
           <div key={store.storeName} className="bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-3xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300">
             {/* Store Header */}
-            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-indigo-50/30 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-slate-100/30 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-slate-200">
                   <Store className="w-6 h-6" />
                 </div>
                 <div>
@@ -311,7 +311,7 @@ export default function DailyReportPage() {
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">MTD Achievement</span>
                     <span className={cn(
                       "text-xs font-black px-2 py-0.5 rounded-full",
-                      store.metrics.achievement >= 100 ? "bg-emerald-100 text-emerald-600" : "bg-indigo-100 text-indigo-600"
+                      store.metrics.achievement >= 100 ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-600"
                     )}>
                       {fmtPct(store.metrics.achievement)}
                     </span>
@@ -326,7 +326,7 @@ export default function DailyReportPage() {
                 </div>
                 <div className="text-right border-l border-slate-200 pl-6">
                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">MTD Sales</p>
-                  <p className="text-xl font-black text-indigo-600"><Amt value={store.metrics.mtdSales} /></p>
+                  <p className="text-xl font-black text-slate-900"><Amt value={store.metrics.mtdSales} /></p>
                 </div>
               </div>
             </div>
@@ -337,16 +337,16 @@ export default function DailyReportPage() {
               <div className="space-y-5">
                 <div>
                   <div className="flex justify-between items-end mb-2">
-                    <p className="text-[11px] font-black text-zinc-600 uppercase tracking-wider">Monthly Target</p>
-                    <p className="text-lg font-black text-zinc-900 leading-none">
+                    <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Monthly Target</p>
+                    <p className="text-lg font-black text-slate-900 leading-none">
                       <Amt value={store.metrics.target} />
                     </p>
                   </div>
-                  <div className="w-full h-3 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/50 p-0.5">
+                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50 p-0.5">
                     <div 
                       className={cn(
                         "h-full rounded-full transition-all duration-1000",
-                        store.metrics.achievement >= 100 ? "bg-teal-500" : "bg-zinc-900"
+                        store.metrics.achievement >= 100 ? "bg-emerald-500" : "bg-slate-900"
                       )}
                       style={{ width: `${Math.max(5, Math.min(store.metrics.achievement, 100))}%` as any }}
                     />
@@ -355,7 +355,7 @@ export default function DailyReportPage() {
                     <p className="text-[10px] font-bold text-slate-400">0%</p>
                     <p className={cn(
                       "text-[10px] font-black px-1.5 py-0.5 rounded",
-                      store.metrics.achievement >= 100 ? "text-emerald-600 bg-emerald-50" : "text-indigo-600 bg-indigo-50"
+                      store.metrics.achievement >= 100 ? "text-emerald-600 bg-emerald-50" : "text-slate-600 bg-slate-100"
                     )}>
                       {fmtPct(store.metrics.achievement)}
                     </p>
@@ -371,7 +371,7 @@ export default function DailyReportPage() {
               <div className="grid grid-cols-1 gap-4">
                 <div className="flex justify-between items-center p-3 bg-slate-50/80 rounded-xl border border-slate-100">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-indigo-400" />
+                    <Clock className="w-4 h-4 text-slate-400" />
                     <span className="text-xs font-bold text-slate-600">Today's Cost %</span>
                   </div>
                   <span className={cn("text-sm font-black", store.metrics.sellingCostTodayPct > 15 ? "text-rose-500" : "text-slate-800")}>
@@ -380,7 +380,7 @@ export default function DailyReportPage() {
                 </div>
                 <div className="flex justify-between items-center p-3 bg-slate-50/80 rounded-xl border border-slate-100">
                   <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-indigo-400" />
+                    <CreditCard className="w-4 h-4 text-slate-400" />
                     <span className="text-xs font-bold text-slate-600">MDR Cost %</span>
                   </div>
                   <span className={cn("text-sm font-black", store.metrics.mdrCostTodayPct > 2 ? "text-rose-500" : "text-slate-800")}>
@@ -389,7 +389,7 @@ export default function DailyReportPage() {
                 </div>
                 <div className="flex justify-between items-center p-3 bg-slate-50/80 rounded-xl border border-slate-100">
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-indigo-400" />
+                    <TrendingUp className="w-4 h-4 text-slate-400" />
                     <span className="text-xs font-bold text-slate-600">Sales Qty</span>
                   </div>
                   <span className="text-sm font-black text-slate-800">{store.metrics.todayQty} pcs</span>
@@ -407,12 +407,12 @@ export default function DailyReportPage() {
                     {fmtPct(store.metrics.mtdCostPct)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-gradient-to-r from-indigo-50/50 to-violet-50/50 rounded-xl border border-indigo-100/40">
+                <div className="flex justify-between items-center p-3 bg-gradient-to-r from-slate-50/50 to-slate-100/50 rounded-xl border border-slate-200/40">
                   <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-indigo-400" />
-                    <span className="text-xs font-bold text-indigo-600">MTD MDR %</span>
+                    <CreditCard className="w-4 h-4 text-slate-400" />
+                    <span className="text-xs font-bold text-slate-600">MTD MDR %</span>
                   </div>
-                  <span className="text-sm font-black text-indigo-600">
+                  <span className="text-sm font-black text-slate-600">
                     {fmtPct(store.metrics.mtdMdrPct)}
                   </span>
                 </div>
@@ -430,11 +430,11 @@ export default function DailyReportPage() {
                 <div className="border border-slate-100 rounded-2xl overflow-hidden">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="bg-gradient-to-r from-slate-50 to-indigo-50/30 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                      <tr className="bg-gradient-to-r from-slate-50 to-slate-100/30 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
                         <th className="px-4 py-2">Category</th>
-                        <th className="px-4 py-2 text-center text-indigo-500">Qty (Sold)</th>
+                        <th className="px-4 py-2 text-center text-slate-900">Qty (Sold)</th>
                         <th className="px-4 py-2 text-right">Reg Sales</th>
-                        <th className="px-4 py-2 text-right text-indigo-500 bg-indigo-50/30">SMI Sales</th>
+                        <th className="px-4 py-2 text-right text-slate-900 bg-slate-50/50">SMI Sales</th>
                         <th className="px-4 py-2 text-center text-amber-500 bg-amber-50/30">Disc %</th>
                         <th className="px-4 py-2 text-center text-rose-500 bg-rose-50/30">Rem. Stock</th>
                       </tr>
@@ -445,7 +445,7 @@ export default function DailyReportPage() {
                           <td className="px-4 py-2 font-bold text-slate-700">{cat}</td>
                           <td className="px-4 py-2 text-center font-mono text-slate-500">{vals.qty}</td>
                           <td className="px-4 py-2 text-right font-mono"><Amt value={vals.netNonSMI} /></td>
-                          <td className="px-4 py-2 text-right font-mono text-indigo-600 bg-indigo-50/20"><Amt value={vals.netSMI} /></td>
+                          <td className="px-4 py-2 text-right font-mono text-slate-900 bg-slate-50/20"><Amt value={vals.netSMI} /></td>
                           <td className="px-4 py-2 text-center font-bold text-amber-600 bg-amber-50/20">
                             {vals.gross > 0 ? ((vals.valDisc / vals.gross) * 100).toFixed(1) : '0.0'}%
                           </td>
