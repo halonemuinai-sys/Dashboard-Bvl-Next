@@ -1197,5 +1197,563 @@ export const dashboardService = {
       .update(patch)
       .eq('id', id);
     if (error) throw error;
-  }
+  },
+
+  /**
+   * Quarterly Budget — Actual vs Budget per store per month
+   * Mirrors GAS getQuarterlyBudgetData() from 8-API_Quarterly.gs
+   */
+  async getQuarterlyBudget(quarter: number, year: number) {
+    const QUARTER_MONTHS: Record<number, number[]> = {
+      1: [1, 2, 3], 2: [4, 5, 6], 3: [7, 8, 9], 4: [10, 11, 12]
+    };
+    const months = QUARTER_MONTHS[quarter];
+    const mStart = `${year}-${String(months[0]).padStart(2, '0')}-01T00:00:00`;
+    const mEnd   = new Date(year, months[months.length - 1], 0, 23, 59, 59).toISOString();
+
+    const [{ data: salesRows, error }, { data: budgetRows }] = await Promise.all([
+      supabase
+        .from('clean_master')
+        .select('transaction_date, location, net_sales')
+        .gte('transaction_date', mStart)
+        .lte('transaction_date', mEnd),
+      supabase
+        .from('store_budgets')
+        .select('month_number, store_name, budget_value')
+        .eq('year', year)
+        .in('month_number', months)
+    ]);
+
+    if (error) throw error;
+
+    const MONTH_SHORT = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const isHO = (loc: string) => loc.toLowerCase().includes('head office') || loc.toLowerCase() === 'ho';
+
+    // Actual: { storeName -> { monthNum -> netSales } }
+    const actualMap: Record<string, Record<number, number>> = {};
+    (salesRows || []).forEach(r => {
+      const loc = (r.location || '').trim();
+      if (isHO(loc)) return;
+      const m = new Date(r.transaction_date).getMonth() + 1;
+      if (!actualMap[loc]) actualMap[loc] = {};
+      actualMap[loc][m] = (actualMap[loc][m] || 0) + (r.net_sales || 0);
+    });
+
+    // Budget: { storeName -> { monthNum -> budgetValue } }
+    const budgetMap: Record<string, Record<number, number>> = {};
+    (budgetRows || []).forEach(b => {
+      const s = (b.store_name || '').trim();
+      if (isHO(s) || s.toLowerCase() === 'total') return;
+      if (!budgetMap[s]) budgetMap[s] = {};
+      budgetMap[s][b.month_number] = (budgetMap[s][b.month_number] || 0) + (b.budget_value || 0);
+    });
+
+    const allStores = [...new Set([...Object.keys(actualMap), ...Object.keys(budgetMap)])].sort();
+
+    let totalActual = 0, totalBudget = 0;
+
+    const storeData = allStores.map(store => {
+      const monthlyBreakdown = months.map(m => {
+        const actual  = actualMap[store]?.[m]  || 0;
+        const budget  = budgetMap[store]?.[m]  || 0;
+        const variance = actual - budget;
+        return { monthNum: m, monthName: MONTH_SHORT[m], actual, budget, variance,
+                 achievement: budget > 0 ? (actual / budget) * 100 : 0 };
+      });
+      const actual  = monthlyBreakdown.reduce((s, m) => s + m.actual, 0);
+      const budget  = monthlyBreakdown.reduce((s, m) => s + m.budget, 0);
+      totalActual  += actual;
+      totalBudget  += budget;
+      return { store, actual, budget, variance: actual - budget,
+               achievement: budget > 0 ? (actual / budget) * 100 : 0,
+               monthlyBreakdown };
+    });
+
+    const totalVariance    = totalActual - totalBudget;
+    const totalAchievement = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
+
+    return {
+      quarter, year,
+      monthNames: months.map(m => MONTH_SHORT[m]),
+      kpi: { totalActual, totalBudget, totalVariance, totalAchievement },
+      storeData
+    };
+  },
+
+  /**
+   * Annual Net Sales — mirrors GAS getAnnualNetSalesData()
+   * Per-store monthly breakdown + YoY vs previous year + targets
+   */
+  async getAnnualNetSales(year: number) {
+    const yStart  = `${year}-01-01T00:00:00`;
+    const yEnd    = `${year}-12-31T23:59:59`;
+    const pyStart = `${year - 1}-01-01T00:00:00`;
+    const pyEnd   = `${year - 1}-12-31T23:59:59`;
+
+    const [
+      { data: rows,    error: e1 },
+      { data: pyRows,  error: e2 },
+      { data: tgtRows, error: e3 },
+    ] = await Promise.all([
+      supabase.from('clean_master').select('transaction_date, location, net_sales')
+        .gte('transaction_date', yStart).lte('transaction_date', yEnd),
+      supabase.from('clean_master').select('transaction_date, location, net_sales')
+        .gte('transaction_date', pyStart).lte('transaction_date', pyEnd),
+      supabase.from('targets').select('store_name, month_number, target_value').eq('year', year),
+    ]);
+
+    if (e1 || e2 || e3) throw e1 ?? e2 ?? e3;
+
+    const isHO = (l: string) => l.toLowerCase().includes('head office') || l.toLowerCase() === 'ho';
+
+    // Aggregate helper: rows → { store: number[12] }
+    const aggregate = (data: typeof rows) => {
+      const map: Record<string, number[]> = {};
+      (data || []).forEach(r => {
+        const loc = (r.location || '').trim();
+        if (isHO(loc)) return;
+        const m = new Date(r.transaction_date).getMonth();
+        if (!map[loc]) map[loc] = new Array(12).fill(0);
+        map[loc][m] += r.net_sales || 0;
+      });
+      return map;
+    };
+
+    const actualMap = aggregate(rows);
+    const prevMap   = aggregate(pyRows);
+
+    // Target map: { store: number[12] }
+    const tgtMap: Record<string, number[]> = {};
+    (tgtRows || []).forEach(t => {
+      const s = (t.store_name || '').trim();
+      if (isHO(s) || s.toLowerCase() === 'total') return;
+      if (!tgtMap[s]) tgtMap[s] = new Array(12).fill(0);
+      tgtMap[s][(t.month_number ?? 1) - 1] += t.target_value || 0;
+    });
+
+    const allStores = [...new Set([
+      ...Object.keys(actualMap),
+      ...Object.keys(tgtMap),
+    ])].sort();
+
+    // Grand total accumulators
+    const grandMonthly     = new Array(12).fill(0);
+    const grandPrevMonthly = new Array(12).fill(0);
+    const grandTargets     = new Array(12).fill(0);
+
+    const stores = allStores.map(name => {
+      const monthly     = actualMap[name] ?? new Array(12).fill(0);
+      const prevMonthly = prevMap[name]   ?? new Array(12).fill(0);
+      const targets     = tgtMap[name]    ?? new Array(12).fill(0);
+      const ytd         = monthly.reduce((s, v) => s + v, 0);
+      const prevYtd     = prevMonthly.reduce((s, v) => s + v, 0);
+      const ytdTarget   = targets.reduce((s, v) => s + v, 0);
+      const yoyGrowth   = prevYtd > 0 ? ((ytd - prevYtd) / prevYtd) * 100 : 0;
+      const bestMonth   = monthly.indexOf(Math.max(...monthly));
+
+      monthly.forEach((v, i) => { grandMonthly[i] += v; grandPrevMonthly[i] += prevMonthly[i]; grandTargets[i] += targets[i]; });
+
+      return { name, monthly, prevMonthly, targets, ytd, prevYtd, ytdTarget, yoyGrowth, bestMonth };
+    });
+
+    // Sort by YTD desc, compute contribution
+    const grandYtd     = grandMonthly.reduce((s, v) => s + v, 0);
+    const grandPrevYtd = grandPrevMonthly.reduce((s, v) => s + v, 0);
+    stores.sort((a, b) => b.ytd - a.ytd);
+    const storeData = stores.map(s => ({
+      ...s,
+      contribution: grandYtd > 0 ? (s.ytd / grandYtd) * 100 : 0,
+    }));
+
+    return {
+      year, prevYear: year - 1,
+      storeData,
+      grandTotal: {
+        monthly: grandMonthly,
+        prevMonthly: grandPrevMonthly,
+        targets: grandTargets,
+        ytd: grandYtd,
+        prevYtd: grandPrevYtd,
+        ytdTarget: grandTargets.reduce((s, v) => s + v, 0),
+        yoyGrowth: grandPrevYtd > 0 ? ((grandYtd - grandPrevYtd) / grandPrevYtd) * 100 : 0,
+      },
+    };
+  },
+
+  /**
+   * Quarterly Standard — mirrors GAS getQuarterlyData()
+   * QTD sales, monthly pacing, category breakdown, top collections & catalogues
+   */
+  async getQuarterlyStandard(quarter: number, year: number) {
+    const QUARTER_MONTHS: Record<number, number[]> = {
+      1: [1, 2, 3], 2: [4, 5, 6], 3: [7, 8, 9], 4: [10, 11, 12],
+    };
+    const MONTH_NAMES = ['','January','February','March','April','May','June',
+                         'July','August','September','October','November','December'];
+    const months = QUARTER_MONTHS[quarter];
+    const mStart  = `${year}-${String(months[0]).padStart(2,'0')}-01T00:00:00`;
+    const mEnd    = new Date(year, months[months.length-1], 0, 23, 59, 59).toISOString();
+    const pyStart = `${year-1}-${String(months[0]).padStart(2,'0')}-01T00:00:00`;
+    const pyEnd   = new Date(year-1, months[months.length-1], 0, 23, 59, 59).toISOString();
+
+    const [
+      { data: rows,    error: e1 },
+      { data: pyRows },
+      { data: tgtRows },
+    ] = await Promise.all([
+      supabase.from('clean_master')
+        .select('transaction_date, location, net_sales, qty, main_category, collection, catalogue_code')
+        .gte('transaction_date', mStart).lte('transaction_date', mEnd),
+      supabase.from('clean_master')
+        .select('transaction_date, location, net_sales')
+        .gte('transaction_date', pyStart).lte('transaction_date', pyEnd),
+      supabase.from('targets')
+        .select('store_name, month_number, target_value')
+        .eq('year', year).in('month_number', months),
+    ]);
+    if (e1) throw e1;
+
+    const isHO = (l: string) => l.toLowerCase().includes('head office') || l.toLowerCase() === 'ho';
+
+    // Monthly target totals (exc HO)
+    const tgtByMonth: Record<number, number> = {};
+    (tgtRows || []).forEach(t => {
+      if (isHO(t.store_name || '')) return;
+      tgtByMonth[t.month_number] = (tgtByMonth[t.month_number] || 0) + (t.target_value || 0);
+    });
+
+    // Current + prev QTD
+    let qtdSales = 0, prevQtdSales = 0;
+    const salesByMonth: Record<number, number> = {};
+    const catMap: Record<string, number> = {};
+    const collMap: Record<string, { cat: string; value: number; qty: number }> = {};
+    const catgMap: Record<string, { cat: string; value: number; qty: number }> = {};
+
+    (rows || []).forEach(r => {
+      if (isHO(r.location || '')) return;
+      const m   = new Date(r.transaction_date).getMonth() + 1;
+      const net = r.net_sales || 0;
+      const qty = r.qty || 0;
+      const cat = (r.main_category || 'Other').trim();
+      const col = (r.collection    || '').trim();
+      const ctg = (r.catalogue_code|| '').trim();
+
+      qtdSales += net;
+      salesByMonth[m] = (salesByMonth[m] || 0) + net;
+      catMap[cat] = (catMap[cat] || 0) + net;
+
+      if (col && col !== '-') {
+        if (!collMap[col]) collMap[col] = { cat, value: 0, qty: 0 };
+        collMap[col].value += net; collMap[col].qty += qty;
+      }
+      if (ctg && ctg !== '-') {
+        if (!catgMap[ctg]) catgMap[ctg] = { cat, value: 0, qty: 0 };
+        catgMap[ctg].value += net; catgMap[ctg].qty += qty;
+      }
+    });
+
+    (pyRows || []).forEach(r => {
+      if (isHO(r.location || '')) return;
+      prevQtdSales += r.net_sales || 0;
+    });
+
+    const qtdTarget  = months.reduce((s, m) => s + (tgtByMonth[m] || 0), 0);
+    const qtdAchv    = qtdTarget > 0 ? (qtdSales / qtdTarget) * 100 : 0;
+    const yoyGrowth  = prevQtdSales > 0 ? ((qtdSales - prevQtdSales) / prevQtdSales) * 100 : 0;
+
+    const monthlyPacing = months.map(m => ({
+      name:   MONTH_NAMES[m],
+      index:  m - 1,
+      sales:  salesByMonth[m]  || 0,
+      target: tgtByMonth[m]   || 0,
+      achv:   tgtByMonth[m] > 0 ? ((salesByMonth[m]||0) / tgtByMonth[m]) * 100 : 0,
+    }));
+
+    const categories = Object.entries(catMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    const topCollections = Object.entries(collMap)
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.value - a.value).slice(0, 10);
+
+    const topCatalogue = Object.entries(catgMap)
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.value - a.value).slice(0, 10);
+
+    return { quarter, year, prevYear: year-1, qtdSales, qtdTarget, qtdAchv, yoyGrowth,
+             monthlyPacing, categories, topCollections, topCatalogue };
+  },
+
+  /**
+   * Forecasting & Projection — mirrors GAS getForecastingData()
+   * Month-end projection, year-end projection, category momentum, store projections,
+   * day-of-week patterns, holiday impact, seasonal chart
+   */
+  async getForecastingData(year: number, activeMonthIdx?: number) {
+    const yStart  = `${year}-01-01T00:00:00`;
+    const yEnd    = `${year}-12-31T23:59:59`;
+    const pyStart = `${year-1}-01-01T00:00:00`;
+    const pyEnd   = `${year-1}-12-31T23:59:59`;
+
+    const [
+      { data: rows,    error },
+      { data: pyRows },
+      { data: tgtRows },
+    ] = await Promise.all([
+      supabase.from('clean_master')
+        .select('transaction_date, location, net_sales, qty, main_category')
+        .gte('transaction_date', yStart).lte('transaction_date', yEnd),
+      supabase.from('clean_master')
+        .select('transaction_date, location, net_sales')
+        .gte('transaction_date', pyStart).lte('transaction_date', pyEnd),
+      supabase.from('targets')
+        .select('store_name, month_number, target_value').eq('year', year),
+    ]);
+    if (error) throw error;
+
+    const isHO = (l: string) => l.toLowerCase().includes('head office') || l.toLowerCase() === 'ho';
+    const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const DOW_NAMES   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+    // --- Determine active month ---
+    let latestDate = new Date(year, 0, 1);
+    (rows || []).forEach(r => {
+      const d = new Date(r.transaction_date);
+      if (!isHO(r.location||'') && d > latestDate) latestDate = d;
+    });
+    const activeMonth = activeMonthIdx !== undefined ? activeMonthIdx : latestDate.getMonth();
+    const activeDay   = latestDate.getMonth() === activeMonth ? latestDate.getDate() : new Date(year, activeMonth+1, 0).getDate();
+    const daysInMonth = new Date(year, activeMonth+1, 0).getDate();
+    const monthProgress = (activeDay / daysInMonth) * 100;
+
+    // --- Aggregate current year: monthly, daily, by-store, by-category ---
+    const monthly   = new Array(12).fill(0);
+    const storeMap: Record<string, { mtd: number; days: Set<number> }> = {};
+    const catMap: Record<string, number[]> = {};  // cat -> monthly[12]
+    const dowMap: Record<number, { total: number; count: Set<string> }> = {};
+    let sellingDays = 0;
+    const sellingDaysSet = new Set<string>();
+
+    (rows || []).forEach(r => {
+      if (isHO(r.location||'')) return;
+      const d = new Date(r.transaction_date);
+      const m = d.getMonth();
+      const net = r.net_sales || 0;
+      const loc = (r.location||'').trim();
+      const cat = (r.main_category||'Other').trim();
+      const dow = d.getDay();
+      const dayKey = d.toISOString().slice(0,10);
+
+      monthly[m] += net;
+
+      if (!storeMap[loc]) storeMap[loc] = { mtd: 0, days: new Set() };
+      if (m === activeMonth) {
+        storeMap[loc].mtd += net;
+        storeMap[loc].days.add(d.getDate());
+        sellingDaysSet.add(dayKey);
+      }
+
+      if (!catMap[cat]) catMap[cat] = new Array(12).fill(0);
+      catMap[cat][m] += net;
+
+      if (m === activeMonth) {
+        if (!dowMap[dow]) dowMap[dow] = { total: 0, count: new Set() };
+        dowMap[dow].total += net;
+        dowMap[dow].count.add(dayKey);
+      }
+    });
+    sellingDays = sellingDaysSet.size;
+
+    // --- Targets ---
+    const tgtByMonth: Record<number, number> = {};
+    const tgtByStore: Record<string, Record<number, number>> = {};
+    (tgtRows || []).forEach(t => {
+      const s = (t.store_name||'').trim();
+      if (isHO(s) || s.toLowerCase() === 'total') return;
+      const m = (t.month_number||1) - 1;
+      tgtByMonth[m] = (tgtByMonth[m]||0) + (t.target_value||0);
+      if (!tgtByStore[s]) tgtByStore[s] = {};
+      tgtByStore[s][m] = (tgtByStore[s][m]||0) + (t.target_value||0);
+    });
+
+    // --- Previous year monthly ---
+    const prevMonthly = new Array(12).fill(0);
+    (pyRows || []).forEach(r => {
+      if (isHO(r.location||'')) return;
+      prevMonthly[new Date(r.transaction_date).getMonth()] += r.net_sales||0;
+    });
+
+    // --- Month-End Projection ---
+    const mtd = monthly[activeMonth];
+    const runRate = sellingDays > 0 ? mtd / sellingDays : 0;
+    const remainingDays = Math.max(0, daysInMonth - activeDay);
+    const projectedSellingDays = remainingDays * (sellingDays / Math.max(1, activeDay));
+
+    let projected: number;
+    if (sellingDays < 4 && activeDay <= 7) {
+      const anchor = prevMonthly[activeMonth] || tgtByMonth[activeMonth] || 0;
+      const linear = runRate * daysInMonth;
+      projected = anchor > 0 ? anchor * 0.7 + linear * 0.3 : linear;
+    } else {
+      projected = mtd + runRate * projectedSellingDays;
+    }
+    const mTarget = tgtByMonth[activeMonth] || 0;
+    const confidence = monthProgress >= 75 ? 'High' : monthProgress >= 40 ? 'Medium' : 'Low';
+
+    // --- Year-End Projection ---
+    const completedMonths = Array.from({length: activeMonth}, (_, i) => i);
+    const ytdActual  = completedMonths.reduce((s, m) => s + monthly[m], 0) + mtd;
+    const prevYtd    = completedMonths.reduce((s, m) => s + prevMonthly[m], 0) + prevMonthly[activeMonth];
+    const growthRate = prevYtd > 0 ? ytdActual / prevYtd : 1;
+
+    const projectedMonthly = Array.from({length: 12}, (_, m) => {
+      if (m < activeMonth)  return monthly[m];
+      if (m === activeMonth) return projected;
+      return prevMonthly[m] > 0 ? prevMonthly[m] * growthRate : 0;
+    });
+    const yearEndProjected = projectedMonthly.reduce((s, v) => s + v, 0);
+    const annualTarget     = Object.values(tgtByMonth).reduce((s, v) => s + v, 0);
+
+    // --- Store Projections (exc HO) ---
+    const storeProjections = Object.entries(storeMap)
+      .filter(([s]) => !isHO(s))
+      .map(([name, d]) => {
+        const sRunRate = d.days.size > 0 ? d.mtd / d.days.size : 0;
+        const sProjDays = projectedSellingDays;
+        const sProj = d.mtd + sRunRate * sProjDays;
+        const sTgt = tgtByStore[name]?.[activeMonth] || 0;
+        return { name, mtd: d.mtd, projected: sProj, target: sTgt,
+                 achievement: sTgt > 0 ? (sProj / sTgt) * 100 : 0 };
+      })
+      .sort((a, b) => b.projected - a.projected);
+
+    // --- Category Momentum ---
+    const prevMonth = activeMonth > 0 ? activeMonth - 1 : 11;
+    const categoryMomentum = Object.entries(catMap)
+      .map(([name, arr]) => ({
+        name,
+        current:  arr[activeMonth],
+        previous: arr[prevMonth],
+        growth:   arr[prevMonth] > 0 ? ((arr[activeMonth] - arr[prevMonth]) / arr[prevMonth]) * 100 : 0,
+      }))
+      .sort((a, b) => b.current - a.current);
+
+    // --- Day-of-Week Pattern ---
+    const dayOfWeek = DOW_NAMES.map((day, i) => ({
+      day,
+      avg:   dowMap[i] ? dowMap[i].total / dowMap[i].count.size : 0,
+      total: dowMap[i]?.total || 0,
+      count: dowMap[i]?.count.size || 0,
+    }));
+
+    // --- Seasonal chart data ---
+    const seasonalPattern = MONTH_SHORT.map((month, i) => ({
+      month, actual: monthly[i], prevYear: prevMonthly[i],
+      target: tgtByMonth[i]||0, projected: projectedMonthly[i],
+    }));
+
+    return {
+      year, prevYear: year-1, activeMonth, activeMonthName: ['January','February','March','April','May','June','July','August','September','October','November','December'][activeMonth],
+      activeDay, daysInMonth, monthProgress,
+      monthEnd: {
+        mtd, projected,
+        projectedDown: projected * 0.85,
+        projectedUp:   projected * 1.15,
+        target: mTarget,
+        achievement: mTarget > 0 ? (projected / mTarget) * 100 : 0,
+        runRate, sellingDays, remainingDays, confidence,
+      },
+      yearEnd: {
+        ytdActual, projected: yearEndProjected, target: annualTarget,
+        achievement: annualTarget > 0 ? (yearEndProjected / annualTarget) * 100 : 0,
+        growthRate: (growthRate - 1) * 100,
+        projectedMonthly,
+      },
+      storeProjections,
+      categoryMomentum,
+      dayOfWeek,
+      seasonalPattern,
+    };
+  },
+
+  async getCategorySalesTrend(baseYear: number) {
+    const years = [baseYear - 3, baseYear - 2, baseYear - 1, baseYear];
+    const { data, error } = await supabase
+      .from('clean_master')
+      .select('transaction_date, net_sales, qty, main_category, location')
+      .gte('transaction_date', `${years[0]}-01-01`)
+      .lte('transaction_date', `${baseYear}-12-31`);
+    if (error) throw error;
+
+    const isHO = (l: string) => l.toLowerCase().includes('head office') || l.toLowerCase() === 'ho';
+    const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const catSet = new Set<string>();
+    // [year][month][cat] → { net, qty }
+    const agg: Record<number, Record<number, Record<string, { net: number; qty: number }>>> = {};
+
+    (data || []).forEach(r => {
+      if (isHO(r.location || '')) return;
+      const d = new Date(r.transaction_date);
+      const y = d.getFullYear();
+      const m = d.getMonth();
+      if (!years.includes(y)) return;
+      const cat = (r.main_category || 'Other').trim();
+      catSet.add(cat);
+      if (!agg[y]) agg[y] = {};
+      if (!agg[y][m]) agg[y][m] = {};
+      if (!agg[y][m][cat]) agg[y][m][cat] = { net: 0, qty: 0 };
+      agg[y][m][cat].net += r.net_sales || 0;
+      agg[y][m][cat].qty += r.qty || 0;
+    });
+
+    const categories = Array.from(catSet).sort();
+
+    // Determine last filled month for baseYear
+    let lastFilledMonth = -1;
+    for (let m = 0; m < 12; m++) {
+      const hasData = categories.some(c => (agg[baseYear]?.[m]?.[c]?.net || 0) > 0);
+      if (hasData) lastFilledMonth = m;
+    }
+    const activeMonth = lastFilledMonth >= 0 ? lastFilledMonth : new Date().getMonth();
+
+    // Build chart rows: one row per month
+    const chartData = MONTH_SHORT.map((month, mi) => {
+      const point: Record<string, number | string | null> = { month };
+      years.forEach(y => {
+        // total (all cats)
+        const totalNet = categories.reduce((s, c) => s + (agg[y]?.[mi]?.[c]?.net || 0), 0);
+        const totalQty = categories.reduce((s, c) => s + (agg[y]?.[mi]?.[c]?.qty || 0), 0);
+        // For current year, null out months after activeMonth so line stops
+        const isFuture = y === baseYear && mi > activeMonth;
+        point[`${y}`]     = isFuture ? null : totalNet;
+        point[`${y}_qty`] = isFuture ? null : totalQty;
+        categories.forEach(cat => {
+          point[`${y}_${cat}`]     = isFuture ? null : (agg[y]?.[mi]?.[cat]?.net || 0);
+          point[`${y}_${cat}_qty`] = isFuture ? null : (agg[y]?.[mi]?.[cat]?.qty || 0);
+        });
+      });
+      return point;
+    });
+
+    // YTD per year
+    const ytd: Record<number, Record<string, { value: number; qty: number }>> = {};
+    years.forEach(y => {
+      ytd[y] = { __total__: { value: 0, qty: 0 } };
+      const maxM = y === baseYear ? activeMonth : 11;
+      categories.forEach(cat => {
+        let v = 0, q = 0;
+        for (let m = 0; m <= maxM; m++) {
+          v += agg[y]?.[m]?.[cat]?.net || 0;
+          q += agg[y]?.[m]?.[cat]?.qty || 0;
+        }
+        ytd[y][cat] = { value: v, qty: q };
+        ytd[y]['__total__'].value += v;
+        ytd[y]['__total__'].qty  += q;
+      });
+    });
+
+    return { years, categories, chartData, ytd, activeMonth };
+  },
 };

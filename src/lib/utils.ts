@@ -32,3 +32,21 @@ export const formatChartValue = (value: number) => {
   if (value >= 1_000_000_000) return (value / 1_000_000_000) + ' M';
   return value.toLocaleString('id-ID');
 };
+
+/**
+ * Format singkat dengan sufiks B (miliar) dan M (juta)
+ * Contoh: 12.500.000.000 → 12.5B
+ *         500.000.000    → 500M
+ *         1.500.000      → 1.5M
+ */
+export const formatShort = (value: number): string => {
+  if (value >= 1_000_000_000) {
+    const v = value / 1_000_000_000;
+    return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + 'B';
+  }
+  if (value >= 1_000_000) {
+    const v = value / 1_000_000;
+    return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + 'M';
+  }
+  return value.toLocaleString('id-ID');
+};
