@@ -807,12 +807,21 @@ export const dashboardService = {
       const isSMI = (row.type || '').toUpperCase() === 'SMI';
       const isToday = rowDay === day;
 
-      if (!storeMap[loc]) storeMap[loc] = {
-        mtdNet: 0, mtdQty: 0, todayNet: 0, todayQty: 0,
-        todayCost: 0, todayGross: 0, todayComm: 0, 
-        todayRegNet: 0, todaySmiNet: 0,
-        categories: {}
-      };
+      if (!storeMap[loc]) {
+        storeMap[loc] = {
+          mtdNet: 0, mtdQty: 0, todayNet: 0, todayQty: 0,
+          todayCost: 0, todayGross: 0, todayComm: 0, 
+          todayRegNet: 0, todaySmiNet: 0,
+          categories: {}
+        };
+        // Pre-populate core categories
+        const coreCats = ['Jewelry', 'Watches', 'Accessories', 'Perfume'];
+        coreCats.forEach(c => {
+          const stockRow = stockRows?.find(sr => sr.location.toLowerCase() === loc.toLowerCase() && normalizeCat(sr.category) === c);
+          const openingStock = stockRow ? (stockRow[currentMonthKey as keyof typeof stockRow] as number) : 0;
+          storeMap[loc].categories[c] = { qty: 0, netNonSMI: 0, netSMI: 0, stock: openingStock, valDisc: 0, gross: 0 };
+        });
+      }
 
       const s = storeMap[loc];
       s.mtdNet += net;
@@ -859,6 +868,16 @@ export const dashboardService = {
         todayCost: 0, todayGross: 0, todayComm: 0,
         todayRegNet: 0, todaySmiNet: 0, categories: {}
       };
+
+      // Ensure target-only stores also get categories pre-populated
+      if (Object.keys(s.categories).length === 0) {
+        const coreCats = ['Jewelry', 'Watches', 'Accessories', 'Perfume'];
+        coreCats.forEach(c => {
+          const stockRow = stockRows?.find(sr => sr.location.toLowerCase() === storeName.toLowerCase() && normalizeCat(sr.category) === c);
+          const openingStock = stockRow ? (stockRow[currentMonthKey as keyof typeof stockRow] as number) : 0;
+          s.categories[c] = { qty: 0, netNonSMI: 0, netSMI: 0, stock: openingStock, valDisc: 0, gross: 0 };
+        });
+      }
       const target    = targetMap[storeName] || 0;
       const remaining = Math.max(0, target - s.mtdNet);
       const achievement = target > 0 ? (s.mtdNet / target) * 100 : 0;
