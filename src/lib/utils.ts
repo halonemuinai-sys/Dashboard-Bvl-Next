@@ -22,13 +22,7 @@ export const formatCurrency = (value: number) => {
  * Contoh: 1.500.000 -> 1.500.000
  */
 export const formatCompact = (value: number) => {
-  if (value >= 1_000_000_000) {
-    return (value / 1_000_000_000).toLocaleString('id-ID', { 
-      maximumFractionDigits: 1 
-    }) + ' M';
-  }
-  // Menghilangkan 'jt', kembali ke format angka biasa dengan titik
-  return value.toLocaleString('id-ID');
+  return formatCurrency(value);
 };
 
 /**

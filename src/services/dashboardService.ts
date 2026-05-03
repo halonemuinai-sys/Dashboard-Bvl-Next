@@ -25,6 +25,17 @@ export interface MonthlyKpi {
   mtdSalesCurrent: number;   // MTD store sales (exc HO)
   mtdSalesPrevYear: number;  // Same period last year
   mtdGrowthPct: number;      // YoY growth
+  momGrowthPct: number;      // MoM growth (vs same period last month)
+  
+  // New metrics for Qty and Transactions (Items Sold & Transactions)
+  ytdQtyCurrent: number;
+  ytdQtyPrevYear: number;
+  ytdTxCurrent: number;
+  ytdTxPrevYear: number;
+  mtdQtyCurrent: number;
+  mtdQtyPrevMonth: number;
+  mtdTxCurrent: number;
+  mtdTxPrevMonth: number;
 }
 
 export interface AnnualStats {
@@ -52,7 +63,12 @@ export interface MonthlyOverviewData {
   annualStats: AnnualStats;
   storeData: StorePerformanceRow[];
   catData: { [key: string]: { qty: number; net: number } };
-  crossingData: { [store: string]: number }; // Crossing Sales per store
+  crossingData: {
+    totalNet: number;
+    totalQty: number;
+    storeStats: Record<string, { physical: number; adjusted: number }>;
+    records: { salesman: string; baseLoc: string; crossingLoc: string; net: number; qty: number }[];
+  };
   trendData: TrendDataPoint[];        // 12 months current year
   multiYearStats: { [year: number]: number[] }; // year -> 12 monthly totals
   categoryTrend: CategoryTrendData;
@@ -87,6 +103,83 @@ export interface AdvisorPerformanceData {
   year: number;
 }
 
+export interface CrossingRecord {
+  salesman: string;
+  baseLoc: string;
+  crossingLoc: string;
+  net: number;
+  qty: number;
+}
+
+export interface CrossingSalesData {
+  records: CrossingRecord[];
+  totalNet: number;
+  totalQty: number;
+  totalNetSalesGenerated: number;
+  totalQtyGenerated: number;
+  hoExcludedNet: number;
+  hoExcludedQty: number;
+  storeStats: Record<string, { physical: number; adjusted: number }>;
+  month: string;
+  year: number;
+}
+
+export interface AdvisorProfile {
+  name: string;
+  home_location: string;
+}
+
+export interface AdvisorRotation {
+  advisor_name: string;
+  year: number;
+  month_number: number;
+  assigned_location: string;
+}
+
+export interface AdvisorSetupData {
+  advisors: AdvisorProfile[];
+  rotations: AdvisorRotation[];
+  targets: { advisor_name: string; year: number; month_number: number; target_value: number }[];
+}
+
+export interface FootfallStoreRow {
+  id: number;
+  transaction_date: string;
+  location: string;
+  traffic_in: number;
+  traffic_out: number;
+  men_pct: number;
+  women_pct: number;
+}
+
+export interface FootfallCrmRow {
+  id: number;
+  transaction_date: string;
+  location: string;
+  walk_in: number;
+  appointment: number;
+  new_customer: number;
+}
+
+export interface StockStoreRow {
+  id: number;
+  year: number;
+  location: string;
+  category: string;
+  jan: number;
+  feb: number;
+  mar: number;
+  apr: number;
+  may: number;
+  jun: number;
+  jul: number;
+  aug: number;
+  sep: number;
+  oct: number;
+  nov: number;
+  dec: number;
+}
+
 // ==========================================
 // --- HELPERS ---
 // ==========================================
@@ -114,11 +207,12 @@ export const dashboardService = {
     const [
       { data: multiYearRows, error: multiYearErr },
       { data: allTargetRows },
-      { data: advisorProfiles }
+      { data: advisorProfiles },
+      { data: rotationRows }
     ] = await Promise.all([
       supabase
         .from('clean_master')
-        .select('transaction_date, location, net_sales, gross_sales, val_disc, cost, qty, main_category, trans_no, customer, salesman')
+        .select('transaction_date, location, net_sales, gross_sales, val_disc, cost, qty, main_category, trans_no, customer, salesman, comm')
         .gte('transaction_date', startRange)
         .lte('transaction_date', endRange),
       supabase
@@ -126,7 +220,10 @@ export const dashboardService = {
         .select('year, month_number, target_value, store_name')
         .gte('year', 2023)
         .lte('year', 2026),
-      supabase.from('advisors').select('name, home_location')
+      supabase.from('advisors').select('name, home_location'),
+      supabase.from('advisor_rotations').select('advisor_name, assigned_location')
+        .eq('year', year)
+        .eq('month_number', monthIndex + 1)
     ]);
 
     if (multiYearErr) throw multiYearErr;
@@ -141,8 +238,10 @@ export const dashboardService = {
       2026: new Array(12).fill(0)
     };
 
-    // A. Fill with Actual Sales
+    // A. Fill with Actual Sales (Retail only — exclude HO)
     multiYearRows?.forEach(row => {
+      const loc = (row.location || '').trim().toLowerCase();
+      if (loc.includes('head office')) return;
       const d = new Date(row.transaction_date);
       const rYear = d.getFullYear();
       const rMonth = d.getMonth();
@@ -194,9 +293,27 @@ export const dashboardService = {
     const yearData = multiYearRows?.filter(r => new Date(r.transaction_date).getFullYear() === year) || [];
     const rows = yearData; 
     let annualSalesExcHO = 0;
-    const crossingData: Record<string, number> = {};
+    const crossingRecordMap = new Map<string, { salesman: string; baseLoc: string; crossingLoc: string; net: number; qty: number }>();
+    const crossingResult = {
+      totalNet: 0,
+      totalQty: 0,
+      storeStats: {
+        "Plaza Indonesia": { physical: 0, adjusted: 0 },
+        "Plaza Senayan": { physical: 0, adjusted: 0 },
+        "Bali": { physical: 0, adjusted: 0 }
+      } as Record<string, { physical: number; adjusted: number }>,
+      records: [] as { salesman: string; baseLoc: string; crossingLoc: string; net: number; qty: number }[]
+    };
+
+    const validStores = ["plaza indonesia", "plaza senayan", "bali", "bali boutique"];
+
     const advisorMap = (advisorProfiles || []).reduce((acc: any, curr: any) => {
-      acc[curr.name] = curr.home_location;
+      acc[curr.name.toLowerCase()] = curr.home_location;
+      return acc;
+    }, {});
+
+    const rotationMap = (rotationRows || []).reduce((acc: any, curr: any) => {
+      acc[curr.advisor_name.toLowerCase()] = curr.assigned_location;
       return acc;
     }, {});
 
@@ -206,13 +323,25 @@ export const dashboardService = {
 
     const categoryTrend: CategoryTrendData = {};
     const monthlyRows: typeof rows = [];
+    const pmIdx = monthIndex === 0 ? 11 : monthIndex - 1;
+    const pmYear = monthIndex === 0 ? year - 1 : year;
 
-    // Monthly aggregation accumulators
+    let ytdQtyCurrent = 0, ytdQtyPrevYear = 0;
+    const ytdTxSetCurrent = new Set<string>();
+    const ytdTxSetPrevYear = new Set<string>();
+    
+    let mtdQtyCurrent = 0, mtdQtyPrevMonth = 0;
+    const mtdTxSetCurrent = new Set<string>();
+    const mtdTxSetPrevMonth = new Set<string>();
     let totalNet = 0, totalGross = 0, totalCost = 0, totalValDisc = 0, totalQty = 0;
     const storeStats: Record<string, { net: number; cost: number; qty: number }> = {};
     const catStats: Record<string, { qty: number; net: number }> = {};
     const dailyStats = Array.from({length: 31}, () => ({ net: 0, qty: 0 }));
-    let maxDay = 0;
+
+    // Real MTD bounds for fair comparison
+    const now = new Date();
+    const isCurrentMonth = year === now.getFullYear() && monthIndex === now.getMonth();
+    const maxDay = isCurrentMonth ? now.getDate() : 31;
 
     rows.forEach(row => {
       const d = new Date(row.transaction_date);
@@ -223,10 +352,7 @@ export const dashboardService = {
       const cat = (row.main_category || 'Other').trim();
       const isHO = loc.toLowerCase().includes('head office');
 
-      // A: Multi-Year Stats
-      if (multiYearStats[year]) multiYearStats[year][rMonth] += net;
-
-      // B: Trend Stats
+      // A: Trend Stats
       trendStats[rMonth].net += net;
       trendStats[rMonth].qty += qty;
       if (row.trans_no) trendStats[rMonth].transSet.add(row.trans_no);
@@ -240,23 +366,52 @@ export const dashboardService = {
       categoryTrend[cat].net[rMonth] += net;
       categoryTrend[cat].qty[rMonth] += qty;
 
-      // F: Crossing Sales check & Monthly Aggregation
+      // F: Crossing Sales & Mobility check (GAS Style)
       if (rMonth === monthIndex) {
-        const advisorHome = advisorMap[row.salesman || ''];
-        if (advisorHome && advisorHome.trim().toLowerCase() !== loc.toLowerCase() && !isHO) {
-          crossingData[loc] = (crossingData[loc] || 0) + net;
+        let tLoc = loc;
+        const salesmanKey = (row.salesman || '').trim().toLowerCase();
+        // Rotation takes precedence over home_location. Fallback to transaction location if unknown.
+        let hLoc = (rotationMap[salesmanKey] || advisorMap[salesmanKey] || loc).trim();
+
+        const tLocLower = tLoc.toLowerCase();
+        const hLocLower = hLoc.toLowerCase();
+
+        const isValidT = validStores.includes(tLocLower);
+        const isValidH = validStores.includes(hLocLower);
+
+        if (isValidT && isValidH) {
+          // Normalize Bali
+          const normT = (tLocLower === 'bali boutique') ? 'Bali' : (tLocLower === 'plaza indonesia' ? 'Plaza Indonesia' : (tLocLower === 'plaza senayan' ? 'Plaza Senayan' : 'Bali'));
+          const normH = (hLocLower === 'bali boutique') ? 'Bali' : (hLocLower === 'plaza indonesia' ? 'Plaza Indonesia' : (hLocLower === 'plaza senayan' ? 'Plaza Senayan' : 'Bali'));
+
+          if (crossingResult.storeStats[normT]) crossingResult.storeStats[normT].physical += net;
+          if (crossingResult.storeStats[normH]) crossingResult.storeStats[normH].adjusted += net;
+
+          if (tLocLower !== hLocLower) {
+            crossingResult.totalNet += net;
+            crossingResult.totalQty += qty;
+            const salesman = row.salesman || 'Unknown';
+            const cKey = `${salesman}||${normH}||${normT}`;
+            if (crossingRecordMap.has(cKey)) {
+              const r = crossingRecordMap.get(cKey)!;
+              r.net += net;
+              r.qty += qty;
+            } else {
+              crossingRecordMap.set(cKey, { salesman, baseLoc: normH, crossingLoc: normT, net, qty });
+            }
+          }
         }
         
         monthlyRows.push(row);
         totalNet += net;
         totalGross += (row.gross_sales || 0);
-        totalCost += (row.cost || 0);
+        totalCost += (row.cost || 0) + (row.comm || 0);
         totalValDisc += (row.val_disc || 0);
         totalQty += qty;
 
         if (!storeStats[loc]) storeStats[loc] = { net: 0, cost: 0, qty: 0 };
         storeStats[loc].net += net;
-        storeStats[loc].cost += (row.cost || 0);
+        storeStats[loc].cost += (row.cost || 0) + (row.comm || 0);
         storeStats[loc].qty += qty;
 
         if (!catStats[cat]) catStats[cat] = { qty: 0, net: 0 };
@@ -267,23 +422,70 @@ export const dashboardService = {
         if (day >= 0 && day < 31) {
           dailyStats[day].net += net;
           dailyStats[day].qty += qty;
-          if (d.getDate() > maxDay) maxDay = d.getDate();
         }
       }
     });
 
-    // MTD YoY calculation
-    let currentMtd = 0, prevMtd = 0;
+    // MTD YoY & MoM calculation
+    let currentMtd = 0, prevYearMtd = 0, prevMonthMtd = 0;
+
     monthlyRows.forEach(r => {
       const loc = (r.location || '').trim();
-      if (!loc.toLowerCase().includes('head office')) currentMtd += (r.net_sales || 0);
+      if (!loc.toLowerCase().includes('head office')) {
+        currentMtd += (r.net_sales || 0);
+        // MTD Qty & Tx (Current)
+        const d = new Date(r.transaction_date);
+        if (d.getDate() <= maxDay) {
+          mtdQtyCurrent += (r.qty || 0);
+          if (r.trans_no) mtdTxSetCurrent.add(r.trans_no);
+        }
+      }
     });
     
     multiYearRows?.forEach(r => {
       const d = new Date(r.transaction_date);
-      if (d.getFullYear() === (year - 1) && d.getMonth() === monthIndex && d.getDate() <= maxDay) {
-        const loc = (r.location || '').trim();
-        if (!loc.toLowerCase().includes('head office')) prevMtd += (r.net_sales || 0);
+      const loc = (r.location || '').trim();
+      if (loc.toLowerCase().includes('head office')) return;
+
+      const rYear = d.getFullYear();
+      const rMonth = d.getMonth();
+      const rDay = d.getDate();
+      
+      const qty = r.qty || 0;
+      const tx = r.trans_no;
+
+      // YTD Current Year (up to selected month)
+      if (rYear === year) {
+        if (rMonth < monthIndex) {
+          ytdQtyCurrent += qty;
+          if (tx) ytdTxSetCurrent.add(tx);
+        } else if (rMonth === monthIndex && rDay <= maxDay) {
+          ytdQtyCurrent += qty;
+          if (tx) ytdTxSetCurrent.add(tx);
+        }
+      }
+      
+      // YTD Previous Year (up to selected month)
+      if (rYear === (year - 1)) {
+        if (rMonth < monthIndex) {
+          ytdQtyPrevYear += qty;
+          if (tx) ytdTxSetPrevYear.add(tx);
+        } else if (rMonth === monthIndex && rDay <= maxDay) {
+          ytdQtyPrevYear += qty;
+          if (tx) ytdTxSetPrevYear.add(tx);
+        }
+      }
+
+      // YoY Sales (Same Month, Previous Year)
+      if (rYear === (year - 1) && rMonth === monthIndex && rDay <= maxDay) {
+        prevYearMtd += (r.net_sales || 0);
+      }
+      
+      // MoM Sales, Qty, Tx (Previous Month, Same/Adjusted Year)
+      if (rYear === pmYear && rMonth === pmIdx && rDay <= maxDay) {
+        prevMonthMtd += (r.net_sales || 0);
+        mtdQtyPrevMonth += qty;
+        if (tx) mtdTxSetPrevMonth.add(tx);
       }
     });
 
@@ -303,6 +505,8 @@ export const dashboardService = {
       });
     });
 
+    crossingResult.records = Array.from(crossingRecordMap.values()).sort((a, b) => b.net - a.net);
+
     const activeStores = storeData.filter(s => !s.store.toLowerCase().includes('head office'));
     const storeNetExcHO = activeStores.reduce((s, r) => s + r.actual, 0);
     const storeTargetExcHO = activeStores.reduce((s, r) => s + r.target, 0);
@@ -318,8 +522,18 @@ export const dashboardService = {
         totalValDisc,
         avgDiscountPercentage: totalGross > 0 ? (totalValDisc / totalGross) * 100 : 0,
         mtdSalesCurrent: currentMtd,
-        mtdSalesPrevYear: prevMtd,
-        mtdGrowthPct: prevMtd > 0 ? ((currentMtd - prevMtd) / prevMtd) * 100 : 0
+        mtdSalesPrevYear: prevYearMtd,
+        mtdGrowthPct: prevYearMtd > 0 ? ((currentMtd - prevYearMtd) / prevYearMtd) * 100 : 0,
+        momGrowthPct: prevMonthMtd > 0 ? ((currentMtd - prevMonthMtd) / prevMonthMtd) * 100 : 0,
+        
+        ytdQtyCurrent,
+        ytdQtyPrevYear,
+        ytdTxCurrent: ytdTxSetCurrent.size,
+        ytdTxPrevYear: ytdTxSetPrevYear.size,
+        mtdQtyCurrent,
+        mtdQtyPrevMonth,
+        mtdTxCurrent: mtdTxSetCurrent.size,
+        mtdTxPrevMonth: mtdTxSetPrevMonth.size
       },
       annualStats: {
         salesExcHO: annualSalesExcHO,
@@ -331,7 +545,7 @@ export const dashboardService = {
       trendData: trendStats.map(t => ({ net: t.net, qty: t.qty, trans: t.transSet.size, customers: t.custSet.size })),
       multiYearStats,
       categoryTrend,
-      crossingData,
+      crossingData: crossingResult,
       advisorData: [], // Loaded separately via getAdvisorPerformance
       dailyTrendData: dailyStats.slice(0, new Date(year, monthIndex + 1, 0).getDate())
     };
@@ -349,7 +563,8 @@ export const dashboardService = {
       { data: salesRows, error: salesErr },
       { data: advisorProfiles },
       { data: advisorTargets },
-      { data: storeTargets }
+      { data: storeTargets },
+      { data: rotationRows }
     ] = await Promise.all([
       supabase
         .from('clean_master')
@@ -358,7 +573,8 @@ export const dashboardService = {
         .lte('transaction_date', mEnd),
       supabase.from('advisors').select('name, home_location'),
       supabase.from('advisor_targets').select('advisor_name, target_value').eq('year', year).eq('month_number', monthIndex + 1),
-      supabase.from('targets').select('store_name, target_value').eq('year', year).eq('month_number', monthIndex + 1)
+      supabase.from('targets').select('store_name, target_value').eq('year', year).eq('month_number', monthIndex + 1),
+      supabase.from('advisor_rotations').select('advisor_name, assigned_location').eq('year', year).eq('month_number', monthIndex + 1)
     ]);
 
     if (salesErr) throw salesErr;
@@ -367,6 +583,11 @@ export const dashboardService = {
     // 2. Maps for quick lookup
     const homeLocMap: Record<string, string> = {};
     advisorProfiles?.forEach(p => { homeLocMap[p.name.toLowerCase()] = p.home_location; });
+
+    const rotationMap: Record<string, string> = {};
+    rotationRows?.forEach(r => { rotationMap[r.advisor_name.toLowerCase()] = r.assigned_location; });
+
+    const effectiveLoc = (key: string, fallback: string) => rotationMap[key] || homeLocMap[key] || fallback;
 
     const advTargetMap: Record<string, number> = {};
     advisorTargets?.forEach(t => { advTargetMap[t.advisor_name.toLowerCase()] = t.target_value || 0; });
@@ -404,7 +625,7 @@ export const dashboardService = {
 
       if (!advisorMap.has(key)) {
         advisorMap.set(key, {
-          name, net: 0, loc: homeLocMap[key] || loc, target: advTargetMap[key] || 0,
+          name, net: 0, loc: effectiveLoc(key, loc), target: advTargetMap[key] || 0,
           categories: {}, transactions: new Set(), productiveMonths: new Set(),
           crossingNet: 0, crossingQty: 0
         });
@@ -416,7 +637,7 @@ export const dashboardService = {
       entry.productiveMonths.add(new Date(row.transaction_date).getMonth());
 
       // Crossing Sale Detection: transLoc != homeLoc
-      const homeLoc = homeLocMap[key];
+      const homeLoc = effectiveLoc(key, '');
       if (homeLoc && loc.toLowerCase() !== homeLoc.toLowerCase()) {
         entry.crossingNet += net;
         entry.crossingQty += qty;
@@ -432,7 +653,7 @@ export const dashboardService = {
       const key = t.advisor_name.toLowerCase();
       if (!advisorMap.has(key)) {
         advisorMap.set(key, {
-          name: t.advisor_name, net: 0, loc: homeLocMap[key] || 'Unknown', target: t.target_value || 0,
+          name: t.advisor_name, net: 0, loc: effectiveLoc(key, 'Unknown'), target: t.target_value || 0,
           categories: {}, transactions: new Set(), productiveMonths: new Set(),
           crossingNet: 0, crossingQty: 0
         });
@@ -492,18 +713,25 @@ export const dashboardService = {
     const mStart = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01T00:00:00`;
     const mEnd   = new Date(year, monthIdx + 1, 0, 23, 59, 59).toISOString();
 
-    const [{ data: rows, error }, { data: targetRows }] = await Promise.all([
+    const [{ data: rows, error }, { data: targetRows }, { data: stockRows }] = await Promise.all([
       supabase
         .from('clean_master')
-        .select('transaction_date, location, main_category, net_sales, qty, cost, gross_sales, type')
+        .select('transaction_date, location, main_category, net_sales, qty, cost, gross_sales, type, comm')
         .gte('transaction_date', mStart)
         .lte('transaction_date', mEnd),
       supabase
         .from('targets')
         .select('store_name, target_value')
         .eq('year', year)
-        .eq('month_number', monthIdx + 1)
+        .eq('month_number', monthIdx + 1),
+      supabase
+        .from('stock_store')
+        .select('*')
+        .eq('year', year)
     ]);
+
+    const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const currentMonthKey = monthKeys[monthIdx];
 
     if (error) throw error;
 
@@ -515,10 +743,20 @@ export const dashboardService = {
       mtdNet: number; mtdQty: number;
       todayNet: number; todayQty: number;
       todayCost: number; todayGross: number;
+      todayComm: number;
       todayRegNet: number; todaySmiNet: number;
-      categories: Record<string, { qty: number; netNonSMI: number; netSMI: number }>;
+      categories: Record<string, { qty: number; netNonSMI: number; netSMI: number; stock: number }>;
     };
     const storeMap: Record<string, StoreAccum> = {};
+
+    const normalizeCat = (c: string) => {
+      const cu = c.toUpperCase();
+      if (cu === 'JWL' || cu === 'JEWELRY') return 'Jewelry';
+      if (cu === 'WTH' || cu === 'WATCHES') return 'Watches';
+      if (cu === 'ACCS' || cu === 'ACCESSORIES') return 'Accessories';
+      if (cu === 'PFM' || cu === 'PERFUME') return 'Perfume';
+      return 'Other';
+    };
 
     (rows || []).forEach(row => {
       const loc = (row.location || '').trim();
@@ -538,7 +776,8 @@ export const dashboardService = {
 
       if (!storeMap[loc]) storeMap[loc] = {
         mtdNet: 0, mtdQty: 0, todayNet: 0, todayQty: 0,
-        todayCost: 0, todayGross: 0, todayRegNet: 0, todaySmiNet: 0,
+        todayCost: 0, todayGross: 0, todayComm: 0, 
+        todayRegNet: 0, todaySmiNet: 0,
         categories: {}
       };
 
@@ -546,17 +785,28 @@ export const dashboardService = {
       s.mtdNet += net;
       s.mtdQty += qty;
 
+      const normCat = normalizeCat(cat);
+      if (!s.categories[normCat]) {
+        // Find opening stock for this store/category
+        const stockRow = stockRows?.find(sr => sr.location.toLowerCase() === loc.toLowerCase() && normalizeCat(sr.category) === normCat);
+        const openingStock = stockRow ? (stockRow[currentMonthKey as keyof typeof stockRow] as number) : 0;
+        s.categories[normCat] = { qty: 0, netNonSMI: 0, netSMI: 0, stock: openingStock };
+      }
+
+      // Deduct from stock (MTD)
+      s.categories[normCat].stock = Math.max(0, s.categories[normCat].stock - qty);
+
       if (isToday) {
         s.todayNet += net;
         s.todayQty += qty;
         s.todayCost += cost;
+        s.todayComm += (row.comm || 0);
         s.todayGross += gross;
         if (isSMI) s.todaySmiNet += net; else s.todayRegNet += net;
 
-        if (!s.categories[cat]) s.categories[cat] = { qty: 0, netNonSMI: 0, netSMI: 0 };
-        s.categories[cat].qty += qty;
-        if (isSMI) s.categories[cat].netSMI += net;
-        else       s.categories[cat].netNonSMI += net;
+        s.categories[normCat].qty += qty;
+        if (isSMI) s.categories[normCat].netSMI += net;
+        else       s.categories[normCat].netNonSMI += net;
       }
     });
 
@@ -568,10 +818,11 @@ export const dashboardService = {
       ...Object.keys(targetMap).filter(s => !STORE_ORDER.includes(s) && !storeMap[s])
     ]));
 
-    const stores = allStores.map(storeName => {
+    const storeResults = allStores.map(storeName => {
       const s = storeMap[storeName] || {
         mtdNet: 0, mtdQty: 0, todayNet: 0, todayQty: 0,
-        todayCost: 0, todayGross: 0, todayRegNet: 0, todaySmiNet: 0, categories: {}
+        todayCost: 0, todayGross: 0, todayComm: 0,
+        todayRegNet: 0, todaySmiNet: 0, categories: {}
       };
       const target    = targetMap[storeName] || 0;
       const remaining = Math.max(0, target - s.mtdNet);
@@ -591,6 +842,8 @@ export const dashboardService = {
           todayQty: s.todayQty,
           sellingCostTodayVal: s.todayCost,
           sellingCostTodayPct: costPct,
+          mdrCostTodayVal: s.todayComm,
+          mdrCostTodayPct: s.todayGross > 0 ? (s.todayComm / s.todayGross) * 100 : 0,
           regSalesTodayPct: todayTotal > 0 ? +((s.todayRegNet / todayTotal) * 100).toFixed(1) : 0,
           smiSalesTodayPct: todayTotal > 0 ? +((s.todaySmiNet / todayTotal) * 100).toFixed(1) : 0,
         },
@@ -598,6 +851,276 @@ export const dashboardService = {
       };
     });
 
-    return { date: dateStr, monthName, stores };
+    return {
+      date: dateStr,
+      monthName,
+      stores: storeResults
+    };
+  },
+
+  /**
+   * Advisor Setup — fetch all advisors + rotations for a given year
+   */
+  async getAdvisorSetup(year: number): Promise<AdvisorSetupData> {
+    const [{ data: advisors }, { data: rotations }, { data: targets }] = await Promise.all([
+      supabase.from('advisors').select('name, home_location').order('name'),
+      supabase.from('advisor_rotations').select('advisor_name, year, month_number, assigned_location').eq('year', year),
+      supabase.from('advisor_targets').select('advisor_name, year, month_number, target_value').eq('year', year)
+    ]);
+    return {
+      advisors: (advisors || []) as AdvisorProfile[],
+      rotations: (rotations || []) as AdvisorRotation[],
+      targets: (targets || []) as any[]
+    };
+  },
+
+  async updateAdvisorHomeBase(name: string, homeLocation: string): Promise<void> {
+    const { error } = await supabase
+      .from('advisors')
+      .update({ home_location: homeLocation })
+      .eq('name', name);
+    if (error) throw error;
+  },
+
+  async saveRotation(advisorName: string, year: number, monthNumber: number, assignedLocation: string): Promise<void> {
+    // 1. Coba update dulu
+    const { data, error: updateErr } = await supabase
+      .from('advisor_rotations')
+      .update({ assigned_location: assignedLocation })
+      .eq('advisor_name', advisorName)
+      .eq('year', year)
+      .eq('month_number', monthNumber)
+      .select();
+
+    if (updateErr) throw updateErr;
+
+    // 2. Jika tidak ada baris yang terupdate (data belum ada) -> lakukan INSERT
+    if (!data || data.length === 0) {
+      const { error: insertErr } = await supabase
+        .from('advisor_rotations')
+        .insert({ advisor_name: advisorName, year, month_number: monthNumber, assigned_location: assignedLocation });
+      
+      if (insertErr) throw insertErr;
+    }
+  },
+
+  async deleteRotation(advisorName: string, year: number, monthNumber: number): Promise<void> {
+    const { error } = await supabase
+      .from('advisor_rotations')
+      .delete()
+      .eq('advisor_name', advisorName)
+      .eq('year', year)
+      .eq('month_number', monthNumber);
+    if (error) throw error;
+  },
+
+  async saveAdvisorTarget(advisorName: string, year: number, monthNumber: number, targetValue: number): Promise<void> {
+    const { data, error: updateErr } = await supabase
+      .from('advisor_targets')
+      .update({ target_value: targetValue })
+      .eq('advisor_name', advisorName)
+      .eq('year', year)
+      .eq('month_number', monthNumber)
+      .select();
+
+    if (updateErr) throw updateErr;
+
+    if (!data || data.length === 0) {
+      const { error: insertErr } = await supabase
+        .from('advisor_targets')
+        .insert({ advisor_name: advisorName, year, month_number: monthNumber, target_value: targetValue });
+      
+      if (insertErr) throw insertErr;
+    }
+  },
+
+  async getFootfallStore(month: string, year: number): Promise<FootfallStoreRow[]> {
+    const monthIndex = MONTH_NAMES.indexOf(month);
+    const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+    const mEnd = new Date(year, monthIndex + 1, 0).toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('footfall_store')
+      .select('*')
+      .gte('transaction_date', mStart)
+      .lte('transaction_date', mEnd)
+      .order('transaction_date', { ascending: true });
+
+    if (error) throw error;
+    return (data || []) as FootfallStoreRow[];
+  },
+
+  async getStockStore(year: number): Promise<StockStoreRow[]> {
+    const { data, error } = await supabase
+      .from('stock_store')
+      .select('*')
+      .eq('year', year);
+    if (error) throw error;
+    return (data || []) as StockStoreRow[];
+  },
+
+  async getFootfallCrm(month: string, year: number): Promise<FootfallCrmRow[]> {
+    const monthIndex = MONTH_NAMES.indexOf(month);
+    const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+    const mEnd = new Date(year, monthIndex + 1, 0).toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('footfall_crm')
+      .select('*')
+      .gte('transaction_date', mStart)
+      .lte('transaction_date', mEnd)
+      .order('transaction_date', { ascending: true });
+
+    if (error) throw error;
+    return (data || []) as FootfallCrmRow[];
+  },
+
+  async saveFootfallStore(row: Partial<FootfallStoreRow>): Promise<void> {
+    if (row.id) {
+      const { error } = await supabase.from('footfall_store').update(row).eq('id', row.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('footfall_store').insert(row);
+      if (error) throw error;
+    }
+  },
+
+  async saveFootfallCrm(row: Partial<FootfallCrmRow>): Promise<void> {
+    if (row.id) {
+      const { error } = await supabase.from('footfall_crm').update(row).eq('id', row.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('footfall_crm').insert(row);
+      if (error) throw error;
+    }
+  },
+
+  /**
+   * Crossing Sales — Replicates getCrossingSalesData() from GAS (5-API_Reports.gs)
+   * Detects advisors selling outside their home boutique for the selected month.
+   * Uses advisor_rotations override first, then advisors.home_location as fallback.
+   */
+  async getCrossingSalesData(month: string, year: number): Promise<CrossingSalesData> {
+    const monthIndex = MONTH_NAMES.indexOf(month);
+    if (monthIndex === -1) throw new Error(`Invalid month: ${month}`);
+
+    const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01T00:00:00`;
+    const mEnd   = new Date(year, monthIndex + 1, 0, 23, 59, 59).toISOString();
+
+    const [{ data: rows, error }, { data: advisorProfiles }, { data: rotationRows }] = await Promise.all([
+      supabase
+        .from('clean_master')
+        .select('salesman, location, net_sales, qty')
+        .gte('transaction_date', mStart)
+        .lte('transaction_date', mEnd),
+      supabase.from('advisors').select('name, home_location'),
+      supabase.from('advisor_rotations').select('advisor_name, assigned_location')
+        .eq('year', year).eq('month_number', monthIndex + 1)
+    ]);
+
+    if (error) throw error;
+
+    const homeLocMap: Record<string, string> = {};
+    advisorProfiles?.forEach(p => { homeLocMap[p.name.toLowerCase()] = p.home_location; });
+
+    // Rotation overrides for this month (takes precedence over home_location)
+    const rotationMap: Record<string, string> = {};
+    rotationRows?.forEach(r => { rotationMap[r.advisor_name.toLowerCase()] = r.assigned_location; });
+
+    const validStores = ['plaza indonesia', 'plaza senayan', 'bali', 'bali boutique'];
+    const normalize = (l: string) => {
+      const ll = l.toLowerCase();
+      if (ll === 'plaza indonesia') return 'Plaza Indonesia';
+      if (ll === 'plaza senayan')   return 'Plaza Senayan';
+      if (ll === 'bali' || ll === 'bali boutique') return 'Bali';
+      return l;
+    };
+
+    const storeStats: Record<string, { physical: number; adjusted: number }> = {
+      'Plaza Indonesia': { physical: 0, adjusted: 0 },
+      'Plaza Senayan':   { physical: 0, adjusted: 0 },
+      'Bali':            { physical: 0, adjusted: 0 },
+    };
+
+    let totalNet = 0, totalQty = 0, totalNetSalesGenerated = 0, totalQtyGenerated = 0;
+    let hoExcludedNet = 0, hoExcludedQty = 0;
+    const recordMap = new Map<string, CrossingRecord>();
+    const isHO = (l: string) => l === 'head office' || l === 'ho';
+
+    (rows || []).forEach(row => {
+      const tLoc = (row.location || '').trim();
+      const salesman = (row.salesman || '').trim();
+      const key = salesman.toLowerCase();
+      // GAS fallback: if advisor not in master, use transaction location as home (no crossing detected)
+      const hLoc = (rotationMap[key] || homeLocMap[key] || tLoc).trim();
+      const net = row.net_sales || 0;
+      const qty = row.qty || 0;
+
+      const tLocLower = tLoc.toLowerCase();
+      const hLocLower = hLoc.toLowerCase();
+
+      // Track HO crossings separately BEFORE whitelist filter (mirrors GAS)
+      if (tLocLower !== hLocLower && (isHO(tLocLower) || isHO(hLocLower))) {
+        hoExcludedNet += net;
+        hoExcludedQty += qty;
+      }
+
+      const isValidT = validStores.includes(tLocLower);
+      const isValidH = validStores.includes(hLocLower);
+      if (!isValidT || !isValidH) return;
+
+      totalNetSalesGenerated += net;
+      totalQtyGenerated += qty;
+
+      const normT = normalize(tLoc);
+      const normH = normalize(hLoc);
+
+      if (storeStats[normT]) storeStats[normT].physical += net;
+      if (storeStats[normH]) storeStats[normH].adjusted += net;
+
+      if (tLocLower !== hLocLower) {
+        totalNet += net;
+        totalQty += qty;
+        const key = `${salesman}||${normH}||${normT}`;
+        if (recordMap.has(key)) {
+          const r = recordMap.get(key)!;
+          r.net += net;
+          r.qty += qty;
+        } else {
+          recordMap.set(key, { salesman, baseLoc: normH, crossingLoc: normT, net, qty });
+        }
+      }
+    });
+
+    const records = Array.from(recordMap.values()).sort((a, b) => b.net - a.net);
+
+    return { records, totalNet, totalQty, totalNetSalesGenerated, totalQtyGenerated, hoExcludedNet, hoExcludedQty, storeStats, month, year };
+  },
+
+  /**
+   * Monthly Transactions — raw transaction detail from clean_master
+   */
+  async getTransactions(month: string, year: number) {
+    const monthIndex = ['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(month);
+    const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01T00:00:00`;
+    const mEnd   = new Date(year, monthIndex + 1, 0, 23, 59, 59).toISOString();
+
+    const { data, error } = await supabase
+      .from('clean_master')
+      .select('id, trans_no, transaction_date, customer, salesman, location, main_category, collection, gross_sales, val_disc, disc_pct, net_sales, qty, cost, comm, type')
+      .gte('transaction_date', mStart)
+      .lte('transaction_date', mEnd)
+      .order('transaction_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async updateTransaction(id: number, patch: { comm?: number; type?: string }) {
+    const { error } = await supabase
+      .from('clean_master')
+      .update(patch)
+      .eq('id', id);
+    if (error) throw error;
   }
 };

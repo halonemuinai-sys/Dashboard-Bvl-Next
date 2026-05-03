@@ -5,7 +5,7 @@ import {
   ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine
 } from 'recharts';
-import { cn, formatCompact, formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency, formatCompact, formatChartValue } from '@/lib/utils';
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -41,7 +41,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
       {visible.map((p: any) => (
         <div key={p.dataKey} className="flex items-center justify-between gap-4 py-0.5">
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }} />
+            <div className="w-2.5 h-2.5 rounded-full bg-[var(--dot-color)]" style={{ '--dot-color': p.color } as any} />
             <span className="text-xs font-semibold text-slate-600">{p.name}</span>
           </div>
           <span className="text-xs font-bold text-slate-900">{formatCompact(p.value)}</span>
@@ -72,15 +72,18 @@ export default function MultiYearChart({ multiYearStats, currentMonth }: Props) 
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="flex items-center gap-2">
-          <div className="w-1 h-4 bg-blue-600 rounded-sm" />
-          <h3 className="text-base font-bold text-slate-900">Multi-Year Sales Trend <span className="text-slate-400 font-normal text-sm">(Retail, Exc. HO)</span></h3>
+      {/* Header with Glassmorphism feel */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-1.5 h-6 bg-blue-600 rounded-full shadow-[0_0_12px_rgba(37,99,235,0.4)]" />
+          <div>
+            <h3 className="text-lg font-black text-slate-900 tracking-tight">Multi-Year Sales Trend</h3>
+            <p className="text-slate-400 font-medium text-xs">Retail Performance Comparison (Excl. HO)</p>
+          </div>
         </div>
 
-        {/* Year toggles */}
-        <div className="flex flex-wrap gap-2">
+      {/* Premium Year Toggles */}
+        <div className="flex flex-wrap gap-2 p-1 bg-slate-50 rounded-2xl border border-slate-100">
           {YEARS.map(y => {
             const cfg = YEAR_CONFIG[y];
             const isHidden = hidden.has(y);
@@ -89,32 +92,38 @@ export default function MultiYearChart({ multiYearStats, currentMonth }: Props) 
                 key={y}
                 type="button"
                 onClick={() => toggle(y)}
+                style={!isHidden ? { 
+                  '--toggle-bg': cfg.line,
+                  '--toggle-shadow': `${cfg.line}44`
+                } as any : undefined}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200",
+                  "relative flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all duration-300 active:scale-95",
                   isHidden
-                    ? "bg-slate-50 border-slate-200 text-slate-400"
-                    : "border-transparent text-white shadow-sm"
+                    ? "text-slate-400 hover:text-slate-600 hover:bg-white"
+                    : "text-white bg-[var(--toggle-bg)] shadow-[0_8px_16px_-4px_var(--toggle-shadow)]"
                 )}
-                style={!isHidden ? { backgroundColor: cfg.line } : undefined}
               >
-                <span className={cn("w-2 h-2 rounded-full transition-all", isHidden ? "opacity-30" : "opacity-100")}
-                  style={{ backgroundColor: cfg.line }} />
-                <span className={cn("transition-all", isHidden && "line-through opacity-50")}>{y}</span>
+                <div className={cn(
+                  "w-2 h-2 rounded-full ring-2 transition-all duration-500",
+                  isHidden ? "bg-slate-300 ring-transparent" : "bg-white ring-white/30 animate-pulse"
+                )} />
+                <span>{y}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="h-[360px]">
+      {/* Chart Container with Reveal Animation */}
+      <div className="h-[360px] chart-reveal" key={Array.from(hidden).join(',')}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               {YEARS.map(y => (
                 <linearGradient key={y} id={YEAR_CONFIG[y].gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={YEAR_CONFIG[y].line} stopOpacity={0.2} />
-                  <stop offset="95%" stopColor={YEAR_CONFIG[y].line} stopOpacity={0} />
+                  <stop offset="0%" stopColor={YEAR_CONFIG[y].line} stopOpacity={0.15} />
+                  <stop offset="60%" stopColor={YEAR_CONFIG[y].line} stopOpacity={0.05} />
+                  <stop offset="100%" stopColor={YEAR_CONFIG[y].line} stopOpacity={0} />
                 </linearGradient>
               ))}
             </defs>
@@ -132,8 +141,8 @@ export default function MultiYearChart({ multiYearStats, currentMonth }: Props) 
               axisLine={false}
               tickLine={false}
               tick={{ fill: '#94a3b8', fontSize: 11 }}
-              tickFormatter={v => v === 0 ? '0' : formatCompact(v)}
-              width={56}
+              tickFormatter={v => v === 0 ? '0' : formatChartValue(v)}
+              width={60}
             />
 
             <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 1.5, strokeDasharray: '4 2' }} />
@@ -158,19 +167,21 @@ export default function MultiYearChart({ multiYearStats, currentMonth }: Props) 
                   dataKey={`y${y}`}
                   name={cfg.label}
                   stroke={cfg.line}
-                  strokeWidth={isHidden ? 0 : 2.5}
+                  strokeWidth={isHidden ? 0 : 3.5}
+                  strokeOpacity={isHidden ? 0 : 1}
                   fill={`url(#${cfg.gradientId})`}
                   fillOpacity={isHidden ? 0 : 1}
                   dot={false}
-                  activeDot={isHidden ? false : {
-                    r: 5, strokeWidth: 2, stroke: '#fff',
-                    fill: cfg.line,
-                    style: { filter: `drop-shadow(0 0 4px ${cfg.line}66)` }
-                  }}
-                  hide={isHidden}
-                  animationBegin={i * 120}
-                  animationDuration={900}
-                  animationEasing="ease-out"
+                    activeDot={isHidden ? false : {
+                      r: 6, 
+                      strokeWidth: 3, 
+                      stroke: '#fff',
+                      fill: cfg.line
+                    }}
+                  legendType={isHidden ? 'none' : 'line'}
+                  animationBegin={i * 150}
+                  animationDuration={1200}
+                  animationEasing="ease-in-out"
                   isAnimationActive
                 />
               );
@@ -186,7 +197,7 @@ export default function MultiYearChart({ multiYearStats, currentMonth }: Props) 
           const cfg = YEAR_CONFIG[y];
           return (
             <div key={y} className="flex items-center gap-2">
-              <div className="w-3 h-0.5 rounded-full" style={{ backgroundColor: cfg.line }} />
+              <div className="w-3 h-0.5 rounded-full bg-[var(--line-color)]" style={{ '--line-color': cfg.line } as any} />
               <span className="text-[11px] text-slate-500 font-medium">{y}</span>
               <span className="text-[11px] font-bold text-slate-700">{formatCompact(total)}</span>
             </div>

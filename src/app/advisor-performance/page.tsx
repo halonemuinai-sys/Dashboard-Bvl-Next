@@ -6,8 +6,9 @@ import {
   Search, FileSpreadsheet, FileText, User, ArrowUpRight, Medal, RefreshCw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { cn, formatCurrency, formatCompact } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { dashboardService, AdvisorPerformanceData, AdvisorRecord } from '@/services/dashboardService';
+import Amt from '@/components/Amt';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const CAT_COLORS: Record<string,string> = { Jewelry:'#F59E0B', Watches:'#3B82F6', Accessories:'#EC4899', Perfume:'#10B981', Other:'#8B5CF6' };
@@ -108,25 +109,84 @@ export default function AdvisorPerformancePage() {
         </div>
       </div>
 
-      {/* KPI Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title:'Total Net Sales', value: formatCompact(summary.totalSales), sub:'Monthly Aggregate', icon: DollarSign },
-          { title:'Total Target', value: formatCompact(summary.totalTarget), sub:'Combined Goal', icon: Target },
-          { title:'Avg. Achievement', value: fmtPct(summary.avgAchv), sub:'Advisors with target', icon: TrendingUp },
-          { title:'Top Performer', value: summary.topName, sub:'Highest Sales Value', icon: Medal },
-        ].map(card => (
-          <div key={card.title} className="bg-white border border-slate-200 p-5 rounded-2xl hover:border-slate-300 hover:shadow-sm transition-all shadow-sm group">
-            <div className="flex justify-between items-start mb-3">
-              <div className="p-2 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
-                <card.icon className="w-5 h-5 text-blue-600" />
+      {/* KPI Summary - Compact Modern Version */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Net Sales Card */}
+        <div className="group relative bg-[#0F172A] p-4 rounded-[24px] text-white shadow-xl shadow-blue-900/30 overflow-hidden transition-all duration-500 hover:shadow-2xl ring-1 ring-white/10">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full blur-[40px] -translate-y-1/2 translate-x-1/2" />
+          <div className="relative z-10 flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start mb-2">
+              <div className="w-9 h-9 rounded-xl bg-blue-600/20 flex items-center justify-center border border-blue-500/30">
+                <DollarSign className="w-4 h-4 text-blue-400" />
               </div>
             </div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{card.title}</p>
-            <h3 className="text-xl font-bold text-slate-900 mb-1">{card.value}</h3>
-            <p className="text-[10px] text-slate-400 font-medium">{card.sub}</p>
+            <div>
+              <p className="text-[9px] font-black text-blue-300/60 uppercase tracking-widest mb-0.5">Net Revenue</p>
+              <h3 className="text-xl font-black text-white tracking-tight">
+                <Amt value={summary.totalSales} compact />
+              </h3>
+            </div>
           </div>
-        ))}
+        </div>
+
+        {/* Total Target Card */}
+        <div className="group relative bg-white p-4 rounded-[24px] shadow-lg shadow-slate-200/40 overflow-hidden transition-all duration-500 border border-slate-100">
+          <div className="relative z-10 flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start mb-2">
+              <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center">
+                <Target className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-[8px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 uppercase">Goal</span>
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Goal</p>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                <Amt value={summary.totalTarget} compact />
+              </h3>
+            </div>
+          </div>
+        </div>
+
+        {/* Avg Achievement Card */}
+        <div className="group relative bg-white p-4 rounded-[24px] shadow-lg shadow-slate-200/40 overflow-hidden transition-all duration-500 border border-slate-100">
+          <div className="relative z-10 flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start mb-2">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-white" />
+              </div>
+              <div className="text-emerald-600 text-[8px] font-black tracking-widest uppercase px-1.5 py-0.5 bg-emerald-50 rounded">
+                Active
+              </div>
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Avg. Success</p>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                {fmtPct(summary.avgAchv)}
+              </h3>
+              <div className="w-full h-1 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.min(summary.avgAchv, 100)}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Top Performer Card */}
+        <div className="group relative bg-[#0F172A] p-4 rounded-[24px] text-white shadow-xl shadow-amber-900/20 overflow-hidden transition-all duration-500 ring-1 ring-amber-500/20">
+          <div className="relative z-10 flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start mb-2">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center">
+                <Medal className="w-4 h-4 text-white" />
+              </div>
+              <Trophy className="w-3.5 h-3.5 text-amber-500/50" />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-amber-300/60 uppercase tracking-widest mb-0.5">MVP Month</p>
+              <h3 className="text-lg font-black text-white tracking-tight truncate leading-tight">
+                {summary.topName}
+              </h3>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Advisor Detail Modal */}
@@ -143,7 +203,7 @@ export default function AdvisorPerformancePage() {
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Net Sales</p>
-                <p className="text-lg font-bold text-slate-900">{formatCurrency(selectedAdvisor.netSales)}</p>
+                <p className="text-lg font-bold text-slate-900"><Amt value={selectedAdvisor.netSales} /></p>
               </div>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Achievement</p>
@@ -225,11 +285,11 @@ export default function AdvisorPerformancePage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right font-mono text-xs font-bold text-slate-700">{formatCurrency(adv.netSales)}</td>
+                        <td className="px-6 py-4 text-right font-mono text-xs font-bold text-slate-700"><Amt value={adv.netSales} /></td>
                         <td className="px-6 py-4 text-right font-mono text-xs font-bold text-blue-600 bg-blue-50">
-                          {adv.crossingNet > 0 ? formatCurrency(adv.crossingNet) : '—'}
+                          {adv.crossingNet > 0 ? <Amt value={adv.crossingNet} /> : '—'}
                         </td>
-                        <td className="px-6 py-4 text-right font-mono text-xs text-slate-400">{formatCurrency(adv.target)}</td>
+                        <td className="px-6 py-4 text-right font-mono text-xs text-slate-400"><Amt value={adv.target} /></td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1.5">
                             <div className="flex justify-between items-center px-1">
@@ -239,8 +299,8 @@ export default function AdvisorPerformancePage() {
                               )}>{fmtPct(adv.achievement)}</span>
                             </div>
                             <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                              <div className={cn("h-full rounded-full transition-all duration-1000 w-[var(--progress)]", achvBg(adv.achievement))}
-                                style={{ '--progress': `${Math.min(adv.achievement,100)}%` } as any} />
+                              <div className={cn("h-full rounded-full transition-all duration-1000", achvBg(adv.achievement))}
+                                style={{ width: `${Math.min(adv.achievement, 100)}%` as any }} />
                             </div>
                           </div>
                         </td>
