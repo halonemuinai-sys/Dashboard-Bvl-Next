@@ -402,51 +402,52 @@ export default function DailyReportPage() {
       {/* --- PROFESSIONAL PDF DOCUMENT (OFF-SCREEN) --- */}
       <div 
         id="pdf-document" 
-        className="absolute -left-[9999px] top-0 w-[794px] bg-white text-black font-sans p-12"
+        className="absolute -left-[9999px] top-0 w-[794px] bg-white text-black font-sans p-8 box-border"
+        style={{ minHeight: '1123px' }}
       >
         {/* Header */}
-        <div className="border-b-2 border-black pb-6 mb-8 text-center">
-          <h1 className="text-4xl font-serif uppercase tracking-[0.2em] text-black">Bvlgari</h1>
-          <h2 className="text-xl mt-4 font-semibold text-gray-800 tracking-wide uppercase">Daily Sales Performance Report</h2>
-          <p className="text-sm text-gray-500 mt-2">
+        <div className="border-b-2 border-black pb-3 mb-4 text-center">
+          <h1 className="text-2xl font-serif uppercase tracking-[0.2em] text-black">Bvlgari</h1>
+          <h2 className="text-lg mt-1 font-semibold text-gray-800 tracking-wide uppercase">Daily Sales Performance Report</h2>
+          <p className="text-xs text-gray-500 mt-1">
             {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
 
         {/* Executive Summary */}
         {data.globalKPIs && (
-        <div className="mb-10">
-          <h3 className="text-sm font-bold uppercase tracking-wider border-b border-gray-300 pb-2 mb-4 text-black">Executive Summary</h3>
-          <div className="grid grid-cols-2 gap-8">
-            <table className="w-full text-sm">
+        <div className="mb-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider border-b border-gray-300 pb-1 mb-2 text-black">Executive Summary</h3>
+          <div className="grid grid-cols-2 gap-6">
+            <table className="w-full text-xs">
               <tbody>
                 <tr className="border-b border-gray-100">
-                  <td className="py-3 text-gray-600">Total Sales (Incl. HO)</td>
-                  <td className="py-3 text-right font-mono font-bold"><Amt value={data.globalKPIs.totalSales}/></td>
+                  <td className="py-1 text-gray-600">Total Sales (Incl. HO)</td>
+                  <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.totalSales}/></td>
                 </tr>
                 <tr className="border-b border-gray-100">
-                  <td className="py-3 text-gray-600">Store Sales (Excl. HO)</td>
-                  <td className="py-3 text-right font-mono font-bold"><Amt value={data.globalKPIs.storeSales}/></td>
+                  <td className="py-1 text-gray-600">Store Sales (Excl. HO)</td>
+                  <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.storeSales}/></td>
                 </tr>
                 <tr className="border-b border-gray-100">
-                  <td className="py-3 text-gray-600">Global Target MTD</td>
-                  <td className="py-3 text-right font-mono font-bold"><Amt value={data.globalKPIs.globalTarget}/></td>
+                  <td className="py-1 text-gray-600">Global Target MTD</td>
+                  <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.globalTarget}/></td>
                 </tr>
               </tbody>
             </table>
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <tbody>
                 <tr className="border-b border-gray-100">
-                  <td className="py-3 text-gray-600">Global Achievement</td>
-                  <td className="py-3 text-right font-mono font-bold">{fmtPct(data.globalKPIs.globalAchievement)}</td>
+                  <td className="py-1 text-gray-600">Global Achievement</td>
+                  <td className="py-1 text-right font-mono font-bold">{fmtPct(data.globalKPIs.globalAchievement)}</td>
                 </tr>
                 <tr className="border-b border-gray-100">
-                  <td className="py-3 text-gray-600">MTD Cost % (MDR + Disc)</td>
-                  <td className="py-3 text-right font-mono font-bold text-rose-600">{fmtPct(data.globalKPIs.mtdCostPct)}</td>
+                  <td className="py-1 text-gray-600">MTD Cost % (MDR + Disc)</td>
+                  <td className="py-1 text-right font-mono font-bold text-rose-600">{fmtPct(data.globalKPIs.mtdCostPct)}</td>
                 </tr>
                 <tr className="border-b border-gray-100">
-                  <td className="py-3 text-gray-600">Average Discount MTD</td>
-                  <td className="py-3 text-right font-mono font-bold text-amber-600">{fmtPct(data.globalKPIs.avgDiscMtd)}</td>
+                  <td className="py-1 text-gray-600">Average Discount MTD</td>
+                  <td className="py-1 text-right font-mono font-bold text-amber-600">{fmtPct(data.globalKPIs.avgDiscMtd)}</td>
                 </tr>
               </tbody>
             </table>
@@ -455,63 +456,63 @@ export default function DailyReportPage() {
         )}
 
         {/* Store Breakdown */}
-        <div className="mb-10">
-          <h3 className="text-sm font-bold uppercase tracking-wider border-b border-gray-300 pb-2 mb-6 text-black">Boutique Performance Breakdown</h3>
+        <div className="mb-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider border-b border-gray-300 pb-1 mb-3 text-black">Boutique Performance Breakdown</h3>
           
           {data.stores.map((store: any) => (
-            <div key={store.storeName} className="mb-8 avoid-page-break" style={{ pageBreakInside: 'avoid' }}>
+            <div key={store.storeName} className="mb-4">
               {/* Store Header */}
-              <div className="bg-gray-50 border border-gray-200 p-4 mb-4 flex justify-between items-center">
-                <h4 className="font-bold text-lg text-black">{store.storeName}</h4>
-                <div className="text-right text-xs">
+              <div className="bg-gray-50 border border-gray-200 py-1.5 px-3 mb-2 flex justify-between items-center">
+                <h4 className="font-bold text-sm text-black">{store.storeName}</h4>
+                <div className="text-right text-[10px]">
                   <span className="text-gray-500 mr-2">MTD Achievement:</span>
                   <span className="font-bold text-black">{fmtPct(store.metrics.achievement)}</span>
                 </div>
               </div>
 
               {/* Store Metrics */}
-              <div className="grid grid-cols-4 gap-4 mb-4 text-xs">
-                <div className="border border-gray-100 p-3">
-                  <div className="text-gray-500 mb-1">MTD Sales</div>
+              <div className="grid grid-cols-4 gap-2 mb-2 text-[10px]">
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5">MTD Sales</div>
                   <div className="font-bold font-mono"><Amt value={store.metrics.mtdSales} /></div>
                 </div>
-                <div className="border border-gray-100 p-3">
-                  <div className="text-gray-500 mb-1">Target</div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5">Target</div>
                   <div className="font-bold font-mono"><Amt value={store.metrics.target} /></div>
                 </div>
-                <div className="border border-gray-100 p-3">
-                  <div className="text-gray-500 mb-1">Today's Sales</div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5">Today's Sales</div>
                   <div className="font-bold font-mono"><Amt value={store.metrics.todaySales} /></div>
                 </div>
-                <div className="border border-gray-100 p-3">
-                  <div className="text-gray-500 mb-1">Rem. to Target</div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5">Rem. to Target</div>
                   <div className="font-bold font-mono text-red-600"><Amt value={store.metrics.remaining} /></div>
                 </div>
               </div>
 
               {/* Store Table */}
-              <table className="w-full text-xs text-left border-collapse border border-gray-200">
+              <table className="w-full text-[10px] text-left border-collapse border border-gray-200">
                 <thead>
                   <tr className="bg-gray-100 text-gray-700">
-                    <th className="border border-gray-200 p-2">Category</th>
-                    <th className="border border-gray-200 p-2 text-center">Qty (Today)</th>
-                    <th className="border border-gray-200 p-2 text-right">Reg Sales</th>
-                    <th className="border border-gray-200 p-2 text-right">SMI Sales</th>
-                    <th className="border border-gray-200 p-2 text-center">Disc %</th>
-                    <th className="border border-gray-200 p-2 text-center">Rem. Stock</th>
+                    <th className="border border-gray-200 py-1 px-2">Category</th>
+                    <th className="border border-gray-200 py-1 px-2 text-center">Qty (Today)</th>
+                    <th className="border border-gray-200 py-1 px-2 text-right">Reg Sales</th>
+                    <th className="border border-gray-200 py-1 px-2 text-right">SMI Sales</th>
+                    <th className="border border-gray-200 py-1 px-2 text-center">Disc %</th>
+                    <th className="border border-gray-200 py-1 px-2 text-center">Rem. Stock</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Object.entries(store.tableData).map(([cat, vals]: any) => (
                     <tr key={cat}>
-                      <td className="border border-gray-200 p-2 font-medium">{cat}</td>
-                      <td className="border border-gray-200 p-2 text-center font-mono">{vals.qty}</td>
-                      <td className="border border-gray-200 p-2 text-right font-mono"><Amt value={vals.netNonSMI} /></td>
-                      <td className="border border-gray-200 p-2 text-right font-mono"><Amt value={vals.netSMI} /></td>
-                      <td className="border border-gray-200 p-2 text-center font-mono">
+                      <td className="border border-gray-200 py-1 px-2 font-medium">{cat}</td>
+                      <td className="border border-gray-200 py-1 px-2 text-center font-mono">{vals.qty}</td>
+                      <td className="border border-gray-200 py-1 px-2 text-right font-mono"><Amt value={vals.netNonSMI} /></td>
+                      <td className="border border-gray-200 py-1 px-2 text-right font-mono"><Amt value={vals.netSMI} /></td>
+                      <td className="border border-gray-200 py-1 px-2 text-center font-mono">
                         {vals.gross > 0 ? ((vals.valDisc / vals.gross) * 100).toFixed(1) : '0.0'}%
                       </td>
-                      <td className="border border-gray-200 p-2 text-center font-mono font-bold text-red-600">{vals.stock}</td>
+                      <td className="border border-gray-200 py-1 px-2 text-center font-mono font-bold text-red-600">{vals.stock}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -521,7 +522,7 @@ export default function DailyReportPage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-8 pt-4 border-t border-gray-300 text-[10px] text-gray-400 flex justify-between items-center">
+        <div className="absolute bottom-6 left-8 right-8 pt-2 border-t border-gray-300 text-[9px] text-gray-400 flex justify-between items-center">
           <div>
             <p className="font-bold text-gray-600 tracking-widest">CONFIDENTIAL</p>
             <p>Internal Use Only - Bvlgari Indonesia</p>
