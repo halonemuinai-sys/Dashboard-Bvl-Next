@@ -469,7 +469,11 @@ export default function DailyReportPage() {
               <tbody>
                 <tr className="border-b border-gray-100">
                   <td className="py-1 text-gray-600">Global Achievement</td>
-                  <td className="py-1 text-right font-mono font-bold">{fmtPct(data.globalKPIs.globalAchievement)}</td>
+                  <td className="py-1 text-right font-mono font-bold">
+                    <span className="bg-slate-900 text-white px-2 py-0.5 rounded-sm">
+                      {fmtPct(data.globalKPIs.globalAchievement)}
+                    </span>
+                  </td>
                 </tr>
                 <tr className="border-b border-gray-100">
                   <td className="py-1 text-gray-600">MTD Cost % (MDR + Disc)</td>
@@ -495,8 +499,10 @@ export default function DailyReportPage() {
               <div className="bg-slate-800 text-white py-1.5 px-3 mb-2 flex justify-between items-center">
                 <h4 className="font-bold text-sm">{store.storeName}</h4>
                 <div className="text-right text-[10px]">
-                  <span className="text-slate-300 mr-2">MTD Achievement:</span>
-                  <span className="font-bold text-white">{fmtPct(store.metrics.achievement)}</span>
+                  <span className="text-slate-300 mr-2 uppercase tracking-tighter">MTD Achievement:</span>
+                  <span className="font-black bg-white text-slate-900 px-2 py-0.5 rounded-sm shadow-sm">
+                    {fmtPct(store.metrics.achievement)}
+                  </span>
                 </div>
               </div>
 
