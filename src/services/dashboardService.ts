@@ -753,6 +753,7 @@ export const dashboardService = {
 
     type StoreAccum = {
       mtdNet: number; mtdQty: number;
+      mtdGross: number; mtdComm: number; mtdValDisc: number;
       todayNet: number; todayQty: number;
       todayCost: number; todayGross: number;
       todayComm: number;
@@ -809,7 +810,8 @@ export const dashboardService = {
 
       if (!storeMap[loc]) {
         storeMap[loc] = {
-          mtdNet: 0, mtdQty: 0, todayNet: 0, todayQty: 0,
+          mtdNet: 0, mtdQty: 0, mtdGross: 0, mtdComm: 0, mtdValDisc: 0,
+          todayNet: 0, todayQty: 0,
           todayCost: 0, todayGross: 0, todayComm: 0, 
           todayRegNet: 0, todaySmiNet: 0,
           categories: {}
@@ -826,6 +828,9 @@ export const dashboardService = {
       const s = storeMap[loc];
       s.mtdNet += net;
       s.mtdQty += qty;
+      s.mtdGross += gross;
+      s.mtdComm += (row.comm || 0);
+      s.mtdValDisc += (row.val_disc || 0);
 
       const normCat = normalizeCat(cat);
       if (!s.categories[normCat]) {
@@ -864,7 +869,8 @@ export const dashboardService = {
 
     const storeResults = allStores.map(storeName => {
       const s = storeMap[storeName] || {
-        mtdNet: 0, mtdQty: 0, todayNet: 0, todayQty: 0,
+        mtdNet: 0, mtdQty: 0, mtdGross: 0, mtdComm: 0, mtdValDisc: 0,
+        todayNet: 0, todayQty: 0,
         todayCost: 0, todayGross: 0, todayComm: 0,
         todayRegNet: 0, todaySmiNet: 0, categories: {}
       };
@@ -889,6 +895,9 @@ export const dashboardService = {
         metrics: {
           mtdSales: s.mtdNet,
           mtdTotalQty: s.mtdQty,
+          mtdCostPct: s.mtdGross > 0 ? ((s.mtdComm + s.mtdValDisc) / s.mtdGross) * 100 : 0,
+          mtdMdrPct: s.mtdGross > 0 ? (s.mtdComm / s.mtdGross) * 100 : 0,
+          mtdAvgDisc: s.mtdGross > 0 ? (s.mtdValDisc / s.mtdGross) * 100 : 0,
           target,
           remaining,
           achievement,
