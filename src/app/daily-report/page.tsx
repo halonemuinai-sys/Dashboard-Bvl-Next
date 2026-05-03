@@ -12,7 +12,8 @@ import {
   Download,
   TrendingUp,
   Clock,
-  RefreshCw
+  RefreshCw,
+  MessageCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
@@ -99,7 +100,31 @@ export default function DailyReportPage() {
 
     pdf.addImage(imgData, 'PNG', xPos, 0, drawWidth, drawHeight);
     
-    pdf.save(`Bvlgari_Executive_Report_${date}.pdf`);
+    pdf.save(`Daily_Report_Sales_${date}.pdf`);
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!data) return;
+    
+    const formattedDate = new Date(date).toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+
+    const msg = `*🏢 BVLGARI DAILY SALES REPORT*\n` +
+                `📅 ${formattedDate}\n\n` +
+                `📊 *GLOBAL OVERVIEW*\n` +
+                `• Total Sales: Rp ${data.globalKPIs.totalSales.toLocaleString('id-ID')}\n` +
+                `• Achievement: *${data.globalKPIs.globalAchievement.toFixed(1)}%*\n` +
+                `• MTD Cost %: ${data.globalKPIs.mtdCostPct.toFixed(1)}%\n\n` +
+                `🏪 *STORE PERFORMANCE*\n` +
+                data.stores.map((s: any) => `• *${s.storeName}*: ${s.metrics.achievement.toFixed(1)}% Ach.`).join('\n') +
+                `\n\n_Generated via Bvlgari Dashboard - MRA Retail_\n` +
+                `🔗 View Online: ${window.location.origin}/daily-report?date=${date}`;
+    
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   useEffect(() => {
@@ -208,6 +233,14 @@ export default function DailyReportPage() {
           >
             <Download className="w-4 h-4" />
             PDF
+          </button>
+
+          <button
+            onClick={handleShareWhatsApp}
+            className="flex items-center gap-2 bg-[#25D366] hover:bg-[#20ba5a] text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold"
+          >
+            <MessageCircle className="w-4 h-4" />
+            WhatsApp
           </button>
 
           <button
