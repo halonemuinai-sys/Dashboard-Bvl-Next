@@ -217,6 +217,7 @@ export default function DailyReportPage() {
           >
             {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {sending ? 'Sending...' : 'Send Report'}
+          </button>
         </div>
       </div>
 
