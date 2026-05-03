@@ -710,15 +710,23 @@ export const dashboardService = {
     const day = selected.getDate();
     const monthName = MONTH_NAMES[monthIdx];
 
-    const mStart = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01T00:00:00`;
-    const mEnd   = new Date(year, monthIdx + 1, 0, 23, 59, 59).toISOString();
+    const lastMonthDate = new Date(year, monthIdx - 1, 1);
+    const lmYear = lastMonthDate.getFullYear();
+    const lmMonthIdx = lastMonthDate.getMonth();
+    const lmStart = `${lmYear}-${String(lmMonthIdx + 1).padStart(2, '0')}-01T00:00:00`;
+    const lmEnd   = new Date(lmYear, lmMonthIdx + 1, 0, 23, 59, 59).toISOString();
 
-    const [{ data: rows, error }, { data: targetRows }, { data: stockRows }] = await Promise.all([
+    const [{ data: rows, error }, { data: lmRows }, { data: targetRows }, { data: stockRows }] = await Promise.all([
       supabase
         .from('clean_master')
         .select('transaction_date, location, main_category, net_sales, qty, cost, gross_sales, type, comm, val_disc')
         .gte('transaction_date', mStart)
         .lte('transaction_date', mEnd),
+      supabase
+        .from('clean_master')
+        .select('transaction_date, location, net_sales')
+        .gte('transaction_date', lmStart)
+        .lte('transaction_date', lmEnd),
       supabase
         .from('targets')
         .select('store_name, target_value')
@@ -859,7 +867,19 @@ export const dashboardService = {
       }
     });
 
-    // Merge stores from both sales data and target map
+    // Calculate Last Month MTD for Growth
+    let lmStoreSales = 0;
+    (lmRows || []).forEach(row => {
+      const loc = (row.location || '').trim();
+      const isHO = loc.toLowerCase().includes('head office') || loc.toLowerCase() === 'ho';
+      if (!isHO) {
+        const rowDate = new Date(row.transaction_date);
+        if (rowDate.getDate() <= day) {
+          lmStoreSales += (row.net_sales || 0);
+        }
+      }
+    });
+    const storeSalesGrowth = lmStoreSales > 0 ? ((globalStoreSales - lmStoreSales) / lmStoreSales) * 100 : 0;
     const STORE_ORDER = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
     const allStores = Array.from(new Set([
       ...STORE_ORDER.filter(s => storeMap[s] || targetMap[s]),
@@ -926,6 +946,7 @@ export const dashboardService = {
         totalSales: globalStoreSales + globalHOSales,
         globalTarget,
         globalAchievement,
+        storeSalesGrowth,
         mtdCostPct,
         avgDiscMtd
       },
