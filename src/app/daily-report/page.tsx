@@ -19,7 +19,7 @@ import { dashboardService } from '@/services/dashboardService';
 import Amt from '@/components/Amt';
 import CustomCalendar from '@/components/CustomCalendar';
 
-const fmtPct = (n: number) => n.toFixed(1) + '%';
+const fmtPct = (n: number) => (typeof n === 'number' && !isNaN(n) ? n.toFixed(1) + '%' : '0.0%');
 
 export default function DailyReportPage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
