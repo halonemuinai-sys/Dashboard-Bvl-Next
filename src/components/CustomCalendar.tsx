@@ -122,8 +122,10 @@ export default function CustomCalendar({ selectedDate, onSelect }: CustomCalenda
             <button
               key={i}
               onClick={() => {
-                const newDate = new Date(d.year, d.month, d.day);
-                onSelect(newDate.toISOString().split('T')[0]);
+                const yyyy = d.year;
+                const mm = String(d.month + 1).padStart(2, '0');
+                const dd = String(d.day).padStart(2, '0');
+                onSelect(`${yyyy}-${mm}-${dd}`);
               }}
               className={cn(
                 "h-10 rounded-xl flex flex-col items-center justify-center text-sm font-bold transition-all relative group",
