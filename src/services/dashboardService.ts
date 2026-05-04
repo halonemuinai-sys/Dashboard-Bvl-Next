@@ -710,6 +710,9 @@ export const dashboardService = {
     const day = selected.getDate();
     const monthName = MONTH_NAMES[monthIdx];
 
+    const mStart = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01T00:00:00`;
+    const mEnd   = new Date(year, monthIdx + 1, 0, 23, 59, 59).toISOString();
+
     const lastMonthDate = new Date(year, monthIdx - 1, 1);
     const lmYear = lastMonthDate.getFullYear();
     const lmMonthIdx = lastMonthDate.getMonth();
