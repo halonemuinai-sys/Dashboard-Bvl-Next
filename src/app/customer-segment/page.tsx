@@ -8,13 +8,13 @@ import {
 } from 'recharts';
 import {
   Users, Search, RefreshCw, Download,
-  TrendingUp, TrendingDown, UserCheck, Star, UserPlus,
+  TrendingUp, UserCheck, Star, UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import CustomerModal from '@/components/CustomerModal';
 import {
-  customerService, SEGMENT_ORDER, SEGMENT_CFG, SEGMENT_DONUT_COLOR,
+  customerService, SEGMENT_ORDER, SEGMENT_CFG,
   type Segment, type CustomerProfile,
 } from '@/services/customerService';
 
@@ -109,8 +109,6 @@ export default function CustomerSegmentPage() {
   );
 
   const { kpi, segmentDistribution, revenueMix, growthTrend } = data;
-  const yoyLabel = `${parseInt(year) - 1} → ${year}`;
-
   return (
     <>
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
@@ -142,47 +140,83 @@ export default function CustomerSegmentPage() {
 
         {/* ── KPI Cards ────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-2xl text-white shadow-lg shadow-blue-200">
-            <div className="flex items-center gap-2 mb-3">
-              <UserCheck className="w-4 h-4 text-blue-200" />
-              <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest">Active Customers</p>
+
+          {/* Active Customers */}
+          <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-5">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm shadow-blue-200">
+                <UserCheck className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </div>
             </div>
-            <h3 className="text-3xl font-black tracking-tight">{kpi.totalActiveCustomers.toLocaleString('id-ID')}</h3>
-            <p className="text-[10px] text-blue-300 mt-1">Last 24 months</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Active Customers</p>
+            <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
+              {kpi.totalActiveCustomers.toLocaleString('id-ID')}
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Last 24 months</p>
           </div>
 
-          <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="w-4 h-4 text-slate-400" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Avg. LTV</p>
+          {/* Avg LTV */}
+          <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-5">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm shadow-purple-200">
+                <TrendingUp className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-[9px] font-bold text-violet-600 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full">
+                Lifetime
+              </span>
             </div>
-            <h3 className="text-2xl font-black text-slate-800 tracking-tight">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Avg. LTV</p>
+            <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
               <Amt value={kpi.avgLtv} short />
             </h3>
-            <p className="text-[10px] text-slate-400 mt-1">Per active customer</p>
+            <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Per active customer</p>
           </div>
 
-          <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Star className="w-4 h-4 text-amber-400" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Top Spender</p>
+          {/* Top Spender */}
+          <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-5">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm shadow-amber-200">
+                <Star className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+                #1 Rank
+              </span>
             </div>
-            <h3 className="text-sm font-black text-slate-800 leading-tight truncate">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Top Spender</p>
+            <h3 className="text-base font-black text-slate-900 leading-tight line-clamp-1">
               {kpi.topSpender.name || '—'}
             </h3>
-            <p className="text-[10px] text-slate-400 mt-1">
-              <Amt value={kpi.topSpender.spend} short />
+            <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">
+              <span className="font-bold text-amber-600"><Amt value={kpi.topSpender.spend} short /></span> lifetime spend
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <UserPlus className="w-4 h-4 text-emerald-400" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">New Customer Ratio</p>
+          {/* New Customer Ratio */}
+          <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-5">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-sm shadow-emerald-200">
+                <UserPlus className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+                {year}
+              </span>
             </div>
-            <h3 className="text-3xl font-black text-emerald-600 tracking-tight">{fmtPct(kpi.newCustomerRatio)}</h3>
-            <p className="text-[10px] text-slate-400 mt-1">First-time buyers {year}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">New Customer Ratio</p>
+            <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
+              {fmtPct(kpi.newCustomerRatio)}
+            </h3>
+            <div className="mt-3 pt-3 border-t border-slate-50">
+              <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-1000"
+                  style={{ width: `${Math.min(kpi.newCustomerRatio, 100)}%` }} />
+              </div>
+            </div>
           </div>
+
         </div>
 
         {/* ── Segment Filter Badges ─────────────────────────────────────── */}
@@ -250,7 +284,7 @@ export default function CustomerSegmentPage() {
                   </Pie>
                   <RechartTooltip
                     contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 11 }}
-                    formatter={(v: unknown, name: unknown) => [v, String(name)]}
+                    formatter={((v: unknown) => [String(v), '']) as any}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -322,7 +356,7 @@ export default function CustomerSegmentPage() {
                   <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <RechartTooltip
                     contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 11 }}
-                    formatter={(v: unknown, name: unknown) => [v, name === 'new' ? 'New' : 'Repeat']}
+                    formatter={((v: unknown, name: unknown) => [String(v), name === 'new' ? 'New' : 'Repeat']) as any}
                   />
                   <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
                     formatter={(v: string) => v === 'new' ? 'New' : 'Repeat'} />
@@ -368,7 +402,7 @@ export default function CustomerSegmentPage() {
                   <th className="py-3 px-5 text-right">Freq Qty</th>
                   <th className="py-3 px-5 text-right">Recency (Days)</th>
                   <th className="py-3 px-5 text-right">Lifetime Value</th>
-                  <th className="py-3 px-5"></th>
+                  <th className="py-3 px-5"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
