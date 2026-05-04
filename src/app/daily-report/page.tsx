@@ -21,9 +21,15 @@ import Amt from '@/components/Amt';
 import CustomCalendar from '@/components/CustomCalendar';
 
 const fmtPct = (n: number) => (typeof n === 'number' && !isNaN(n) ? n.toFixed(1) + '%' : '0.0%');
+const getLocalDateString = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+};
 
 export default function DailyReportPage() {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getLocalDateString(new Date()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [sending, setSending] = useState(false);
@@ -163,12 +169,11 @@ export default function DailyReportPage() {
           <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
             <button 
               onClick={() => {
-                const d = new Date();
-                setDate(d.toISOString().split('T')[0]);
+                setDate(getLocalDateString(new Date()));
               }}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                date === new Date().toISOString().split('T')[0] 
+                date === getLocalDateString(new Date())) 
                   ? "bg-slate-900 text-white shadow-md shadow-slate-200" 
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
@@ -179,11 +184,11 @@ export default function DailyReportPage() {
               onClick={() => {
                 const d = new Date();
                 d.setDate(d.getDate() - 1);
-                setDate(d.toISOString().split('T')[0]);
+                setDate(getLocalDateString(d));
               }}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                date === new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0]
+                date === getLocalDateString(new Date(new Date().setDate(new Date().getDate() - 1))))
                   ? "bg-slate-900 text-white shadow-md shadow-slate-200" 
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
