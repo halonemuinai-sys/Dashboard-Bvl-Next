@@ -5,6 +5,7 @@ import { BarChart, Calendar as CalendarIcon, RefreshCw, TrendingUp, TrendingDown
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import { dashboardService } from '@/services/dashboardService';
+import BvlgariLoader from '@/components/BvlgariLoader';
 
 const QUARTERS = [
   { label: 'Q1', value: 1, months: 'Jan — Mar' },
@@ -44,12 +45,7 @@ export default function QuarterlyBudgetPage() {
   const achvBg = (pct: number) =>
     pct >= 100 ? 'bg-emerald-500' : pct >= 85 ? 'bg-amber-500' : 'bg-rose-500';
 
-  if (loading || !data) return (
-    <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-      <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-      <p className="text-slate-500 font-medium animate-pulse">Loading Quarterly Budget...</p>
-    </div>
-  );
+  if (loading || !data) return <BvlgariLoader message="Loading Quarterly Budget..." />;
 
   const { kpi, storeData, monthNames } = data;
   const isOverall = kpi.totalVariance >= 0;

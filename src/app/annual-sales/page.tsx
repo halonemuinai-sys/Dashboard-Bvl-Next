@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, Calendar as CalendarIcon, Download, Store } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, Calendar as CalendarIcon, Download, Store, Target, Award } from 'lucide-react';
 import { cn, formatShort } from '@/lib/utils';
 import Amt from '@/components/Amt';
+import BvlgariLoader from '@/components/BvlgariLoader';
 import { dashboardService } from '@/services/dashboardService';
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -61,12 +62,7 @@ export default function AnnualSalesPage() {
     a.click();
   };
 
-  if (loading || !data) return (
-    <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-      <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-      <p className="text-slate-500 font-medium animate-pulse">Loading Annual Net Sales...</p>
-    </div>
-  );
+  if (loading || !data) return <BvlgariLoader message="Loading Annual Net Sales..." />;
 
   const { grandTotal, storeData } = data;
   const yoyPos = grandTotal.yoyGrowth >= 0;
@@ -102,41 +98,100 @@ export default function AnnualSalesPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-2xl text-white shadow-lg shadow-blue-200">
-          <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest mb-1">YTD Net Sales</p>
-          <h3 className="text-2xl font-black tracking-tight"><Amt value={grandTotal.ytd} short /></h3>
-          <p className="text-[10px] text-blue-300 mt-1">Exc. Head Office</p>
-        </div>
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Annual Target</p>
-          <h3 className="text-2xl font-black text-slate-700 tracking-tight"><Amt value={grandTotal.ytdTarget} short /></h3>
-          <p className="text-[10px] text-slate-400 mt-1">
-            Achv: <span className={cn("font-bold",
-              grandTotal.ytdTarget > 0 && (grandTotal.ytd / grandTotal.ytdTarget) >= 1 ? "text-emerald-600" : "text-amber-500")}>
-              {grandTotal.ytdTarget > 0 ? ((grandTotal.ytd / grandTotal.ytdTarget) * 100).toFixed(1) + '%' : '—'}
-            </span>
-          </p>
-        </div>
-        <div className={cn("p-5 rounded-2xl shadow-sm border",
-          yoyPos ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200")}>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">YoY Growth</p>
-          <div className="flex items-center gap-2">
-            {yoyPos
-              ? <TrendingUp className="w-5 h-5 text-emerald-500" />
-              : <TrendingDown className="w-5 h-5 text-rose-500" />}
-            <h3 className={cn("text-2xl font-black tracking-tight", yoyPos ? "text-emerald-600" : "text-rose-500")}>
-              {fmtPct(grandTotal.yoyGrowth)}
-            </h3>
+      {(() => {
+        const achv      = grandTotal.ytdTarget > 0 ? (grandTotal.ytd / grandTotal.ytdTarget) * 100 : 0;
+        const achvColor = achv >= 100 ? 'from-emerald-600 to-emerald-400' : achv >= 80 ? 'from-amber-500 to-amber-400' : 'from-rose-600 to-rose-400';
+        const achvText  = achv >= 100 ? 'text-emerald-600' : achv >= 80 ? 'text-amber-500' : 'text-rose-500';
+        const achvBar   = achv >= 100 ? 'bg-emerald-500' : achv >= 80 ? 'bg-amber-400' : 'bg-rose-400';
+        const topStore  = storeData[0];
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+            {/* 1. YTD Net Sales — hero dark gradient */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden lg:col-span-1">
+              <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-blue-500/10" />
+              <div className="absolute -left-2 -bottom-4 w-16 h-16 rounded-full bg-white/5" />
+              <div className="flex items-start justify-between mb-4 relative">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">YTD Net Sales</p>
+                <span className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-4 h-4 text-blue-400" />
+                </span>
+              </div>
+              <h3 className="text-3xl font-black font-mono text-white mb-1 leading-none relative">
+                <Amt value={grandTotal.ytd} short />
+              </h3>
+              <p className="text-[10px] text-slate-500 mb-4">Exc. Head Office · {year}</p>
+              <Sparkline monthly={grandTotal.monthly} />
+            </div>
+
+            {/* 2. Achievement — dynamic accent */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className={cn('h-[3px] bg-gradient-to-r', achvColor)} />
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight">Achievement</p>
+                  <span className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
+                    <Target className="w-4 h-4 text-slate-400" />
+                  </span>
+                </div>
+                <h3 className={cn('text-3xl font-black mb-1 leading-none', achvText)}>
+                  {grandTotal.ytdTarget > 0 ? achv.toFixed(1) + '%' : '—'}
+                </h3>
+                <p className="text-[9px] text-slate-400 mb-3">
+                  <Amt value={grandTotal.ytd} short /> / <Amt value={grandTotal.ytdTarget} short />
+                </p>
+                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className={cn('h-full rounded-full transition-all duration-1000', achvBar)}
+                    style={{ width: `${Math.min(achv, 100)}%` }} />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. YoY Growth */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className={cn('h-[3px] bg-gradient-to-r', yoyPos ? 'from-emerald-600 to-emerald-400' : 'from-rose-600 to-rose-400')} />
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight">YoY Growth</p>
+                  <span className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0',
+                    yoyPos ? 'bg-emerald-50' : 'bg-rose-50')}>
+                    {yoyPos
+                      ? <TrendingUp className="w-4 h-4 text-emerald-500" />
+                      : <TrendingDown className="w-4 h-4 text-rose-500" />}
+                  </span>
+                </div>
+                <h3 className={cn('text-3xl font-black leading-none mb-1', yoyPos ? 'text-emerald-600' : 'text-rose-500')}>
+                  {fmtPct(grandTotal.yoyGrowth)}
+                </h3>
+                <p className="text-[9px] text-slate-400">
+                  vs <Amt value={grandTotal.prevYtd} short /> ({data.prevYear})
+                </p>
+              </div>
+            </div>
+
+            {/* 4. Top Store */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="h-[3px] bg-gradient-to-r from-amber-500 to-amber-300" />
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight">Top Store</p>
+                  <span className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                    <Award className="w-4 h-4 text-amber-500" />
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-slate-900 leading-tight mb-1 truncate">
+                  {topStore?.name ?? '—'}
+                </h3>
+                <p className="text-[9px] text-slate-400">
+                  <span className="font-black text-amber-600 text-sm"><Amt value={topStore?.ytd ?? 0} short /></span>
+                  {' '}· {topStore?.contribution.toFixed(1)}% kontribusi
+                </p>
+              </div>
+            </div>
+
           </div>
-          <p className="text-[10px] text-slate-400 mt-1">vs {data.prevYear}</p>
-        </div>
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active Stores</p>
-          <h3 className="text-2xl font-black text-slate-700 tracking-tight">{storeData.length}</h3>
-          <p className="text-[10px] text-slate-400 mt-1">Retail boutiques</p>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Main Table */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">

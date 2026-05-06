@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
 import Amt from '@/components/Amt';
 import CustomCalendar from '@/components/CustomCalendar';
+import BvlgariLoader from '@/components/BvlgariLoader';
 
 const fmtPct = (n: number) => (typeof n === 'number' && !isNaN(n) ? n.toFixed(1) + '%' : '0.0%');
 const getLocalDateString = (d: Date) => {
@@ -75,8 +76,8 @@ export default function DailyReportPage() {
     element.style.zIndex = '-100';
 
     // Capture the element
-    const canvas = await html2canvas(element, { 
-      scale: 2, 
+    const canvas = await html2canvas(element, {
+      scale: 1.5,
       useCORS: true,
       windowWidth: 794 // A4 width
     });
@@ -84,7 +85,7 @@ export default function DailyReportPage() {
     // Re-hide the element
     element.style.left = '-9999px';
     
-    const imgData = canvas.toDataURL('image/png', 1.0);
+    const imgData = canvas.toDataURL('image/jpeg', 0.85);
     
     // Create PDF
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -104,7 +105,7 @@ export default function DailyReportPage() {
     // Center horizontally if scaled down
     const xPos = (pdfWidth - drawWidth) / 2;
 
-    pdf.addImage(imgData, 'PNG', xPos, 0, drawWidth, drawHeight);
+    pdf.addImage(imgData, 'JPEG', xPos, 0, drawWidth, drawHeight);
     
     pdf.save(`Daily_Report_Sales_${date}.pdf`);
   };
@@ -147,14 +148,7 @@ export default function DailyReportPage() {
     })();
   }, [date]);
 
-  if (loading || !data) {
-    return (
-      <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <RefreshCw className="w-8 h-8 text-zinc-900 animate-spin" />
-        <p className="text-zinc-500 font-medium animate-pulse">Generating Daily Report...</p>
-      </div>
-    );
-  }
+  if (loading || !data) return <BvlgariLoader message="Loading Daily Report..." />;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-10">
@@ -173,8 +167,8 @@ export default function DailyReportPage() {
               }}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                date === getLocalDateString(new Date())) 
-                  ? "bg-slate-900 text-white shadow-md shadow-slate-200" 
+                date === getLocalDateString(new Date())
+                  ? "bg-slate-900 text-white shadow-md shadow-slate-200"
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
             >
@@ -188,8 +182,8 @@ export default function DailyReportPage() {
               }}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                date === getLocalDateString(new Date(new Date().setDate(new Date().getDate() - 1))))
-                  ? "bg-slate-900 text-white shadow-md shadow-slate-200" 
+                date === getLocalDateString(new Date(new Date().setDate(new Date().getDate() - 1)))
+                  ? "bg-slate-900 text-white shadow-md shadow-slate-200"
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
             >

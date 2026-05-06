@@ -5,6 +5,7 @@ import { Repeat, Calendar as CalendarIcon, Filter, RefreshCw, ArrowRight, Trendi
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import { dashboardService, CrossingSalesData } from '@/services/dashboardService';
+import BvlgariLoader from '@/components/BvlgariLoader';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -46,14 +47,7 @@ export default function CrossingSalesPage() {
     });
   }, [data]);
 
-  if (loading || !data) {
-    return (
-      <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-slate-500 font-medium animate-pulse">Loading Crossing Sales...</p>
-      </div>
-    );
-  }
+  if (loading || !data) return <BvlgariLoader message="Loading Crossing Sales..." />;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">

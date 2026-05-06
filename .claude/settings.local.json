@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Bvlgari Dashboard\" -Recurse -File | Where-Object {$_.Extension -in @\\('.gs', '.html'\\)} | Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Bvlgari Dashboard\\\\\" -Recurse -Include \"*.gs\", \"*.html\" | Select-Object FullName | Sort-Object FullName)",
+      "Bash(powershell -Command \"Select-String -Path '4-API_Dashboard.gs' -Pattern 'linear|regression|moving.*average|extrapolation|algorithm' -Context 2,2\")",
+      "Bash(powershell -Command \"Select-String -Path 'ViewForecasting.html' -Pattern 'KPI|Card|metric|label' -Context 1,1 | head -50\")",
+      "Bash(powershell -Command \"Select-String -Path '4-API_Dashboard.gs' -Pattern 'remainingDays|YTD|remaining' -Context 1,1 | grep -A2 -B2 'remainingDays'\")"
     ]
   }
 }

@@ -3,12 +3,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Trophy, Target, DollarSign, TrendingUp, Calendar as CalendarIcon,
-  Search, FileSpreadsheet, FileText, User, ArrowUpRight, Medal, RefreshCw
+  Search, FileSpreadsheet, FileText, User, ArrowUpRight, Medal, RefreshCw, BarChart2
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { cn, formatCurrency } from '@/lib/utils';
 import { dashboardService, AdvisorPerformanceData, AdvisorRecord } from '@/services/dashboardService';
 import Amt from '@/components/Amt';
+import BvlgariLoader from '@/components/BvlgariLoader';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const CAT_COLORS: Record<string,string> = { Jewelry:'#F59E0B', Watches:'#3B82F6', Accessories:'#EC4899', Perfume:'#10B981', Other:'#8B5CF6' };
@@ -29,6 +30,12 @@ export default function AdvisorPerformancePage() {
   const [search, setSearch] = useState('');
   const [selectedAdvisor, setSelectedAdvisor] = useState<AdvisorRecord | null>(null);
 
+  // YTD annual state
+  type YtdData = Awaited<ReturnType<typeof dashboardService.getAnnualAdvisorPerformance>>;
+  const [ytdData, setYtdData]     = useState<YtdData | null>(null);
+  const [ytdLoading, setYtdLoading] = useState(true);
+  const [ytdSearch, setYtdSearch] = useState('');
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -39,6 +46,13 @@ export default function AdvisorPerformancePage() {
       finally { setLoading(false); }
     })();
   }, [month, year]);
+
+  // Load YTD data whenever year changes
+  useEffect(() => {
+    setYtdLoading(true);
+    dashboardService.getAnnualAdvisorPerformance(parseInt(year))
+      .then(setYtdData).catch(console.error).finally(() => setYtdLoading(false));
+  }, [year]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -62,14 +76,7 @@ export default function AdvisorPerformancePage() {
     return { totalSales, totalTarget, avgAchv, topName: advisors[0]?.name || '-' };
   }, [data]);
 
-  if (loading || !data) {
-    return (
-      <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-slate-500 font-medium animate-pulse">Analyzing Advisor Performance...</p>
-      </div>
-    );
-  }
+  if (loading || !data) return <BvlgariLoader message="Analyzing Advisor Performance..." />;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
@@ -237,6 +244,105 @@ export default function AdvisorPerformancePage() {
           </div>
         </div>
       )}
+
+      {/* ── YTD Annual Performance Table ──────────────────────────── */}
+      <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+        <div className="px-6 py-4 border-b border-amber-100 bg-amber-50 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <BarChart2 className="w-5 h-5 text-amber-600" />
+            <div>
+              <h2 className="text-sm font-black text-amber-900">YTD Annual Performance — {year}</h2>
+              <p className="text-[10px] text-amber-600 mt-0.5">Akumulasi semua bulan Jan–Des · diurutkan berdasarkan Achievement %</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-amber-400" />
+              <input type="text" placeholder="Cari advisor..." value={ytdSearch}
+                onChange={e => setYtdSearch(e.target.value)}
+                className="bg-white border border-amber-200 text-slate-700 text-xs py-1.5 pl-8 pr-3 rounded-xl outline-none focus:border-amber-400 transition-colors w-44 shadow-sm placeholder:text-amber-300" />
+            </div>
+            {ytdLoading && <RefreshCw className="w-4 h-4 text-amber-400 animate-spin shrink-0" />}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left whitespace-nowrap">
+            <thead className="bg-amber-50 text-[9px] font-bold text-amber-700 uppercase tracking-widest border-b border-amber-100">
+              <tr>
+                <th className="py-3 px-4 text-center w-10">#</th>
+                <th className="py-3 px-4">Advisor</th>
+                <th className="py-3 px-4">Lokasi</th>
+                <th className="py-3 px-4 text-center">Bln Aktif</th>
+                <th className="py-3 px-4 text-center">Trans</th>
+                <th className="py-3 px-4 text-right">YTD Sales</th>
+                <th className="py-3 px-4 text-right">YTD Target</th>
+                <th className="py-3 px-4 text-center w-48">Achievement</th>
+                <th className="py-3 px-4 text-right">Contrib %</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 text-xs">
+              {ytdLoading ? (
+                <tr><td colSpan={9} className="py-12 text-center text-slate-400 italic">Memuat data YTD...</td></tr>
+              ) : (ytdData?.advisors ?? [])
+                .filter(a => !ytdSearch || a.name.toLowerCase().includes(ytdSearch.toLowerCase()) || a.location.toLowerCase().includes(ytdSearch.toLowerCase()))
+                .map((adv, i) => (
+                <tr key={adv.name} className="hover:bg-amber-50/50 transition-colors">
+                  <td className="py-2.5 px-4 text-center">
+                    {i < 3
+                      ? <span className="text-base">{['🥇','🥈','🥉'][i]}</span>
+                      : <span className="text-slate-300 font-bold">{i + 1}</span>}
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                        <User className="w-3.5 h-3.5 text-amber-500" />
+                      </div>
+                      <span className="font-bold text-slate-800">{adv.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-4 text-slate-500">{adv.location}</td>
+                  <td className="py-2.5 px-4 text-center font-mono text-slate-600">
+                    {adv.productiveMonths}<span className="text-slate-300">/12</span>
+                  </td>
+                  <td className="py-2.5 px-4 text-center font-mono text-slate-600">{adv.transCount}</td>
+                  <td className="py-2.5 px-4 text-right font-mono font-black text-slate-900"><Amt value={adv.netSales} short /></td>
+                  <td className="py-2.5 px-4 text-right font-mono text-slate-400">
+                    {adv.target > 0 ? <Amt value={adv.target} short /> : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between px-0.5">
+                        <span className={cn('text-[10px] font-black', achvColor(adv.achievement))}>
+                          {adv.target > 0 ? fmtPct(adv.achievement) : '—'}
+                        </span>
+                      </div>
+                      {adv.target > 0 && (
+                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full transition-all duration-1000', achvBg(adv.achievement))}
+                            style={{ width: `${Math.min(adv.achievement, 100)}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-4 text-right font-mono text-slate-500">{fmtPct(adv.contribution)}</td>
+                </tr>
+              ))}
+              {!ytdLoading && (ytdData?.advisors ?? []).length === 0 && (
+                <tr><td colSpan={9} className="py-12 text-center text-slate-400 italic text-sm">Tidak ada data YTD untuk {year}</td></tr>
+              )}
+            </tbody>
+            {!ytdLoading && ytdData && ytdData.advisors.length > 0 && (
+              <tfoot className="border-t-2 border-amber-200 bg-amber-50 text-xs font-bold text-amber-800">
+                <tr>
+                  <td colSpan={5} className="py-3 px-4 text-amber-600">{ytdData.advisors.length} advisors</td>
+                  <td className="py-3 px-4 text-right font-mono"><Amt value={ytdData.totalNet} short /></td>
+                  <td colSpan={3} />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
 
       {/* Tables grouped by location */}
       <div className="space-y-8">

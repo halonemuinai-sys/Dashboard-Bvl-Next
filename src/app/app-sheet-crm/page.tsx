@@ -4,11 +4,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Database, RefreshCw, Download, Search, Calendar as CalendarIcon,
   TrendingUp, Users, CheckCircle, XCircle, Clock, ArrowRight,
-  MapPin, Wifi,
+  MapPin, Wifi, Home, UserX,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
-import { crmService, FUNNEL_MAP, STATUS_MAP, type TrafficRow } from '@/services/crmService';
+import { crmService, FUNNEL_MAP, STATUS_MAP, type TrafficRow, type LocationStat } from '@/services/crmService';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -32,11 +32,13 @@ const FUNNEL_CFG: Record<string, { icon: React.ElementType; grad: string; text: 
 
 // ── Status icon config ──────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  walkin:   { icon: Users,       color: 'text-blue-600',   bg: 'bg-blue-50 border-blue-100' },
-  followup: { icon: RefreshCw,   color: 'text-violet-600', bg: 'bg-violet-50 border-violet-100' },
-  delivery: { icon: TrendingUp,  color: 'text-teal-600',   bg: 'bg-teal-50 border-teal-100' },
-  service:  { icon: Database,    color: 'text-amber-600',  bg: 'bg-amber-50 border-amber-100' },
-  online:   { icon: Wifi,        color: 'text-slate-600',  bg: 'bg-slate-50 border-slate-200' },
+  walkin:   { icon: Users,       color: 'text-blue-600',    bg: 'bg-blue-50 border-blue-100' },
+  followup: { icon: RefreshCw,   color: 'text-violet-600',  bg: 'bg-violet-50 border-violet-100' },
+  delivery: { icon: TrendingUp,  color: 'text-teal-600',    bg: 'bg-teal-50 border-teal-100' },
+  service:  { icon: Database,    color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-100' },
+  online:   { icon: Wifi,        color: 'text-slate-600',   bg: 'bg-slate-50 border-slate-200' },
+  inhouse:  { icon: Home,        color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+  outsider: { icon: UserX,       color: 'text-rose-600',    bg: 'bg-rose-50 border-rose-100' },
 };
 
 // ── Prospect level badge color ──────────────────────────────────────────────
@@ -142,6 +144,10 @@ export default function AppSheetCrmPage() {
             className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-sm font-bold text-slate-700 shadow-sm outline-none cursor-pointer">
             {['2026','2025','2024','2023'].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
+          <button type="button" onClick={load}
+            className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm text-xs font-bold text-slate-600 hover:border-slate-300 transition-colors">
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </button>
           <button type="button" onClick={exportCSV}
             className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm text-xs font-bold text-slate-600 hover:border-slate-300 transition-colors">
             <Download className="w-4 h-4" /> Excel
@@ -156,6 +162,74 @@ export default function AppSheetCrmPage() {
         </div>
       ) : (
         <>
+          {/* ── KPI Summary Cards ────────────────────────────────────── */}
+          {(() => {
+            const berhasil    = overview.funnel.find(f => f.key === 'berhasil');
+            const convRate    = rows.length > 0 ? ((berhasil?.count || 0) / rows.length) * 100 : 0;
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm shadow-blue-200">
+                      <Users className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">Total</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Kunjungan</p>
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">{rows.length.toLocaleString('id-ID')}</h3>
+                  <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">{MONTHS[month-1]} {year}</p>
+                </div>
+
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-sm shadow-emerald-200">
+                      <CheckCircle className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Closed</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Penjualan Berhasil</p>
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">{(berhasil?.count || 0).toLocaleString('id-ID')}</h3>
+                  <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">dari {rows.length} kunjungan</p>
+                </div>
+
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm shadow-purple-200">
+                      <TrendingUp className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-[9px] font-bold text-violet-700 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full">Rate</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Conversion Rate</p>
+                  <h3 className={cn('text-3xl font-black tracking-tight',
+                    convRate >= 30 ? 'text-emerald-600' : convRate >= 15 ? 'text-amber-500' : 'text-slate-900')}>
+                    {convRate.toFixed(1)}%
+                  </h3>
+                  <div className="mt-3 pt-3 border-t border-slate-50">
+                    <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div className={cn('h-full rounded-full transition-all duration-1000',
+                        convRate >= 30 ? 'bg-emerald-400' : convRate >= 15 ? 'bg-amber-400' : 'bg-rose-400')}
+                        style={{ width: `${Math.min(convRate, 100)}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm shadow-amber-200">
+                      <Database className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">Revenue</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Revenue</p>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                    <Amt value={overview.kpi.totalRevenue} short />
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Dari transaksi berhasil</p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ── Section 1: Traffic Pipeline Funnel ───────────────────── */}
           <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
@@ -216,18 +290,18 @@ export default function AppSheetCrmPage() {
               {/* Per-location breakdown */}
               {overview.byLocation.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-                  {overview.byLocation.map(loc => (
+                  {(overview.byLocation as LocationStat[]).map(loc => (
                     <div key={loc.name} className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <MapPin className="w-3.5 h-3.5 text-slate-400" />
                         <p className="text-xs font-black text-slate-700 truncate">{loc.name}</p>
-                        <span className="ml-auto text-xs font-black text-blue-600">{(loc as any).total}</span>
+                        <span className="ml-auto text-xs font-black text-blue-600">{loc.total}</span>
                       </div>
                       <div className="space-y-1.5">
                         {STATUS_MAP.map(s => {
-                          const cnt = (loc as Record<string, number>)[s.key] || 0;
+                          const cnt = loc[s.key as keyof LocationStat] as number || 0;
                           if (!cnt) return null;
-                          const pct = loc.total > 0 ? (cnt / (loc.total as number)) * 100 : 0;
+                          const pct = loc.total > 0 ? (cnt / loc.total) * 100 : 0;
                           return (
                             <div key={s.key}>
                               <div className="flex justify-between text-[9px] font-bold text-slate-500 mb-0.5">

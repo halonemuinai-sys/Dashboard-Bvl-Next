@@ -14,6 +14,7 @@ import StorePerformanceTable from '@/components/StorePerformanceTable';
 import KPICards from '@/components/KPICards';
 import CrossingSalesWidget from '@/components/CrossingSalesWidget';
 import TopAdvisorsWidget from '@/components/TopAdvisorsWidget';
+import BvlgariLoader from '@/components/BvlgariLoader';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -23,7 +24,11 @@ export default function MonthlyOverviewPage() {
   const [month, setMonth] = useState(MONTHS[new Date().getMonth()]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [data, setData] = useState<MonthlyOverviewData | null>(null);
+  const [syncKey, setSyncKey] = useState(0);
+
+  const handleSync = () => { setSyncing(true); setSyncKey(k => k + 1); };
 
   useEffect(() => {
     (async () => {
@@ -33,18 +38,19 @@ export default function MonthlyOverviewPage() {
           dashboardService.getMonthlyOverview(month, parseInt(year)),
           dashboardService.getAdvisorPerformance(month, parseInt(year))
         ]);
-        
+
         setData({
           ...overview,
           advisorData: advisorRes.advisors
         });
-      } catch (e) { 
-        console.error(e); 
-      } finally { 
-        setLoading(false); 
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+        setSyncing(false);
       }
     })();
-  }, [month, year]);
+  }, [month, year, syncKey]);
 
   const activeStores = useMemo(() =>
     data?.storeData.filter(s => !s.store.toLowerCase().includes('head office')).sort((a,b) => b.actual - a.actual) || []
@@ -67,14 +73,7 @@ export default function MonthlyOverviewPage() {
 
 
 
-  if (loading || !data) {
-    return (
-      <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-slate-500 font-medium animate-pulse">Loading Monthly Overview...</p>
-      </div>
-    );
-  }
+  if (loading || !data) return <BvlgariLoader message="Loading Monthly Overview..." />;
 
   const kpi = data.kpi;
   const annual = data.annualStats;
@@ -88,16 +87,33 @@ export default function MonthlyOverviewPage() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Monthly Overview</h1>
           <p className="text-slate-500 text-sm mt-0.5">Key Performance Indicators & Store Breakdown</p>
         </div>
-        <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
-          <CalendarIcon className="w-4 h-4 text-blue-600" />
-          <select aria-label="Select month" value={month} onChange={e => setMonth(e.target.value)}
-            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer">
-            {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
-            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer border-l border-slate-200 pl-2 ml-2">
-            <option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option>
-          </select>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
+            <CalendarIcon className="w-4 h-4 text-blue-600" />
+            <select aria-label="Select month" value={month} onChange={e => setMonth(e.target.value)}
+              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer">
+              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
+              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer border-l border-slate-200 pl-2 ml-2">
+              <option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handleSync}
+            disabled={syncing || loading}
+            title="Sync data dari API"
+            className={cn(
+              'flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all',
+              syncing || loading
+                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'
+            )}
+          >
+            <RefreshCw className={cn('w-4 h-4', (syncing || loading) && 'animate-spin')} />
+            <span className="hidden sm:inline">Sync</span>
+          </button>
         </div>
       </div>
 

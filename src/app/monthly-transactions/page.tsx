@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { ClipboardList, Calendar as CalendarIcon, RefreshCw } from 'lucide-react';
+import { ClipboardList, Calendar as CalendarIcon, RefreshCw, Lock, LockOpen, ShieldAlert, FileDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
 import { Row, Summary, SortKey, SortDir, MONTHS, PAGE_SIZE } from './_types';
 import TransactionSummary from './TransactionSummary';
@@ -25,6 +26,41 @@ export default function MonthlyTransactionsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('transaction_date');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [page, setPage] = useState(1);
+
+  // Lock/unlock state — persisted per month+year in localStorage
+  const lockKey = `monthtrans_locked_${month}_${year}`;
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
+
+  // Sync lock state when month/year changes
+  useEffect(() => {
+    const stored = localStorage.getItem(lockKey);
+    // Default: locked (stored === null or 'locked')
+    setIsUnlocked(stored === 'unlocked');
+  }, [month, year, lockKey]);
+
+  const handleLock = () => {
+    localStorage.setItem(lockKey, 'locked');
+    setIsUnlocked(false);
+    setCommEdits({});
+  };
+
+  const handleUnlock = () => {
+    const stored = localStorage.getItem(lockKey);
+    if (stored === 'locked') {
+      // Previously explicitly locked — require confirmation
+      setShowUnlockConfirm(true);
+    } else {
+      localStorage.setItem(lockKey, 'unlocked');
+      setIsUnlocked(true);
+    }
+  };
+
+  const confirmUnlock = () => {
+    localStorage.setItem(lockKey, 'unlocked');
+    setIsUnlocked(true);
+    setShowUnlockConfirm(false);
+  };
 
   // Inline editing
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -122,6 +158,42 @@ export default function MonthlyTransactionsPage() {
     finally { setSavingId(null); }
   };
 
+  const exportExcel = () => {
+    const fmtDate = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+    };
+    const headers = [
+      'Trans.No.','Trans.Date','Customer Name','Salesman','Location',
+      'SAP Code','Collection Code','Total Price','Disc','Net Price',
+      'Net Sales','Type Item','QTY','Card Commission','Catalogue_Code',
+    ];
+    const csvRows = sorted.map(r => [
+      r.trans_no,
+      fmtDate(r.transaction_date),
+      `"${(r.customer || '').replace(/"/g,'""')}"`,
+      r.salesman,
+      r.location,
+      r.sap_code || '',
+      r.collection || '',
+      r.gross_sales,
+      r.val_disc,
+      r.gross_sales - r.val_disc,   // Net Price
+      r.net_sales,
+      r.type || '',
+      r.qty,
+      r.comm || 0,
+      r.catalogue_code || '',
+    ].join(','));
+
+    // UTF-8 BOM so Excel/Google Sheets reads Indonesian characters correctly
+    const csv = '﻿' + [headers.join(','), ...csvRows].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = `Transactions_${month}_${year}.csv`;
+    a.click();
+  };
+
   if (loading) return (
     <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
       <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
@@ -157,8 +229,62 @@ export default function MonthlyTransactionsPage() {
               <option value="2024">2024</option>
             </select>
           </div>
+
+          {/* Download Excel */}
+          <button type="button" onClick={exportExcel} disabled={sorted.length === 0}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
+            <FileDown className="w-4 h-4" />
+            <span className="hidden sm:inline">Download</span>
+          </button>
+
+          {/* Lock / Unlock toggle */}
+          {isUnlocked ? (
+            <button type="button" onClick={handleLock}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100">
+              <LockOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Unlocked — Klik untuk Lock</span>
+            </button>
+          ) : (
+            <button type="button" onClick={handleUnlock}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200">
+              <Lock className="w-4 h-4" />
+              <span className="hidden sm:inline">Locked</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Unlock confirmation dialog */}
+      {showUnlockConfirm && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowUnlockConfirm(false); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-5 h-5 text-rose-500" />
+              </span>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Buka Kunci Edit?</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">{month} {year}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              Data commission bulan ini sudah pernah dikunci. Membuka kunci akan mengizinkan perubahan.
+              Pastikan kamu punya otorisasi untuk mengedit data periode ini.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setShowUnlockConfirm(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 transition-all">
+                Batal
+              </button>
+              <button type="button" onClick={confirmUnlock}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-sm">
+                Ya, Buka Kunci
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <TransactionSummary summary={summary} />
 
@@ -181,6 +307,7 @@ export default function MonthlyTransactionsPage() {
           onCommBlur={saveComm}
           onCommEscape={id => setCommEdits(prev => { const n = { ...prev }; delete n[id]; return n; })}
           onTypeChange={saveType}
+          isUnlocked={isUnlocked}
         />
       </div>
     </div>
