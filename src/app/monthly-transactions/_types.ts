@@ -14,6 +14,8 @@ export type Row = {
   location: string;
   main_category: string;
   collection: string;
+  sap_code: string;
+  catalogue_code: string;
   gross_sales: number;
   val_disc: number;
   disc_pct: number;

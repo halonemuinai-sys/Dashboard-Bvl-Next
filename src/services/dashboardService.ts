@@ -699,6 +699,72 @@ export const dashboardService = {
   },
 
   /**
+   * Annual YTD Advisor Performance — mirrors GAS getAnnualAdvisorData(year)
+   * Aggregates full-year sales per advisor + sum of all 12-month targets
+   */
+  async getAnnualAdvisorPerformance(year: number) {
+    const yStart = `${year}-01-01T00:00:00`;
+    const yEnd   = `${year}-12-31T23:59:59`;
+
+    const [{ data: txRows, error }, { data: tgtRows }] = await Promise.all([
+      supabase.from('clean_master')
+        .select('transaction_date,location,net_sales,qty,salesman,trans_no')
+        .gte('transaction_date', yStart).lte('transaction_date', yEnd),
+      supabase.from('advisor_targets')
+        .select('advisor_name,month_number,target_value').eq('year', year),
+    ]);
+    if (error) throw error;
+
+    const isHO = (l: string) => l.toLowerCase().includes('head office') || l.toLowerCase() === 'ho';
+
+    const advMap: Record<string, {
+      name: string; location: string;
+      netSales: number; qty: number;
+      transactions: Set<string>; months: Set<number>;
+    }> = {};
+    let totalNet = 0;
+
+    (txRows || []).forEach((r: { transaction_date: string; location: string; net_sales: number; qty: number; salesman: string; trans_no: string }) => {
+      if (isHO(r.location || '')) return;
+      const name = (r.salesman || '').trim();
+      if (!name) return;
+      const key  = name.toLowerCase();
+      const net  = r.net_sales || 0;
+      const mon  = new Date(r.transaction_date).getMonth() + 1;
+
+      totalNet += net;
+      if (!advMap[key]) advMap[key] = { name, location: (r.location || '').trim(), netSales: 0, qty: 0, transactions: new Set(), months: new Set() };
+      advMap[key].netSales += net;
+      advMap[key].qty      += r.qty || 0;
+      if (r.trans_no) advMap[key].transactions.add(r.trans_no);
+      advMap[key].months.add(mon);
+    });
+
+    // Target: sum all 12 months per advisor
+    const tgtMap: Record<string, number> = {};
+    (tgtRows || []).forEach((t: { advisor_name: string; target_value: number }) => {
+      const key = (t.advisor_name || '').trim().toLowerCase();
+      tgtMap[key] = (tgtMap[key] || 0) + (t.target_value || 0);
+    });
+
+    const advisors = Object.values(advMap).map(a => {
+      const key    = a.name.toLowerCase();
+      const target = tgtMap[key] || 0;
+      return {
+        name: a.name, location: a.location,
+        netSales: a.netSales, qty: a.qty,
+        transCount:       a.transactions.size,
+        productiveMonths: a.months.size,
+        target,
+        achievement:  target > 0 ? (a.netSales / target) * 100 : 0,
+        contribution: totalNet > 0 ? (a.netSales / totalNet) * 100 : 0,
+      };
+    }).sort((a, b) => b.achievement - a.achievement);
+
+    return { year, advisors, totalNet };
+  },
+
+  /**
    * Daily Report — Replicates calculateStoreDaily() + getDailyReportData() from GAS
    * Target source: targets table (mirrors master_target_store sheet)
    * MTD: all transactions from day 1 of month up to and including selected date
@@ -1061,17 +1127,59 @@ export const dashboardService = {
   async getFootfallCrm(month: string, year: number): Promise<FootfallCrmRow[]> {
     const monthIndex = MONTH_NAMES.indexOf(month);
     const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
-    const mEnd = new Date(year, monthIndex + 1, 0).toISOString().split('T')[0];
+    const mEnd   = new Date(year, monthIndex + 1, 0).toISOString().split('T')[0];
 
-    const { data, error } = await supabase
+    // 1. Ambil manual entries dari footfall_crm
+    const { data: manual, error } = await supabase
       .from('footfall_crm')
       .select('*')
       .gte('transaction_date', mStart)
       .lte('transaction_date', mEnd)
       .order('transaction_date', { ascending: true });
-
     if (error) throw error;
-    return (data || []) as FootfallCrmRow[];
+
+    // Manual entries (keyed by date||location) jadi prioritas utama
+    const manualMap: Record<string, FootfallCrmRow> = {};
+    (manual || []).forEach(r => {
+      manualMap[`${r.transaction_date}||${r.location}`] = r as FootfallCrmRow;
+    });
+
+    // 2. Fallback: hitung dari mirror_traffic per hari per lokasi
+    const { data: trafficRows } = await supabase
+      .from('mirror_traffic')
+      .select('transaction_date, location')
+      .gte('transaction_date', mStart)
+      .lte('transaction_date', mEnd);
+
+    const trafficCount: Record<string, Record<string, number>> = {};
+    (trafficRows || []).forEach(r => {
+      const d = r.transaction_date as string;
+      const l = (r.location as string) || '';
+      if (!trafficCount[d]) trafficCount[d] = {};
+      trafficCount[d][l] = (trafficCount[d][l] || 0) + 1;
+    });
+
+    // 3. Gabungkan: manual override jika ada, fallback ke traffic count
+    const result: FootfallCrmRow[] = [];
+    const seen = new Set<string>();
+
+    // Tambahkan manual entries
+    Object.values(manualMap).forEach(r => {
+      result.push(r);
+      seen.add(`${r.transaction_date}||${r.location}`);
+    });
+
+    // Tambahkan traffic-derived entries yang belum ada manual entry-nya
+    Object.entries(trafficCount).forEach(([date, locs]) => {
+      Object.entries(locs).forEach(([location, count]) => {
+        const key = `${date}||${location}`;
+        if (!seen.has(key)) {
+          result.push({ id: 0, transaction_date: date, location, walk_in: count, appointment: 0, new_customer: 0 });
+        }
+      });
+    });
+
+    return result.sort((a, b) => a.transaction_date.localeCompare(b.transaction_date));
   },
 
   async saveFootfallStore(row: Partial<FootfallStoreRow>): Promise<void> {
@@ -1206,7 +1314,7 @@ export const dashboardService = {
 
     const { data, error } = await supabase
       .from('clean_master')
-      .select('id, trans_no, transaction_date, customer, salesman, location, main_category, collection, gross_sales, val_disc, disc_pct, net_sales, qty, cost, comm, type')
+      .select('id, trans_no, transaction_date, customer, salesman, location, main_category, collection, sap_code, catalogue_code, gross_sales, val_disc, disc_pct, net_sales, qty, cost, comm, type')
       .gte('transaction_date', mStart)
       .lte('transaction_date', mEnd)
       .order('transaction_date', { ascending: true });
@@ -1779,5 +1887,529 @@ export const dashboardService = {
     });
 
     return { years, categories, chartData, ytd, activeMonth };
+  },
+
+  async getStorePerformance(store: string, year: number) {
+    const isAll = !store || store === 'ALL';
+    const isHO  = (l: string) => l.toLowerCase().includes('head office') || l.toLowerCase() === 'ho';
+    const yStart  = `${year}-01-01`,     yEnd  = `${year}-12-31`;
+    const pyStart = `${year - 1}-01-01`, pyEnd = `${year - 1}-12-31`;
+
+    // ── 6 parallel queries ────────────────────────────────────────────
+    let q1 = supabase.from('clean_master')
+      .select('transaction_date,location,net_sales,gross_sales,val_disc,cost,qty,main_category,salesman,trans_no')
+      .gte('transaction_date', yStart).lte('transaction_date', yEnd);
+    if (!isAll) q1 = q1.eq('location', store);
+
+    let q2 = supabase.from('clean_master')
+      .select('transaction_date,location,net_sales')
+      .gte('transaction_date', pyStart).lte('transaction_date', pyEnd);
+    if (!isAll) q2 = q2.eq('location', store);
+
+    let q3 = supabase.from('store_budgets')
+      .select('month_number,store_name,budget_value').eq('year', year);
+    if (!isAll) q3 = q3.eq('store_name', store);
+
+    let q4 = supabase.from('footfall_store')
+      .select('transaction_date,location,traffic_in,traffic_out')
+      .gte('transaction_date', yStart).lte('transaction_date', yEnd);
+    if (!isAll) q4 = q4.eq('location', store);
+
+    // Traffic dari mirror_traffic (AppSheet data) — sesuai GAS Traffic_Summary
+    let q5 = supabase.from('mirror_traffic')
+      .select('transaction_date,location,prospect_item')
+      .gte('transaction_date', yStart).lte('transaction_date', yEnd);
+    if (!isAll) q5 = q5.eq('location', store);
+
+    // Advisor annual targets (sum per advisor)
+    const q6 = supabase.from('advisor_targets')
+      .select('advisor_name,month_number,target_value').eq('year', year);
+
+    const [{ data: rows, error }, { data: pyRows }, { data: budgetRows }, { data: ffRows }, { data: trafficRows }, { data: advTargetRows }] =
+      await Promise.all([q1, q2, q3, q4, q5, q6]);
+    if (error) throw error;
+
+    // ── Aggregate current year sales ──────────────────────────────────
+    let totalSales = 0, totalGross = 0, totalDisc = 0, totalCost = 0, totalQty = 0;
+    const txSet = new Set<string>();
+    const monthlyTrend = new Array(12).fill(0);
+    const catMap: Record<string, { value: number; qty: number }> = {};
+    const advMap: Record<string, { location: string; totalSales: number; qty: number; txSet: Set<string> }> = {};
+
+    for (const r of rows || []) {
+      if (isHO(r.location || '')) continue;
+      const m   = new Date(r.transaction_date).getMonth();
+      const net = r.net_sales || 0;
+      totalSales += net;
+      totalGross += r.gross_sales || 0;
+      totalDisc  += r.val_disc || 0;
+      totalCost  += r.cost || 0;
+      totalQty   += r.qty || 0;
+      if (r.trans_no) txSet.add(r.trans_no);
+      monthlyTrend[m] += net;
+
+      const cat = (r.main_category || 'Other').trim();
+      if (!catMap[cat]) catMap[cat] = { value: 0, qty: 0 };
+      catMap[cat].value += net;
+      catMap[cat].qty   += r.qty || 0;
+
+      const adv = (r.salesman || '').trim();
+      if (adv) {
+        if (!advMap[adv]) advMap[adv] = { location: (r.location || '').trim(), totalSales: 0, qty: 0, txSet: new Set() };
+        advMap[adv].totalSales += net;
+        advMap[adv].qty        += r.qty || 0;
+        if (r.trans_no) advMap[adv].txSet.add(r.trans_no);
+      }
+    }
+    const transCount = txSet.size;
+
+    // ── Prev year ─────────────────────────────────────────────────────
+    const prevYearTrend = new Array(12).fill(0);
+    let prevYearSales = 0;
+    for (const r of pyRows || []) {
+      if (isHO(r.location || '')) continue;
+      prevYearTrend[new Date(r.transaction_date).getMonth()] += r.net_sales || 0;
+      prevYearSales += r.net_sales || 0;
+    }
+
+    // ── Budgets ───────────────────────────────────────────────────────
+    const monthlyTargets = new Array(12).fill(0);
+    for (const b of budgetRows || []) monthlyTargets[(b.month_number || 1) - 1] += b.budget_value || 0;
+    const annualTarget = monthlyTargets.reduce((s, v) => s + v, 0);
+
+    // ── Footfall (door counter) ───────────────────────────────────────
+    let footfall = 0;
+    for (const f of ffRows || []) {
+      const ti = f.traffic_in || 0, to = f.traffic_out || 0;
+      footfall += to > 0 ? Math.min(ti, to) : ti;
+    }
+
+    // ── Traffic (AppSheet CRM) + breakdown by prospect_item ──────────
+    let trafficBerhasil = 0, trafficGagal = 0, trafficMenunggu = 0, trafficPotensial = 0, trafficNego = 0;
+    for (const t of trafficRows || []) {
+      const p = (t.prospect_item || '').toLowerCase();
+      if      (p.includes('berhasil'))  trafficBerhasil++;
+      else if (p.includes('gagal'))     trafficGagal++;
+      else if (p.includes('menunggu'))  trafficMenunggu++;
+      else if (p.includes('negosiasi')) trafficNego++;
+      else if (p.includes('potensial')) trafficPotensial++;
+    }
+    const traffic = (trafficRows || []).length;
+
+    // ── Advisor targets (sum all months per advisor) ──────────────────
+    const advTargetMap: Record<string, number> = {};
+    for (const t of advTargetRows || []) {
+      const name = (t.advisor_name || '').trim();
+      advTargetMap[name] = (advTargetMap[name] || 0) + (t.target_value || 0);
+    }
+
+    // ── Derived KPIs ──────────────────────────────────────────────────
+    const achievement    = annualTarget > 0 ? (totalSales / annualTarget) * 100 : 0;
+    const avgTransValue  = transCount   > 0 ? totalSales / transCount : 0;
+    const discountPct    = totalGross   > 0 ? (totalDisc / totalGross) * 100 : 0;
+    const costPct        = totalGross   > 0 ? (totalCost / totalGross) * 100 : 0;
+    const yoyGrowth      = prevYearSales > 0 ? ((totalSales - prevYearSales) / prevYearSales) * 100 : 0;
+    const captureRate    = footfall > 0 ? (traffic / footfall) * 100 : 0;
+    const conversionRate = traffic  > 0 ? (transCount / traffic) * 100 : 0;
+
+    const categoryStats = Object.entries(catMap)
+      .map(([name, d]) => ({ name, value: d.value, qty: d.qty }))
+      .sort((a, b) => b.value - a.value);
+
+    const advisorStats = Object.entries(advMap)
+      .map(([name, d]) => {
+        const target = advTargetMap[name] || 0;
+        return {
+          name, location: d.location,
+          totalSales: d.totalSales, qty: d.qty, trans: d.txSet.size,
+          target,
+          achievement: target > 0 ? (d.totalSales / target) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.totalSales - a.totalSales);
+
+    return {
+      store: isAll ? 'ALL' : store,
+      year,
+      prevYear: year - 1,
+      kpi: { totalSales, annualTarget, achievement, avgTransValue, transCount, discountPct, costPct, yoyGrowth, prevYearSales },
+      efficiency: {
+        footfall, traffic, captureRate, conversionRate,
+        trafficBreakdown: { berhasil: trafficBerhasil, gagal: trafficGagal, menunggu: trafficMenunggu, potensial: trafficPotensial, nego: trafficNego },
+      },
+      monthlyTrend,
+      prevYearTrend,
+      monthlyTargets,
+      categoryStats,
+      advisorStats,
+    };
+  },
+
+  async getClientelingData(year: number) {
+    const today    = new Date();
+    const INACTIVE = 730;   // days = 24 months
+    const LAPSED_MIN = 180; // 6 months
+    const VIP_MIN = 50_000_000;
+
+    const TIER_ORDER = ['Top', 'Elite', 'High Potential', 'Potential', 'Prospect', 'Inactive'];
+
+    const isInvalid = (name: string) => {
+      if (!name?.trim()) return true;
+      const l = name.toLowerCase().trim();
+      return ['customer','n/a','-','walk in','walkin','tamu','guest'].includes(l);
+    };
+
+    const classifyTier = (spend: number, recencyDays: number): string => {
+      if (recencyDays > INACTIVE)      return 'Inactive';
+      if (spend >= 1_350_000_000)       return 'Top';
+      if (spend >= 200_000_000)         return 'Elite';
+      if (spend >= VIP_MIN)             return 'High Potential';
+      if (spend > 0)                    return 'Potential';
+      return 'Prospect';
+    };
+
+    // Fetch all + current year + prev year in parallel
+    const [{ data: allRows, error }, { data: yearRows }, { data: pyRows }] = await Promise.all([
+      supabase.from('clean_master')
+        .select('customer, transaction_date, net_sales, qty, trans_no, location, main_category')
+        .order('transaction_date', { ascending: true }),
+      supabase.from('clean_master')
+        .select('customer, transaction_date, net_sales, trans_no, location')
+        .gte('transaction_date', `${year}-01-01`).lte('transaction_date', `${year}-12-31`),
+      supabase.from('clean_master')
+        .select('customer, transaction_date, net_sales, trans_no')
+        .gte('transaction_date', `${year - 1}-01-01`).lte('transaction_date', `${year - 1}-12-31`),
+    ]);
+    if (error) throw error;
+
+    // ── Build lifetime customer profiles ─────────────────────────────
+    type Profile = {
+      name: string; totalSpend: number; totalQty: number;
+      txSet: Set<string>; firstDate: Date; lastDate: Date;
+      locSpend: Record<string, number>;
+      yearSpend: Record<number, number>;
+    };
+    const pMap = new Map<string, Profile>();
+
+    for (const r of allRows || []) {
+      const name = (r.customer || '').trim();
+      if (isInvalid(name)) continue;
+      const d   = new Date(r.transaction_date);
+      const net = r.net_sales || 0;
+      const yr  = d.getFullYear();
+      const loc = (r.location || '').trim();
+
+      if (!pMap.has(name)) {
+        pMap.set(name, { name, totalSpend: 0, totalQty: 0,
+          txSet: new Set(), firstDate: d, lastDate: d,
+          locSpend: {}, yearSpend: {} });
+      }
+      const p = pMap.get(name)!;
+      p.totalSpend += net;
+      p.totalQty   += r.qty || 0;
+      if (r.trans_no) p.txSet.add(r.trans_no);
+      if (d < p.firstDate) p.firstDate = d;
+      if (d > p.lastDate)  p.lastDate  = d;
+      p.locSpend[loc]  = (p.locSpend[loc]  || 0) + net;
+      p.yearSpend[yr]  = (p.yearSpend[yr]  || 0) + net;
+    }
+
+    // ── Classify + build derived fields ──────────────────────────────
+    const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const tierCounts:  Record<string, number> = {};
+    const tierRevenue: Record<string, number> = {};
+    for (const t of TIER_ORDER) { tierCounts[t] = 0; tierRevenue[t] = 0; }
+
+    let totalActive = 0, totalRepeat = 0, totalNew = 0;
+    let repeatRevenue = 0, newRevenue = 0;
+
+    const allProfiles: {
+      name: string; totalSpend: number; visits: number;
+      recencyDays: number; tier: string; primaryLocation: string;
+      firstVisit: string; lastVisit: string;
+      yearSpend: Record<number, number>;
+    }[] = [];
+
+    pMap.forEach(p => {
+      const recencyDays = Math.floor((today.getTime() - p.lastDate.getTime()) / 86_400_000);
+      const tier        = classifyTier(p.totalSpend, recencyDays);
+      const primaryLoc  = Object.entries(p.locSpend).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+      const isActive    = recencyDays <= INACTIVE;
+
+      tierCounts[tier]++;
+      tierRevenue[tier] += p.totalSpend;
+
+      if (isActive) {
+        totalActive++;
+        if (p.txSet.size > 1) { totalRepeat++; repeatRevenue += p.totalSpend; }
+        else                  { totalNew++;    newRevenue    += p.totalSpend; }
+      }
+
+      allProfiles.push({
+        name: p.name, totalSpend: p.totalSpend, visits: p.txSet.size,
+        recencyDays, tier, primaryLocation: primaryLoc,
+        firstVisit: p.firstDate.toISOString().slice(0, 10),
+        lastVisit:  p.lastDate.toISOString().slice(0, 10),
+        yearSpend:  p.yearSpend,
+      });
+    });
+
+    // ── KPIs ──────────────────────────────────────────────────────────
+    const retentionRate = totalActive > 0 ? (totalRepeat / totalActive) * 100 : 0;
+    const avgLtv        = totalActive > 0 ? (repeatRevenue + newRevenue) / totalActive : 0;
+    const lapsedCount   = allProfiles.filter(p =>
+      p.recencyDays >= LAPSED_MIN && p.recencyDays <= INACTIVE && p.totalSpend >= VIP_MIN
+    ).length;
+
+    // ── Top 50 clients ────────────────────────────────────────────────
+    const topClients = [...allProfiles]
+      .sort((a, b) => b.totalSpend - a.totalSpend)
+      .slice(0, 50)
+      .map(p => ({ name: p.name, spend: p.totalSpend, visits: p.visits,
+        recency: p.recencyDays, tier: p.tier, location: p.primaryLocation,
+        firstVisit: p.firstVisit, lastVisit: p.lastVisit }));
+
+    // ── Lapsed alerts ─────────────────────────────────────────────────
+    const lapsedAlerts = allProfiles
+      .filter(p => p.recencyDays >= LAPSED_MIN && p.recencyDays <= INACTIVE && p.totalSpend >= VIP_MIN)
+      .sort((a, b) => b.totalSpend - a.totalSpend)
+      .slice(0, 30)
+      .map(p => ({ name: p.name, spend: p.totalSpend, daysSince: p.recencyDays,
+        lastVisit: p.lastVisit, tier: p.tier, location: p.primaryLocation }));
+
+    // ── RFM buckets (active customers) ───────────────────────────────
+    const active = allProfiles.filter(p => p.recencyDays <= INACTIVE);
+    const recencyBuckets = { '0-30': 0, '31-90': 0, '91-180': 0, '181-365': 0, '365+': 0 };
+    const freqBuckets    = { '1x': 0, '2-3x': 0, '4-6x': 0, '7-10x': 0, '10+x': 0 };
+    for (const p of active) {
+      const d = p.recencyDays;
+      if      (d <= 30)  recencyBuckets['0-30']++;
+      else if (d <= 90)  recencyBuckets['31-90']++;
+      else if (d <= 180) recencyBuckets['91-180']++;
+      else if (d <= 365) recencyBuckets['181-365']++;
+      else               recencyBuckets['365+']++;
+
+      const v = p.visits;
+      if      (v === 1)   freqBuckets['1x']++;
+      else if (v <= 3)    freqBuckets['2-3x']++;
+      else if (v <= 6)    freqBuckets['4-6x']++;
+      else if (v <= 10)   freqBuckets['7-10x']++;
+      else                freqBuckets['10+x']++;
+    }
+
+    // ── Location loyalty ──────────────────────────────────────────────
+    const locMap: Record<string, { active: number; spend: number }> = {};
+    for (const p of active) {
+      const loc = p.primaryLocation || '—';
+      if (!locMap[loc]) locMap[loc] = { active: 0, spend: 0 };
+      locMap[loc].active++;
+      locMap[loc].spend += p.totalSpend;
+    }
+    const locationSummary = Object.entries(locMap)
+      .map(([name, d]) => ({ name, active: d.active, spend: d.spend, avgSpend: d.active > 0 ? d.spend / d.active : 0 }))
+      .sort((a, b) => b.spend - a.spend);
+
+    // ── Tier migration (customers with spend in both years) ───────────
+    const tierMigration: { name: string; from: string; to: string; prevSpend: number; currSpend: number; direction: string }[] = [];
+    for (const p of allProfiles) {
+      const prev = p.yearSpend[year - 1] || 0;
+      const curr = p.yearSpend[year]     || 0;
+      if (!prev || !curr) continue;
+      const prevRecency = Math.floor((today.getTime() - new Date(p.lastVisit).getTime()) / 86_400_000);
+      const fromTier = classifyTier(prev, INACTIVE - 1); // treat both as active for classification
+      const toTier   = classifyTier(curr, prevRecency);
+      if (fromTier === toTier) continue;
+      const fromIdx = TIER_ORDER.indexOf(fromTier);
+      const toIdx   = TIER_ORDER.indexOf(toTier);
+      tierMigration.push({
+        name: p.name, from: fromTier, to: toTier,
+        prevSpend: prev, currSpend: curr,
+        direction: toIdx < fromIdx ? 'up' : 'down', // lower index = higher tier
+      });
+    }
+    tierMigration.sort((a, b) => b.currSpend - a.currSpend);
+
+    // ── Monthly retention (current year) ──────────────────────────────
+    // Determine which customers had their first-ever visit in current year
+    const firstVisitYear: Record<string, number> = {};
+    pMap.forEach((p, name) => { firstVisitYear[name] = p.firstDate.getFullYear(); });
+
+    // Track unique customers per month in current year
+    const monthNew      = new Array(12).fill(0);
+    const monthReturning = new Array(12).fill(0);
+    const seenMonth = new Map<string, Set<number>>();
+    for (const r of (yearRows || []).sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))) {
+      const name = (r.customer || '').trim();
+      if (isInvalid(name)) continue;
+      const m = new Date(r.transaction_date).getMonth();
+      if (!seenMonth.has(name)) seenMonth.set(name, new Set());
+      const ms = seenMonth.get(name)!;
+      if (ms.has(m)) continue;
+      ms.add(m);
+      if (firstVisitYear[name] === year) monthNew[m]++;
+      else                               monthReturning[m]++;
+    }
+    const retention = MONTH_SHORT.map((month, i) => ({ month, newCust: monthNew[i], returning: monthReturning[i] }));
+
+    return {
+      year,
+      kpi: { totalActive, retentionRate, avgLtv, lapsedCount, repeatRevenue, newRevenue,
+             repeatPct: totalActive > 0 ? (totalRepeat / totalActive) * 100 : 0,
+             newPct:    totalActive > 0 ? (totalNew    / totalActive) * 100 : 0 },
+      tierCounts,
+      tierRevenue,
+      topClients,
+      lapsedAlerts,
+      recencyBuckets,
+      freqBuckets,
+      locationSummary,
+      tierMigration: tierMigration.slice(0, 20),
+      retention,
+    };
+  },
+
+  async getProductRank(month: number, year: number, store = 'ALL') {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const lastDay = new Date(year, month, 0).getDate();
+    const from = `${year}-${pad(month)}-01`;
+    const to   = `${year}-${pad(month)}-${pad(lastDay)}`;
+
+    let q = supabase.from('clean_master')
+      .select('sap_code,main_category,collection,catalogue_code,qty,net_sales,location')
+      .gte('transaction_date', from)
+      .lte('transaction_date', to)
+      .not('location', 'ilike', '%head office%');
+    if (store !== 'ALL') q = q.eq('location', store);
+
+    const { data, error } = await q;
+    if (error) throw error;
+    const rows = (data || []) as {
+      sap_code: string; main_category: string; collection: string;
+      catalogue_code: string; qty: number; net_sales: number; location: string;
+    }[];
+
+    const sapMap:  Record<string, { sap: string; category: string; collection: string; qty: number; net: number }> = {};
+    const catMap:  Record<string, { name: string; qty: number; net: number }> = {};
+    const collMap: Record<string, { name: string; qty: number; net: number }> = {};
+    const catMap2: Record<string, string> = {}; // dominant category per collection
+    const catalogueMap: Record<string, { name: string; qty: number; net: number }> = {};
+
+    rows.forEach(r => {
+      const sap  = String(r.sap_code  || 'Unknown').trim();
+      const cat  = String(r.main_category || 'Other').trim();
+      const coll = String(r.collection    || 'Other').trim();
+      const cat2 = String(r.catalogue_code || '-').trim();
+      const qty  = Number(r.qty)       || 0;
+      const net  = Number(r.net_sales) || 0;
+
+      if (!sapMap[sap])  sapMap[sap]  = { sap, category: cat, collection: coll, qty: 0, net: 0 };
+      sapMap[sap].qty += qty; sapMap[sap].net += net;
+
+      if (!catMap[cat])  catMap[cat]  = { name: cat,  qty: 0, net: 0 };
+      catMap[cat].qty += qty; catMap[cat].net += net;
+
+      if (!collMap[coll]) collMap[coll] = { name: coll, qty: 0, net: 0 };
+      collMap[coll].qty += qty; collMap[coll].net += net;
+      if (!catMap2[coll] || net > 0) catMap2[coll] = cat;
+
+      if (!catalogueMap[cat2]) catalogueMap[cat2] = { name: cat2, qty: 0, net: 0 };
+      catalogueMap[cat2].qty += qty; catalogueMap[cat2].net += net;
+    });
+
+    const byNet = (a: { net: number }, b: { net: number }) => b.net - a.net;
+    const byQty = (a: { qty: number }, b: { qty: number }) => b.qty - a.qty;
+
+    const topSapVal    = Object.values(sapMap).sort(byNet).slice(0, 20);
+    const topSapQty    = Object.values(sapMap).sort(byQty).slice(0, 20);
+    const topCat       = Object.values(catMap).sort(byNet);
+    const topColl      = Object.values(collMap).sort(byNet).slice(0, 20)
+      .map(c => ({ ...c, dominantCat: catMap2[c.name] || '' }));
+    const topCatalogue = Object.values(catalogueMap).sort(byNet).slice(0, 20);
+
+    return {
+      topSapVal, topSapQty, topCat, topColl, topCatalogue,
+      kpi: {
+        topProductByVal: topSapVal[0] ?? null,
+        topProductByQty: topSapQty[0] ?? null,
+        topCategory:     topCat[0]    ?? null,
+        topCollection:   topColl[0]   ?? null,
+      },
+    };
+  },
+
+  async getHeatmapData(month: number, year: number, store = 'ALL') {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const lastDay = new Date(year, month, 0).getDate();
+    const from = `${year}-${pad(month)}-01`;
+    const to   = `${year}-${pad(month)}-${pad(lastDay)}`;
+
+    let q = supabase.from('clean_master')
+      .select('transaction_date,net_sales,qty,location')
+      .gte('transaction_date', from)
+      .lte('transaction_date', to)
+      .not('location', 'ilike', '%head office%');
+    if (store !== 'ALL') q = q.eq('location', store);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    const dailyStats: { net: number; qty: number }[] = Array.from(
+      { length: lastDay }, () => ({ net: 0, qty: 0 })
+    );
+
+    (data || []).forEach((r: { transaction_date: string; net_sales: number; qty: number }) => {
+      const day = new Date(r.transaction_date).getDate() - 1;
+      if (day >= 0 && day < lastDay) {
+        dailyStats[day].net += r.net_sales || 0;
+        dailyStats[day].qty += r.qty       || 0;
+      }
+    });
+
+    const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
+
+    // Best / worst day (skip zero)
+    let bestIdx = -1, worstIdx = -1;
+    let bestNet = -Infinity, worstNet = Infinity;
+    dailyStats.forEach((d, i) => {
+      if (d.net > 0) {
+        if (d.net > bestNet)  { bestNet  = d.net;  bestIdx  = i; }
+        if (d.net < worstNet) { worstNet = d.net;  worstIdx = i; }
+      }
+    });
+
+    // Best day of week (avg net by DOW)
+    const dowNet   = new Array(7).fill(0);
+    const dowCount = new Array(7).fill(0);
+    dailyStats.forEach((d, i) => {
+      if (d.net > 0) {
+        const dow = (firstDayOfWeek + i) % 7;
+        dowNet[dow]   += d.net;
+        dowCount[dow] += 1;
+      }
+    });
+    const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    let bestDowIdx = 0, bestDowAvg = -1;
+    dowNet.forEach((net, i) => {
+      const avg = dowCount[i] > 0 ? net / dowCount[i] : 0;
+      if (avg > bestDowAvg) { bestDowAvg = avg; bestDowIdx = i; }
+    });
+
+    const fmtDay = (idx: number) => {
+      const d = new Date(year, month - 1, idx + 1);
+      return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+    };
+
+    return {
+      dailyStats,
+      lastDay,
+      firstDayOfWeek,
+      kpi: {
+        bestDay:    bestIdx  >= 0 ? { label: fmtDay(bestIdx),  net: bestNet,  qty: dailyStats[bestIdx].qty  } : null,
+        worstDay:   worstIdx >= 0 ? { label: fmtDay(worstIdx), net: worstNet, qty: dailyStats[worstIdx].qty } : null,
+        bestDow:    DOW_NAMES[bestDowIdx],
+        bestDowAvg: bestDowAvg > 0 ? bestDowAvg : 0,
+      },
+    };
   },
 };

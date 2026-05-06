@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, ChevronsUpDown, Loader2, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import { Row, SortKey, SortDir, Summary, TYPE_COLORS, PAGE_SIZE } from './_types';
@@ -21,6 +21,7 @@ interface Props {
   onCommBlur: (id: number) => void;
   onCommEscape: (id: number) => void;
   onTypeChange: (id: number, type: string) => void;
+  isUnlocked: boolean;
 }
 
 function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
@@ -48,7 +49,7 @@ export default function TransactionTable({
   paged, sorted, filtered, summary,
   sortKey, sortDir, onSort,
   page, totalPages, onPage,
-  savingId, savedIds, commEdits, onCommEdit, onCommBlur, onCommEscape, onTypeChange,
+  savingId, savedIds, commEdits, onCommEdit, onCommBlur, onCommEscape, onTypeChange, isUnlocked,
 }: Props) {
   const totalComm = filtered.reduce((s, r) => s + (r.comm || 0), 0);
 
@@ -59,14 +60,20 @@ export default function TransactionTable({
         <table className="w-full text-left whitespace-nowrap">
           <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100">
             <tr>
-              <Th>Tgl</Th>
+              <Th onClick={() => onSort('transaction_date')}>
+                <span className="inline-flex items-center gap-1">Tgl <SortIcon col="transaction_date" sortKey={sortKey} sortDir={sortDir} /></span>
+              </Th>
               <Th>Trans No</Th>
               <Th>Customer</Th>
               <Th>Salesman</Th>
               <Th>Lokasi</Th>
               <Th>Kategori</Th>
               <Th>Koleksi</Th>
-              <Th className="text-amber-600">Type ✎</Th>
+              <Th className={isUnlocked ? 'text-amber-600' : 'text-slate-400'}>
+                <span className="inline-flex items-center gap-1">
+                  Type {isUnlocked ? '✎' : <Lock className="w-2.5 h-2.5" />}
+                </span>
+              </Th>
               <Th onClick={() => onSort('qty')} className="text-right">
                 <span className="inline-flex items-center gap-1">Qty <SortIcon col="qty" sortKey={sortKey} sortDir={sortDir} /></span>
               </Th>
@@ -76,7 +83,11 @@ export default function TransactionTable({
               <Th onClick={() => onSort('val_disc')} className="text-right">
                 <span className="inline-flex items-center gap-1">Disc <SortIcon col="val_disc" sortKey={sortKey} sortDir={sortDir} /></span>
               </Th>
-              <Th className="text-right text-amber-600">Comm ✎</Th>
+              <Th className={cn('text-right', isUnlocked ? 'text-amber-600' : 'text-slate-400')}>
+                <span className="inline-flex items-center gap-1 justify-end">
+                  Comm {isUnlocked ? '✎' : <Lock className="w-2.5 h-2.5" />}
+                </span>
+              </Th>
               <Th onClick={() => onSort('net_sales')} className="text-right bg-blue-50/40">
                 <span className="inline-flex items-center gap-1 text-blue-600">Net Sales <SortIcon col="net_sales" sortKey={sortKey} sortDir={sortDir} /></span>
               </Th>
@@ -109,24 +120,31 @@ export default function TransactionTable({
 
                   {/* Type editable */}
                   <td className="py-1.5 px-4">
-                    <div className="flex items-center gap-1.5">
-                      <select
-                        aria-label="Edit type"
-                        value={r.type || ''}
-                        disabled={isSaving}
-                        onChange={e => onTypeChange(r.id, e.target.value)}
-                        className={cn(
-                          "text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-pointer outline-none transition-all",
-                          TYPE_COLORS[r.type] || 'bg-slate-100 text-slate-500 border-slate-200',
-                          "hover:ring-1 hover:ring-amber-300 focus:ring-1 focus:ring-amber-400"
-                        )}>
-                        <option value="">—</option>
-                        <option value="Regular">Regular</option>
-                        <option value="SMI">SMI</option>
-                      </select>
-                      {isSaving && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
-                      {isSaved  && <Check  className="w-3 h-3 text-emerald-500" />}
-                    </div>
+                    {isUnlocked ? (
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          aria-label="Edit type"
+                          value={r.type || ''}
+                          disabled={isSaving}
+                          onChange={e => onTypeChange(r.id, e.target.value)}
+                          className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-pointer outline-none transition-all",
+                            TYPE_COLORS[r.type] || 'bg-slate-100 text-slate-500 border-slate-200',
+                            "hover:ring-1 hover:ring-amber-300 focus:ring-1 focus:ring-amber-400"
+                          )}>
+                          <option value="">—</option>
+                          <option value="Regular">Regular</option>
+                          <option value="SMI">SMI</option>
+                        </select>
+                        {isSaving && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
+                        {isSaved  && <Check  className="w-3 h-3 text-emerald-500" />}
+                      </div>
+                    ) : (
+                      <span className={cn(
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full border',
+                        TYPE_COLORS[r.type] || 'bg-slate-100 text-slate-500 border-slate-200'
+                      )}>{r.type || '—'}</span>
+                    )}
                   </td>
 
                   <td className="py-2.5 px-4 text-right font-mono text-slate-700">{r.qty}</td>
@@ -135,24 +153,31 @@ export default function TransactionTable({
 
                   {/* Comm editable */}
                   <td className="py-1.5 px-4 text-right">
-                    <input
-                      type="text"
-                      aria-label="Edit comm"
-                      value={commVal}
-                      disabled={isSaving}
-                      onChange={e => onCommEdit(r.id, e.target.value)}
-                      onBlur={() => onCommBlur(r.id)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter')  (e.target as HTMLInputElement).blur();
-                        if (e.key === 'Escape') onCommEscape(r.id);
-                      }}
-                      className={cn(
-                        "w-28 text-right text-xs font-mono px-2 py-1 rounded-lg border outline-none transition-all",
-                        commEdits[r.id] !== undefined
-                          ? "border-amber-300 bg-amber-50 text-amber-800 ring-1 ring-amber-300"
-                          : "border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 focus:border-amber-300 focus:bg-amber-50"
-                      )}
-                    />
+                    {isUnlocked ? (
+                      <input
+                        type="text"
+                        aria-label="Edit comm"
+                        value={commVal}
+                        disabled={isSaving}
+                        onChange={e => onCommEdit(r.id, e.target.value)}
+                        onBlur={() => onCommBlur(r.id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter')  (e.target as HTMLInputElement).blur();
+                          if (e.key === 'Escape') onCommEscape(r.id);
+                        }}
+                        className={cn(
+                          "w-28 text-right text-xs font-mono px-2 py-1 rounded-lg border outline-none transition-all",
+                          commEdits[r.id] !== undefined
+                            ? "border-amber-300 bg-amber-50 text-amber-800 ring-1 ring-amber-300"
+                            : "border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 focus:border-amber-300 focus:bg-amber-50"
+                        )}
+                      />
+                    ) : (
+                      <span className="text-xs font-mono text-slate-600 flex items-center justify-end gap-1">
+                        {r.comm > 0 ? <Amt value={r.comm} /> : <span className="text-slate-300">—</span>}
+                        <Lock className="w-2.5 h-2.5 text-slate-300" />
+                      </span>
+                    )}
                   </td>
 
                   <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 bg-blue-50/30"><Amt value={r.net_sales} /></td>

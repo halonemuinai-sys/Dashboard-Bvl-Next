@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { RefreshCw, Download, FileText, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService, FootfallStoreRow } from '@/services/dashboardService';
+import BvlgariLoader from '@/components/BvlgariLoader';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 import * as XLSX from 'xlsx';
 
@@ -123,14 +124,7 @@ export default function FootfallStorePage() {
     };
   });
 
-  if (loading) {
-    return (
-      <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-slate-500 font-medium animate-pulse">Loading Footfall Data...</p>
-      </div>
-    );
-  }
+  if (loading) return <BvlgariLoader message="Loading Footfall Data..." />;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-10">

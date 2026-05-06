@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import { dashboardService } from '@/services/dashboardService';
+import BvlgariLoader from '@/components/BvlgariLoader';
 
 const QUARTERS = [
   { label: 'Q1', value: 1, months: 'Jan — Mar' },
@@ -50,12 +51,7 @@ export default function QuarterlyStandardPage() {
     data?.categories.reduce((s, c) => s + c.value, 0) || 1,
   [data]);
 
-  if (loading || !data) return (
-    <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-      <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-      <p className="text-slate-500 font-medium animate-pulse">Loading Quarterly Standard...</p>
-    </div>
-  );
+  if (loading || !data) return <BvlgariLoader message="Loading Quarterly Data..." />;
 
   const { qtdSales, qtdTarget, qtdAchv, yoyGrowth, monthlyPacing, categories, topCollections, topCatalogue } = data;
   const yoyPos  = yoyGrowth >= 0;

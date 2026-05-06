@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import CustomerModal from '@/components/CustomerModal';
+import BvlgariLoader from '@/components/BvlgariLoader';
 import {
   customerService, SEGMENT_ORDER, SEGMENT_CFG,
   type Segment, type CustomerProfile,
@@ -101,12 +102,7 @@ export default function CustomerSegmentPage() {
     setModalSeg(c.segment);
   };
 
-  if (loading || !data) return (
-    <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-      <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-      <p className="text-slate-500 font-medium animate-pulse">Loading Customer Intelligence...</p>
-    </div>
-  );
+  if (loading || !data) return <BvlgariLoader message="Loading Customer Intelligence..." />;
 
   const { kpi, segmentDistribution, revenueMix, growthTrend } = data;
   return (

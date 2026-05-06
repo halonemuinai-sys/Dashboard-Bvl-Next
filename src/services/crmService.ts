@@ -1,23 +1,63 @@
 import { supabase } from '@/lib/supabase';
 
 // Matches existing mirror_traffic schema created by ARES CRM project
+export interface LocationStat {
+  name: string;
+  total: number;
+  walkin: number;
+  followup: number;
+  delivery: number;
+  service: number;
+  online: number;
+  inhouse: number;
+  outsider: number;
+  other: number;
+}
+
 export interface TrafficRow {
   id: number;
-  transaction_date: string;   // tanggal berkunjung (main visit date)
+  source_id: string;
+  tanggal_input: string;
+  transaction_date: string;
   customer_name: string;
-  location: string;           // lokasi store
+  nama_panggilan: string;
+  customer_advisor: string;
   served_by: string;
-  status: string;             // status kedatangan
-  prospect_item: string;      // prospek level
+  location: string;
+  status: string;
+  repair_charge: number;
+  siapa: string;
+  akses_masuk: string;
+  tanggal_berkunjung: string;
+  rentang_waktu: string;
+  no_hp: string;
+  email: string;
+  etnis: string;
+  status_pelanggan: string;
+  prospect_item: string;
+  kota: string;
+  kewarganegaraan: string;
+  minat_barang: string;
+  item_1: string;
+  item_2: string;
+  item_3: string;
+  item_4: string;
+  item_5: string;
+  item_6: string;
+  item_7: string;
+  item_8: string;
+  item_9: string;
+  item_10: string;
+  detail_items: string;
   gross_sales: number;
   disc_pct: number;
   val_disc: number;
   net_sales: number;
-  repair_charge: number;
-  siapa: string;
-  akses_masuk: string;
-  tanggal_berkunjung: string; // secondary date field (raw from dynamic column)
-  rentang_waktu: string;
+  notes: string;
+  bukti_chat: string;
+  group_size: number;
+  faktor_pemicu: string;
+  description_item: string;
 }
 
 const FUNNEL_MAP: Array<{ key: string; label: string; match: string[] }> = [
@@ -34,14 +74,24 @@ const STATUS_MAP: Array<{ key: string; label: string; match: string[] }> = [
   { key: 'delivery',  label: 'Delivery & Showing', match: ['delivery', 'showing'] },
   { key: 'service',   label: 'Service & Repair',   match: ['service', 'repair'] },
   { key: 'online',    label: 'Online Only',        match: ['online'] },
+  { key: 'inhouse',   label: 'In House',           match: ['in house', 'in-house', 'inhouse'] },
+  { key: 'outsider',  label: 'Outsider',           match: ['outsider'] },
 ];
 
 function matchKey(value: string, map: typeof FUNNEL_MAP | typeof STATUS_MAP): string {
-  const lower = (value || '').toLowerCase();
+  // Normalize non-breaking space (U+00A0) to regular space — Bali data uses NBSP
+  const lower = (value || '').toLowerCase().replace(/ /g, ' ');
   for (const entry of map) {
     if (entry.match.some(m => lower.includes(m))) return entry.key;
   }
   return 'other';
+}
+
+// Bali uses akses_masuk for arrival type instead of status — try both fields
+function resolveStatus(r: TrafficRow): string {
+  const k = matchKey(r.status, STATUS_MAP);
+  if (k !== 'other') return k;
+  return matchKey(r.akses_masuk, STATUS_MAP);
 }
 
 function dateRange(month: number, year: number) {
@@ -91,7 +141,7 @@ export const crmService = {
     statusCounts['other'] = 0;
 
     rows.forEach(r => {
-      statusCounts[matchKey(r.status, STATUS_MAP)]++;
+      statusCounts[resolveStatus(r)]++;
     });
 
     const statusBreakdown = STATUS_MAP.map(s => ({
@@ -99,22 +149,17 @@ export const crmService = {
     }));
 
     // ── Per Location ─────────────────────────────────────────────────────
-    const locMap: Record<string, Record<string, number>> = {};
+    const locMap: Record<string, LocationStat> = {};
     rows.forEach(r => {
       const loc = r.location || 'Unknown';
-      if (!locMap[loc]) {
-        locMap[loc] = { total: 0 };
-        for (const s of STATUS_MAP) locMap[loc][s.key] = 0;
-      }
+      if (!locMap[loc]) locMap[loc] = { name: loc, total: 0, walkin: 0, followup: 0, delivery: 0, service: 0, online: 0, inhouse: 0, outsider: 0, other: 0 };
       locMap[loc].total++;
-      const k = matchKey(r.status, STATUS_MAP);
-      if (locMap[loc][k] !== undefined) locMap[loc][k]++;
+      const k = resolveStatus(r) as keyof LocationStat;
+      if (k in locMap[loc]) (locMap[loc][k] as number)++;
+      else locMap[loc].other++;
     });
 
-    const byLocation: Array<{ name: string; total: number } & Record<string, number>> =
-      Object.entries(locMap).map(([name, counts]) =>
-        ({ name, ...counts }) as { name: string; total: number } & Record<string, number>
-      );
+    const byLocation: LocationStat[] = Object.values(locMap);
 
     const kpi = {
       totalVisit:   rows.length,

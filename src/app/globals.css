@@ -41,3 +41,38 @@ body {
 .chart-reveal {
   animation: reveal-right 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
+
+/* ── Bvlgari Loader ─────────────────────────────── */
+@keyframes bvl-spin-cw {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes bvl-spin-ccw {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+@keyframes bvl-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+@keyframes bvl-letter {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes bvl-glow {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1;   }
+}
+@keyframes bvl-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+  40%            { transform: scale(1);   opacity: 1;   }
+}
+
+.bvl-ring-cw  { animation: bvl-spin-cw  6s linear infinite; transform-origin: center; }
+.bvl-ring-ccw { animation: bvl-spin-ccw 4s linear infinite; transform-origin: center; }
+.bvl-title    { animation: bvl-letter 0.8s cubic-bezier(0.4,0,0.2,1) forwards; }
+.bvl-shimmer  { animation: bvl-shimmer 1.6s ease-in-out infinite; }
+.bvl-glow     { animation: bvl-glow 2s ease-in-out infinite; }
+.bvl-dot-1    { animation: bvl-dot 1.2s ease-in-out infinite 0s; }
+.bvl-dot-2    { animation: bvl-dot 1.2s ease-in-out infinite 0.2s; }
+.bvl-dot-3    { animation: bvl-dot 1.2s ease-in-out infinite 0.4s; }

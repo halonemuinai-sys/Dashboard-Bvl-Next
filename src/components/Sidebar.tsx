@@ -30,40 +30,45 @@ import { cn } from '@/lib/utils';
 
 const menuGroups = [
   {
-    title: "EXECUTIVE SUMMARY",
+    title: "OVERVIEW",
     items: [
-      { name: 'Monthly Overview', icon: LayoutDashboard, href: '/' },
-      { name: 'Quarterly Standard', icon: PieChart, href: '/quarterly-standard' },
-      { name: 'Quarterly Budget', icon: BarChart, href: '/quarterly-budget' },
-      { name: 'Store Performance', icon: Store, href: '/store-performance', badge: 'NEW', badgeColor: 'bg-blue-500' },
-      { name: 'Annual Net Sales', icon: TrendingUp, href: '/annual-sales' },
-      { name: 'Forecasting', icon: LineChart, href: '/forecasting', badge: 'AI', badgeColor: 'bg-indigo-500' },
+      { name: 'Monthly Overview',    icon: LayoutDashboard, href: '/' },
+      { name: 'Quarterly Standard',  icon: PieChart,        href: '/quarterly-standard' },
+      { name: 'Quarterly Budget',    icon: BarChart,        href: '/quarterly-budget' },
+      { name: 'Annual Net Sales',    icon: TrendingUp,      href: '/annual-sales' },
+      { name: 'Store Performance',   icon: Store,           href: '/store-performance' },
+      { name: 'Forecasting',         icon: LineChart,       href: '/forecasting', badge: 'AI', badgeColor: 'bg-indigo-500' },
     ]
   },
   {
-    title: "STORE & OPERATIONS",
+    title: "OPERASIONAL",
     items: [
-      { name: 'Daily Report', icon: Calendar, href: '/daily-report' },
-      { name: 'Monthly Trans.', icon: ClipboardList, href: '/monthly-transactions', badge: 'UPDATE', badgeColor: 'bg-amber-500' },
-      { name: 'Heatmap Calendar', icon: CalendarRange, href: '/heatmap-calendar' },
-      { name: 'Crossing Sales', icon: Repeat, href: '/crossing-sales' },
-      { name: 'Advisor Setup', icon: Users2, href: '/advisor-setup' },
-      { name: 'Sales Data', icon: Database, href: '/sales', badge: 'SYNC', badgeColor: 'bg-emerald-500' },
-      { name: 'Footfall (Store)', icon: Users2, href: '/footfall-store' },
+      { name: 'Daily Report',        icon: Calendar,        href: '/daily-report' },
+      { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions' },
+      { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
+      { name: 'Crossing Sales',      icon: Repeat,          href: '/crossing-sales' },
+      { name: 'Sales Data',          icon: Database,        href: '/sales', badge: 'SYNC', badgeColor: 'bg-emerald-500' },
     ]
   },
   {
-    title: "ANALYTICS & INSIGHTS",
+    title: "PRODUK & ADVISOR",
     items: [
-      { name: 'Product Rank (Top)', icon: Zap, href: '/product-rank' },
-      { name: 'Product Projection', icon: Presentation, href: '/product-projection' },
-      { name: 'Advisor Performance', icon: Briefcase, href: '/advisor-performance' },
-      { name: 'Customer Segment', icon: Search, href: '/customer-segment' },
-      { name: 'Footfall (CRM)', icon: Users, href: '/footfall-crm' },
-      { name: 'App Sheet (CRM)', icon: Database, href: '/app-sheet-crm' },
-      { name: 'Clienteling Hub', icon: Heart, href: '/clienteling-hub', badge: 'NEW', badgeColor: 'bg-rose-500' },
+      { name: 'Product Rank',        icon: Zap,             href: '/product-rank' },
+      { name: 'Product Projection',  icon: Presentation,    href: '/product-projection' },
+      { name: 'Advisor Setup',       icon: Users2,          href: '/advisor-setup' },
+      { name: 'Advisor Performance', icon: Briefcase,       href: '/advisor-performance' },
     ]
-  }
+  },
+  {
+    title: "CRM & TRAFFIC",
+    items: [
+      { name: 'App Sheet (CRM)',     icon: Database,        href: '/app-sheet-crm' },
+      { name: 'Footfall (Store)',    icon: Users2,          href: '/footfall-store' },
+      { name: 'Footfall (CRM)',      icon: Users,           href: '/footfall-crm' },
+      { name: 'Customer Segment',    icon: Search,          href: '/customer-segment' },
+      { name: 'Clienteling Hub',     icon: Heart,           href: '/clienteling-hub', badge: 'NEW', badgeColor: 'bg-rose-500' },
+    ]
+  },
 ];
 
 import { Menu, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';

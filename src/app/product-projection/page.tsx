@@ -9,6 +9,7 @@ import {
 import { TrendingUp, TrendingDown, RefreshCw, Calendar as CalendarIcon, BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
+import BvlgariLoader from '@/components/BvlgariLoader';
 
 type TrendData = Awaited<ReturnType<typeof dashboardService.getCategorySalesTrend>>;
 
@@ -52,12 +53,7 @@ export default function ProductProjectionPage() {
     return metric === 'qty' ? `${base}_qty` : base;
   }, [category, metric]);
 
-  if (loading || !data) return (
-    <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-      <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-      <p className="text-slate-500 font-medium animate-pulse">Loading Category Trend...</p>
-    </div>
-  );
+  if (loading || !data) return <BvlgariLoader message="Loading Product Projection..." />;
 
   const { years, categories, chartData, ytd } = data;
   const baseYear  = parseInt(year);
