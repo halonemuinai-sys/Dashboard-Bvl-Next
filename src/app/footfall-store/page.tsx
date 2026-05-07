@@ -136,10 +136,10 @@ export default function FootfallStorePage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg shadow-sm">
-            <select value={month} onChange={e => setMonth(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer">
+            <select aria-label="Select Month" title="Select Month" value={month} onChange={e => setMonth(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer">
               {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <select value={year} onChange={e => setYear(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer border-l border-slate-200 pl-2 ml-2">
+            <select aria-label="Select Year" title="Select Year" value={year} onChange={e => setYear(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer border-l border-slate-200 pl-2 ml-2">
               <option value="2026">2026</option>
               <option value="2025">2025</option>
               <option value="2024">2024</option>
