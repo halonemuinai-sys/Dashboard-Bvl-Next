@@ -165,10 +165,14 @@ export default function MonthlyTransactionsPage() {
     };
     const headers = [
       'Trans.No.','Trans.Date','Customer Name','Salesman','Location',
-      'SAP Code','Collection Code','Total Price','Disc','Net Price',
+      'SAP Code','Collection Code','Total Price','Disc %','Net Price',
       'Net Sales','Type Item','QTY','Card Commission','Catalogue_Code',
     ];
-    const csvRows = sorted.map(r => [
+    const csvRows = sorted.map(r => {
+      const discPct = r.gross_sales > 0
+        ? ((r.val_disc / r.gross_sales) * 100).toFixed(2) + '%'
+        : '0.00%';
+      return [
       r.trans_no,
       fmtDate(r.transaction_date),
       `"${(r.customer || '').replace(/"/g,'""')}"`,
@@ -177,14 +181,15 @@ export default function MonthlyTransactionsPage() {
       r.sap_code || '',
       r.collection || '',
       r.gross_sales,
-      r.val_disc,
+      discPct,
       r.gross_sales - r.val_disc,   // Net Price
       r.net_sales,
       r.type || '',
       r.qty,
       r.comm || 0,
       r.catalogue_code || '',
-    ].join(','));
+    ].join(',');
+    });
 
     // UTF-8 BOM so Excel/Google Sheets reads Indonesian characters correctly
     const csv = '﻿' + [headers.join(','), ...csvRows].join('\n');
