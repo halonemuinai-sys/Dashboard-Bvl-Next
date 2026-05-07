@@ -159,36 +159,43 @@ export default function MonthlyTransactionsPage() {
   };
 
   const exportExcel = () => {
+    // Helper: wrap cell in quotes, escape internal quotes — required for any field that may contain commas
+    const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+
+    const BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
     const fmtDate = (iso: string) => {
       const d = new Date(iso);
-      return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+      return `${d.getDate()} ${BULAN[d.getMonth()]} ${d.getFullYear()}`;
     };
+
     const headers = [
       'Trans.No.','Trans.Date','Customer Name','Salesman','Location',
       'SAP Code','Collection Code','Total Price','Disc %','Net Price',
-      'Net Sales','Type Item','QTY','Card Commission','Catalogue_Code',
+      'Net Sales','Type Item','QTY','Card Commission','Catalogue_Code','Phone',
     ];
+
     const csvRows = sorted.map(r => {
       const discPct = r.gross_sales > 0
         ? ((r.val_disc / r.gross_sales) * 100).toFixed(2) + '%'
         : '0.00%';
       return [
-      r.trans_no,
-      fmtDate(r.transaction_date),
-      `"${(r.customer || '').replace(/"/g,'""')}"`,
-      r.salesman,
-      r.location,
-      r.sap_code || '',
-      r.collection || '',
-      r.gross_sales,
-      discPct,
-      r.gross_sales - r.val_disc,   // Net Price
-      r.net_sales,
-      r.type || '',
-      r.qty,
-      r.comm || 0,
-      r.catalogue_code || '',
-    ].join(',');
+        q(r.trans_no),
+        q(fmtDate(r.transaction_date)),
+        q(r.customer || ''),
+        q(r.salesman || ''),
+        q(r.location || ''),
+        r.sap_code || '',
+        q(r.collection_code || ''),   // quoted — e.g. "ACCS,3,1" won't break columns
+        r.gross_sales,
+        q(discPct),
+        r.gross_sales - r.val_disc,
+        r.net_sales,
+        q(r.type || ''),
+        r.qty,
+        r.comm || 0,
+        q(r.catalogue_code || ''),
+        q(r.phone_no || ''),
+      ].join(',');
     });
 
     // UTF-8 BOM so Excel/Google Sheets reads Indonesian characters correctly
