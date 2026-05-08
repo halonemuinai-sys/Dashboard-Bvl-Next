@@ -45,7 +45,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       )}>
         {/* Mobile Header Top Bar */}
         {isMobile && (
-          <div className="bg-white border-b border-slate-200 h-16 px-4 flex items-center gap-3 sticky top-0 z-30 shadow-sm">
+          <div className="mobile-header-bar bg-white border-b border-slate-200 h-16 px-4 flex items-center gap-3 sticky top-0 z-30 shadow-sm">
             <button 
               onClick={() => setIsOpen(true)}
               className="p-1.5 -ml-1.5 text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"

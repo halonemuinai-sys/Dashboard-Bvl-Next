@@ -24,7 +24,8 @@ import {
   Database,
   Heart,
   ChevronRight,
-  Diamond
+  Diamond,
+  ContactRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -62,6 +63,8 @@ const menuGroups = [
   {
     title: "CRM & TRAFFIC",
     items: [
+      { name: 'CRM Profiling',        icon: ContactRound,    href: '/crm-profiling', badge: 'NEW', badgeColor: 'bg-violet-500' },
+      { name: 'Event Selling Plan',  icon: Diamond,         href: '/event-selling-plan', badge: 'NEW', badgeColor: 'bg-amber-500' },
       { name: 'App Sheet (CRM)',     icon: Database,        href: '/app-sheet-crm' },
       { name: 'Footfall (Store)',    icon: Users2,          href: '/footfall-store' },
       { name: 'Footfall (CRM)',      icon: Users,           href: '/footfall-crm' },
@@ -112,7 +115,8 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
         
         {/* Absolute Toggle Button so it floats nicely on the edge - hidden on mobile */}
         {!isMobile && (
-          <button 
+          <button
+            type="button"
             onClick={() => setIsOpen(!isOpen)}
             className="absolute -right-3 top-8 bg-white border border-slate-200 rounded-full p-1 shadow-sm hover:bg-slate-50 text-slate-500 hover:text-blue-600 transition-colors z-50"
           >

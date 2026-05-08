@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Trophy, Target, DollarSign, TrendingUp, Calendar as CalendarIcon,
-  Search, FileSpreadsheet, FileText, User, ArrowUpRight, Medal, RefreshCw, BarChart2
+  Search, FileSpreadsheet, User, ArrowUpRight, Medal, RefreshCw, BarChart2
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -76,6 +76,85 @@ export default function AdvisorPerformancePage() {
     return { totalSales, totalTarget, avgAchv, topName: advisors[0]?.name || '-' };
   }, [data]);
 
+  const [exporting, setExporting] = useState(false);
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const fmtPct = (n: number) => n > 0 ? parseFloat(n.toFixed(2)) : 0;
+
+      const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const curMonthIdx = MONTH_NAMES.indexOf(month);
+      const curYear     = parseInt(year);
+
+      // Build list: current month + 4 previous months (handles year boundary)
+      const monthList: { m: string; y: number }[] = [];
+      for (let i = 0; i < 5; i++) {
+        let idx = curMonthIdx - i;
+        let yr  = curYear;
+        if (idx < 0) { idx += 12; yr -= 1; }
+        monthList.push({ m: MONTH_NAMES[idx], y: yr });
+      }
+
+      // Fetch all months in parallel (current already loaded, still re-fetch for consistency)
+      const monthDataArr = await Promise.all(
+        monthList.map(({ m, y }) => dashboardService.getAdvisorPerformance(m, y))
+      );
+
+      // Helper: build advisor rows for a monthly sheet
+      const makeMonthRows = (advisors: typeof monthDataArr[0]['advisors']) =>
+        advisors.map((a, i) => ({
+          'Rank':           i + 1,
+          'Advisor Name':   a.name,
+          'Location':       a.location,
+          'Net Sales':      a.netSales,
+          'Crossing Sales': a.crossingNet,
+          'Target':         a.target,
+          'Achievement %':  fmtPct(a.achievement),
+          'Contribution %': fmtPct(a.contribution),
+          'Trans Count':    a.transCount,
+        }));
+
+      const COL_W_MONTH = [6,28,20,16,16,14,14,14,12].map(w => ({ wch: w }));
+      const COL_W_YEAR  = [6,28,20,16,16,14,14,16,12].map(w => ({ wch: w }));
+
+      // ── Sheet 1: Summary Year (YTD) ───────────────────────────
+      const wsYear = XLSX.utils.json_to_sheet(
+        (ytdData?.advisors ?? []).map((a, i) => ({
+          'Rank':              i + 1,
+          'Advisor Name':      a.name,
+          'Location':          a.location,
+          'YTD Sales':         a.netSales,
+          'YTD Target':        a.target,
+          'Achievement %':     fmtPct(a.achievement),
+          'Contribution %':    fmtPct(a.contribution),
+          'Productive Months': a.productiveMonths,
+          'Trans Count':       a.transCount,
+        }))
+      );
+      wsYear['!cols'] = COL_W_YEAR;
+
+      // ── Build workbook ─────────────────────────────────────────
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsYear, `Summary ${year}`);
+
+      // Sheet per month: current + 4 previous
+      monthDataArr.forEach((mData, i) => {
+        const { m, y } = monthList[i];
+        const ws = XLSX.utils.json_to_sheet(makeMonthRows(mData.advisors));
+        ws['!cols'] = COL_W_MONTH;
+        // Sheet name max 31 chars (Excel limit)
+        const sheetName = `${m.slice(0,3)} ${y}`;
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      });
+
+      XLSX.writeFile(wb, `Advisor_Performance_${month}_${year}.xlsx`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading || !data) return <BvlgariLoader message="Analyzing Advisor Performance..." />;
 
   return (
@@ -107,12 +186,13 @@ export default function AdvisorPerformancePage() {
               <option value="2026">2026</option><option value="2025">2025</option>
             </select>
           </div>
-          <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
-            <button className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 hover:text-slate-700" title="Export Excel">
-              <FileSpreadsheet className="w-4 h-4" /></button>
-            <button className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 hover:text-slate-700" title="Export PDF">
-              <FileText className="w-4 h-4" /></button>
-          </div>
+          <button type="button" onClick={exportExcel} disabled={exporting}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed">
+            {exporting
+              ? <RefreshCw className="w-4 h-4 animate-spin" />
+              : <FileSpreadsheet className="w-4 h-4" />}
+            <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export Excel'}</span>
+          </button>
         </div>
       </div>
 
