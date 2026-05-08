@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Diamond,
   ContactRound,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -74,6 +75,7 @@ const menuGroups = [
   },
 ];
 
+import { logout } from '@/app/login/actions';
 import { Menu, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
 
 interface SidebarProps {
@@ -195,6 +197,20 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
           {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           {isActuallyOpen && (hidden ? "Angka Tersembunyi" : "Sembunyikan Angka")}
         </button>
+
+        <button
+          type="button"
+          onClick={() => logout()}
+          title={isActuallyOpen ? undefined : "Sign Out"}
+          className={cn(
+            "flex items-center justify-center transition-all border border-red-100 text-red-500 hover:bg-red-50",
+            isActuallyOpen ? "w-full gap-2 px-3 py-2 rounded-xl text-xs font-bold" : "w-10 h-10 rounded-xl"
+          )}
+        >
+          <LogOut className="w-4 h-4" />
+          {isActuallyOpen && "Sign Out"}
+        </button>
+
         {isActuallyOpen && (
           <p className="text-[9px] text-slate-400 text-center leading-relaxed">
             &copy; 2026 MRA Retail.<br />
