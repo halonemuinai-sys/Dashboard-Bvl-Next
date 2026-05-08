@@ -1,13 +1,18 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import Sidebar from "@/components/Sidebar";
 import { cn } from "@/lib/utils";
 import { Menu } from "lucide-react";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+
+  // If on login page, render children only (no sidebar/header)
+  const isAuthPage = pathname === '/login';
 
   useEffect(() => {
     const checkMobile = () => {
@@ -25,6 +30,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  if (isAuthPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex min-h-screen relative w-full">
