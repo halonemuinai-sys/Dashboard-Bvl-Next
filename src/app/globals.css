@@ -76,3 +76,47 @@ body {
 .bvl-dot-1    { animation: bvl-dot 1.2s ease-in-out infinite 0s; }
 .bvl-dot-2    { animation: bvl-dot 1.2s ease-in-out infinite 0.2s; }
 .bvl-dot-3    { animation: bvl-dot 1.2s ease-in-out infinite 0.4s; }
+
+/* ── Event Selling Plan — Print / PDF ─────────────── */
+@media print {
+  /* Hide sidebar and mobile header */
+  aside { display: none !important; }
+  .mobile-header-bar { display: none !important; }
+
+  /* Remove sidebar offset, padding from main */
+  main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+  main > div {
+    padding: 0 !important;
+  }
+
+  /* White background, no slate body bg */
+  body { background: white !important; }
+
+  /* The document wrapper */
+  .esp-document {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+
+  /* Preserve colors and backgrounds in print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* A4 Portrait, 8mm margin all sides */
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  /* Avoid breaking sections across pages */
+  .esp-section { page-break-inside: avoid; }
+
+  /* Hide action buttons */
+  .esp-action-bar { display: none !important; }
+}

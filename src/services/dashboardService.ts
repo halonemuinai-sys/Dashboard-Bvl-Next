@@ -142,6 +142,57 @@ export interface AdvisorSetupData {
   targets: { advisor_name: string; year: number; month_number: number; target_value: number }[];
 }
 
+export interface CrmProfilingRow {
+  id: number;
+  tanggal_input: string | null;
+  nama_depan: string;
+  nama_belakang: string;
+  title: string;
+  nama_lengkap: string;
+  nama_panggilan: string;
+  customer_advisor: string;
+  lokasi_store: string;
+  tanggal_lahir: string | null;
+  status_pelanggan: string;
+  domisili: string;
+  domisili_luar_negeri: string;
+  umur: string;
+  etnis: string;
+  agama: string;
+  kewarganegaraan: string;
+  no_hp: string;
+  email: string;
+  pekerjaan: string;
+  fashion_style: string;
+  bentuk_tubuh: string;
+  tinggi_badan: string;
+  cake_favorit: string;
+  makanan_favorit: string;
+  minuman_favorit: string;
+  alergi_makanan: string;
+  hobby: string;
+  hobby_kategori: string;
+  hobby_sub: string;
+  hobby_others: string;
+  warna_favorit: string;
+  status_pernikahan: string;
+  memiliki_anak: string;
+  jumlah_anak: string;
+  tempat_liburan_favorit: string;
+  topik_pembicaraan_favorit: string;
+  karakter: string;
+  tanggal_pernikahan: string | null;
+  barang_antusias: string;
+  instagram: string;
+  tiktok: string;
+  ktp_passport: string;
+  foto_customer: string;
+  faktor_pemicu_pembelian: string;
+  full_name_tittle: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FootfallStoreRow {
   id: number;
   transaction_date: string;
@@ -2434,5 +2485,35 @@ export const dashboardService = {
         bestDowAvg: bestDowAvg > 0 ? bestDowAvg : 0,
       },
     };
+  },
+
+  async getEventSellingPlan(profile: CrmProfilingRow) {
+    const name = profile.nama_lengkap || `${profile.nama_depan} ${profile.nama_belakang}`.trim();
+    const { data, error } = await supabase
+      .from('clean_master')
+      .select('trans_no,transaction_date,customer,location,net_sales,gross_sales,sap_code,collection,main_category,qty,catalogue_code')
+      .ilike('customer', `%${name}%`)
+      .order('net_sales', { ascending: false })
+      .limit(60);
+    if (error) throw error;
+    return (data || []) as {
+      trans_no: string; transaction_date: string; customer: string;
+      location: string; net_sales: number; gross_sales: number;
+      sap_code: string; collection: string; main_category: string;
+      qty: number; catalogue_code: string;
+    }[];
+  },
+
+  async getCrmProfiling(search = '', store = ''): Promise<CrmProfilingRow[]> {
+    let q = supabase.from('crm_profiling').select('*').order('created_at', { ascending: false });
+    if (store) q = q.eq('lokasi_store', store);
+    if (search) {
+      q = q.or(
+        `nama_lengkap.ilike.%${search}%,no_hp.ilike.%${search}%,customer_advisor.ilike.%${search}%,nama_panggilan.ilike.%${search}%`
+      );
+    }
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data || []) as CrmProfilingRow[];
   },
 };

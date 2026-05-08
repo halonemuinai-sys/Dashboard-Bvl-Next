@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Config dari server.js (yang sudah berjalan di Project Ares)
-// Sales endpoint menggunakan port 8089 + path /demo/ (berbeda dari catalog API 8189)
-const BVLGARI_API_BASE = 'http://139.99.102.231:8089/demo';
-const BVLGARI_API_TOKEN = 'Bearer B0KiIGq0Q7LP/Sg+mOuQNdEH6Xogt4Kf4W8sKhQJiMA6ItgTswhTtg8Mx2/Bzq3T';
+// Config dari environment variables
+const BVLGARI_API_BASE = process.env.BVLGARI_API_BASE || 'http://139.99.102.231:8089/demo';
+const BVLGARI_API_TOKEN = process.env.BVLGARI_API_TOKEN || '';
 
 /**
  * Proxy endpoint untuk menghindari CORS.
