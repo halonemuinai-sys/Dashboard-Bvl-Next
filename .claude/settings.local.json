@@ -7,6 +7,10 @@
       "Bash(powershell -Command \"Select-String -Path '4-API_Dashboard.gs' -Pattern 'linear|regression|moving.*average|extrapolation|algorithm' -Context 2,2\")",
       "Bash(powershell -Command \"Select-String -Path 'ViewForecasting.html' -Pattern 'KPI|Card|metric|label' -Context 1,1 | head -50\")",
       "Bash(powershell -Command \"Select-String -Path '4-API_Dashboard.gs' -Pattern 'remainingDays|YTD|remaining' -Context 1,1 | grep -A2 -B2 'remainingDays'\")"
+    ],
+    "additionalDirectories": [
+      "D:\\Mobile-Apps-MRA-Retail\\lib\\services",
+      "D:\\Mobile-Apps-MRA-Retail\\lib\\screens\\prospects"
     ]
   }
 }

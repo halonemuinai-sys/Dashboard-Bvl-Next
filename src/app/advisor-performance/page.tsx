@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Trophy, Target, DollarSign, TrendingUp, Calendar as CalendarIcon,
-  Search, FileSpreadsheet, User, ArrowUpRight, Medal, RefreshCw, BarChart2
+  Search, FileSpreadsheet, User, ArrowUpRight, Medal, RefreshCw, BarChart2, Mail, CheckCircle, AlertCircle
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -77,6 +77,27 @@ export default function AdvisorPerformancePage() {
   }, [data]);
 
   const [exporting, setExporting] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<'idle'|'ok'|'err'>('idle');
+
+  const sendEmail = async () => {
+    setSendingEmail(true);
+    setEmailStatus('idle');
+    try {
+      const res = await fetch('/api/send-advisor-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month, year }),
+      });
+      const json = await res.json();
+      setEmailStatus(json.success ? 'ok' : 'err');
+    } catch {
+      setEmailStatus('err');
+    } finally {
+      setSendingEmail(false);
+      setTimeout(() => setEmailStatus('idle'), 4000);
+    }
+  };
 
   const exportExcel = async () => {
     setExporting(true);
@@ -188,10 +209,22 @@ export default function AdvisorPerformancePage() {
           </div>
           <button type="button" onClick={exportExcel} disabled={exporting}
             className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed">
-            {exporting
-              ? <RefreshCw className="w-4 h-4 animate-spin" />
-              : <FileSpreadsheet className="w-4 h-4" />}
+            {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export Excel'}</span>
+          </button>
+          <button type="button" onClick={sendEmail} disabled={sendingEmail}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+              emailStatus === 'ok'  ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+              emailStatus === 'err' ? 'bg-rose-50 border-rose-200 text-rose-700' :
+              'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+            }`}>
+            {sendingEmail ? <RefreshCw className="w-4 h-4 animate-spin" /> :
+             emailStatus === 'ok'  ? <CheckCircle className="w-4 h-4" /> :
+             emailStatus === 'err' ? <AlertCircle className="w-4 h-4" /> :
+             <Mail className="w-4 h-4" />}
+            <span className="hidden sm:inline">
+              {sendingEmail ? 'Sending...' : emailStatus === 'ok' ? 'Sent!' : emailStatus === 'err' ? 'Failed' : 'Send Email'}
+            </span>
           </button>
         </div>
       </div>
@@ -251,6 +284,7 @@ export default function AdvisorPerformancePage() {
                 {fmtPct(summary.avgAchv)}
               </h3>
               <div className="w-full h-1 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                {/* eslint-disable-next-line */}
                 <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.min(summary.avgAchv, 100)}%` }} />
               </div>
             </div>
@@ -398,6 +432,7 @@ export default function AdvisorPerformancePage() {
                       </div>
                       {adv.target > 0 && (
                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          {/* eslint-disable-next-line */}
                           <div className={cn('h-full rounded-full transition-all duration-1000', achvBg(adv.achievement))}
                             style={{ width: `${Math.min(adv.achievement, 100)}%` }} />
                         </div>
@@ -485,6 +520,7 @@ export default function AdvisorPerformancePage() {
                               )}>{fmtPct(adv.achievement)}</span>
                             </div>
                             <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                              {/* eslint-disable-next-line */}
                               <div className={cn("h-full rounded-full transition-all duration-1000", achvBg(adv.achievement))}
                                 style={{ width: `${Math.min(adv.achievement, 100)}%` as any }} />
                             </div>
