@@ -25,7 +25,6 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       try {
         const res = await fetch('/api/me');
         const data = await res.json();
@@ -38,7 +37,13 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     }
+
     load();
+
+    // Re-fetch when tab gets focus so permission changes apply immediately
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   const canAccess = (path: string): boolean => {
