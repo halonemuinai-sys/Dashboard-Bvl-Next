@@ -11,52 +11,40 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
-  // If on login page, render children only (no sidebar/header)
   const isAuthPage = pathname === '/login';
 
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth < 768) {
-        setIsOpen(false);
-      } else {
-        setIsOpen(true);
-      }
+      setIsOpen(window.innerWidth >= 768);
     };
-    
-    // Initial check
     checkMobile();
-    
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  if (isAuthPage) {
-    return <>{children}</>;
-  }
+  if (isAuthPage) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen relative w-full">
-      {/* Mobile Overlay */}
       {isMobile && isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[40]"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* We pass isMobile down so Sidebar knows to be full width when open on mobile */}
       <Sidebar isOpen={isMobile ? true : isOpen} setIsOpen={setIsOpen} isMobile={isMobile} mobileOpen={isOpen} />
-      
+
       <main className={cn(
-        "flex-1 min-h-screen transition-all duration-300 w-full max-w-full flex flex-col", 
+        "flex-1 min-h-screen transition-all duration-300 w-full max-w-full flex flex-col",
         !isMobile ? (isOpen ? "md:ml-64" : "md:ml-20") : "ml-0"
       )}>
-        {/* Mobile Header Top Bar */}
         {isMobile && (
           <div className="mobile-header-bar bg-white border-b border-slate-200 h-16 px-4 flex items-center gap-3 sticky top-0 z-30 shadow-sm">
-            <button 
+            <button
               onClick={() => setIsOpen(true)}
+              aria-label="Open Menu"
               className="p-1.5 -ml-1.5 text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
             >
               <Menu className="w-5 h-5" />

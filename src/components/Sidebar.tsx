@@ -27,8 +27,23 @@ import {
   Diamond,
   ContactRound,
   LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useUserAccess } from '@/lib/user-access-context';
+
+const ROLE_LABEL: Record<string, string> = {
+  super_admin:      'Super Admin',
+  management_it:    'Management & IT',
+  operations_sales: 'Operations Sales',
+  crm:              'CRM',
+};
+const ROLE_COLOR: Record<string, string> = {
+  super_admin:      'bg-rose-100 text-rose-700',
+  management_it:    'bg-indigo-100 text-indigo-700',
+  operations_sales: 'bg-amber-100 text-amber-700',
+  crm:              'bg-emerald-100 text-emerald-700',
+};
 
 const menuGroups = [
   {
@@ -73,6 +88,12 @@ const menuGroups = [
       { name: 'Clienteling Hub',     icon: Heart,           href: '/clienteling-hub', badge: 'NEW', badgeColor: 'bg-rose-500' },
     ]
   },
+  {
+    title: "ADMIN",
+    items: [
+      { name: 'User Access',         icon: ShieldCheck,     href: '/user-access' },
+    ]
+  },
 ];
 
 import { logout } from '@/app/login/actions';
@@ -88,6 +109,7 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: SidebarProps) {
   const pathname = usePathname();
   const { hidden, toggle } = useHideAmounts();
+  const { canAccess, role } = useUserAccess();
 
   // If mobile, we rely on mobileOpen for the slide translation. If desktop, we rely on isOpen for the width.
   const isActuallyOpen = isMobile ? true : isOpen;
@@ -129,7 +151,10 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
 
       {/* Navigation */}
       <nav className="flex-1 px-3 space-y-5 overflow-y-auto custom-scrollbar py-4">
-        {menuGroups.map((group) => (
+        {menuGroups.map((group) => {
+          const visibleItems = group.items.filter(item => canAccess(item.href));
+          if (visibleItems.length === 0) return null;
+          return (
           <div key={group.title}>
             {isActuallyOpen ? (
               <p className="px-4 text-[10px] font-bold text-slate-400 mb-1.5 tracking-[0.15em] uppercase">
@@ -139,7 +164,7 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
               <div className="w-8 border-t border-slate-200 mx-auto mb-3 mt-4" />
             )}
             <div className="space-y-1">
-              {group.items.map((item) => {
+              {visibleItems.map((item) => {
                 const isActive = pathname === item.href;
                 return (
                   <Link
@@ -177,7 +202,8 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Footer Within Sidebar */}
@@ -211,6 +237,11 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
           {isActuallyOpen && "Sign Out"}
         </button>
 
+        {isActuallyOpen && role && (
+          <div className={cn('text-[10px] font-bold px-2 py-1 rounded-lg text-center', ROLE_COLOR[role] || 'bg-slate-100 text-slate-500')}>
+            {ROLE_LABEL[role] || role}
+          </div>
+        )}
         {isActuallyOpen && (
           <p className="text-[9px] text-slate-400 text-center leading-relaxed">
             &copy; 2026 MRA Retail.<br />
