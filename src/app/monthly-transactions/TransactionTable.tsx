@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, ChevronsUpDown, Loader2, Lock } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, ChevronsUpDown, Loader2, Lock, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import { Row, SortKey, SortDir, Summary, TYPE_COLORS, PAGE_SIZE } from './_types';
@@ -21,6 +21,7 @@ interface Props {
   onCommBlur: (id: number) => void;
   onCommEscape: (id: number) => void;
   onTypeChange: (id: number, type: string) => void;
+  onDelete: (id: number, transNo: string) => void;
   isUnlocked: boolean;
 }
 
@@ -49,7 +50,7 @@ export default function TransactionTable({
   paged, sorted, filtered, summary,
   sortKey, sortDir, onSort,
   page, totalPages, onPage,
-  savingId, savedIds, commEdits, onCommEdit, onCommBlur, onCommEscape, onTypeChange, isUnlocked,
+  savingId, savedIds, commEdits, onCommEdit, onCommBlur, onCommEscape, onTypeChange, onDelete, isUnlocked,
 }: Props) {
   const totalComm = filtered.reduce((s, r) => s + (r.comm || 0), 0);
 
@@ -91,6 +92,7 @@ export default function TransactionTable({
               <Th onClick={() => onSort('net_sales')} className="text-right bg-blue-50/40">
                 <span className="inline-flex items-center gap-1 text-blue-600">Net Sales <SortIcon col="net_sales" sortKey={sortKey} sortDir={sortDir} /></span>
               </Th>
+              {isUnlocked && <Th className="text-center text-rose-400 w-10"> </Th>}
             </tr>
           </thead>
 
@@ -181,6 +183,18 @@ export default function TransactionTable({
                   </td>
 
                   <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 bg-blue-50/30"><Amt value={r.net_sales} /></td>
+                  {isUnlocked && (
+                    <td className="py-2.5 px-2 text-center">
+                      <button
+                        type="button"
+                        title="Hapus transaksi"
+                        onClick={() => onDelete(r.id, r.trans_no)}
+                        disabled={isSaving}
+                        className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-30">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}

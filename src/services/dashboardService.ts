@@ -1405,6 +1405,14 @@ export const dashboardService = {
     if (error) throw error;
   },
 
+  async deleteTransaction(id: number) {
+    const { error } = await supabase
+      .from('clean_master')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  },
+
   /**
    * Quarterly Budget — Actual vs Budget per store per month
    * Mirrors GAS getQuarterlyBudgetData() from 8-API_Quarterly.gs
