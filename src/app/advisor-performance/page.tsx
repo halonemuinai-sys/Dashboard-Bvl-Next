@@ -284,8 +284,8 @@ export default function AdvisorPerformancePage() {
                 {fmtPct(summary.avgAchv)}
               </h3>
               <div className="w-full h-1 bg-slate-100 rounded-full mt-2 overflow-hidden">
-                {/* eslint-disable-next-line */}
-                <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.min(summary.avgAchv, 100)}%` }} />
+                <style>{`.bar-avg { width: ${Math.min(summary.avgAchv, 100)}%; }`}</style>
+                <div className="h-full bg-emerald-500 transition-all duration-1000 bar-avg" />
               </div>
             </div>
           </div>
@@ -432,9 +432,8 @@ export default function AdvisorPerformancePage() {
                       </div>
                       {adv.target > 0 && (
                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                          {/* eslint-disable-next-line */}
-                          <div className={cn('h-full rounded-full transition-all duration-1000', achvBg(adv.achievement))}
-                            style={{ width: `${Math.min(adv.achievement, 100)}%` }} />
+                          <style>{`.bar-ytd-${i} { width: ${Math.min(adv.achievement, 100)}%; }`}</style>
+                          <div className={cn(`h-full rounded-full transition-all duration-1000 bar-ytd-${i}`, achvBg(adv.achievement))} />
                         </div>
                       )}
                     </div>
@@ -520,9 +519,8 @@ export default function AdvisorPerformancePage() {
                               )}>{fmtPct(adv.achievement)}</span>
                             </div>
                             <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                              {/* eslint-disable-next-line */}
-                              <div className={cn("h-full rounded-full transition-all duration-1000", achvBg(adv.achievement))}
-                                style={{ width: `${Math.min(adv.achievement, 100)}%` as any }} />
+                              <style>{`.bar-loc-${adv.name.replace(/\\W/g, '')} { width: ${Math.min(adv.achievement, 100)}%; }`}</style>
+                              <div className={cn(`h-full rounded-full transition-all duration-1000 bar-loc-${adv.name.replace(/\\W/g, '')}`, achvBg(adv.achievement))} />
                             </div>
                           </div>
                         </td>

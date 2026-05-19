@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { ClipboardList, Calendar as CalendarIcon, RefreshCw, Lock, LockOpen, ShieldAlert, FileDown } from 'lucide-react';
+import { ClipboardList, Calendar as CalendarIcon, RefreshCw, Lock, LockOpen, ShieldAlert, FileDown, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
 import { Row, Summary, SortKey, SortDir, MONTHS, PAGE_SIZE } from './_types';
@@ -60,6 +60,23 @@ export default function MonthlyTransactionsPage() {
     localStorage.setItem(lockKey, 'unlocked');
     setIsUnlocked(true);
     setShowUnlockConfirm(false);
+  };
+
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; transNo: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteRequest = (id: number, transNo: string) => setDeleteTarget({ id, transNo });
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await dashboardService.deleteTransaction(deleteTarget.id);
+      setRows(prev => prev.filter(r => r.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (e) { console.error(e); }
+    finally { setDeleting(false); }
   };
 
   // Inline editing
@@ -266,6 +283,38 @@ export default function MonthlyTransactionsPage() {
         </div>
       </div>
 
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-500" />
+              </span>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Hapus Transaksi?</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5 font-mono">{deleteTarget.transNo}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              Transaksi ini akan dihapus permanen dari database. Tindakan ini tidak bisa dibatalkan.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 transition-all">
+                Batal
+              </button>
+              <button type="button" onClick={confirmDelete} disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 transition-all shadow-sm">
+                {deleting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                {deleting ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Unlock confirmation dialog */}
       {showUnlockConfirm && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -319,6 +368,7 @@ export default function MonthlyTransactionsPage() {
           onCommBlur={saveComm}
           onCommEscape={id => setCommEdits(prev => { const n = { ...prev }; delete n[id]; return n; })}
           onTypeChange={saveType}
+          onDelete={handleDeleteRequest}
           isUnlocked={isUnlocked}
         />
       </div>
