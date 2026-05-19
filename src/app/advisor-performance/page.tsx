@@ -201,8 +201,8 @@ export default function AdvisorPerformancePage() {
         const row = wsYtd.addRow([
           i + 1, a.name, a.location,
           a.netSales, a.target,
-          a.achievement / 100,
-          (a.contribution ?? 0) / 100,
+          a.achievement,
+          a.contribution ?? 0,
           a.productiveMonths ?? 0,
           a.transCount,
         ]);
@@ -310,8 +310,8 @@ export default function AdvisorPerformancePage() {
             const row = ws.addRow([
               i + 1, a.name, a.location,
               a.netSales, a.crossingNet ?? 0, a.target,
-              a.achievement / 100,
-              (a.contribution ?? 0) / 100,
+              a.achievement,
+              a.contribution ?? 0,
               a.transCount,
             ]);
             styleDataRow(row, i % 2 === 1);
