@@ -102,14 +102,12 @@ export default function AdvisorPerformancePage() {
   const exportExcel = async () => {
     setExporting(true);
     try {
-      const XLSX = await import('xlsx');
-      const fmtPct = (n: number) => n > 0 ? parseFloat(n.toFixed(2)) : 0;
+      const ExcelJS = (await import('exceljs')).default;
 
       const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
       const curMonthIdx = MONTH_NAMES.indexOf(month);
       const curYear     = parseInt(year);
 
-      // Build list: current month + 4 previous months (handles year boundary)
       const monthList: { m: string; y: number }[] = [];
       for (let i = 0; i < 5; i++) {
         let idx = curMonthIdx - i;
@@ -118,59 +116,258 @@ export default function AdvisorPerformancePage() {
         monthList.push({ m: MONTH_NAMES[idx], y: yr });
       }
 
-      // Fetch all months in parallel (current already loaded, still re-fetch for consistency)
       const monthDataArr = await Promise.all(
         monthList.map(({ m, y }) => dashboardService.getAdvisorPerformance(m, y))
       );
 
-      // Helper: build advisor rows for a monthly sheet
-      const makeMonthRows = (advisors: typeof monthDataArr[0]['advisors']) =>
-        advisors.map((a, i) => ({
-          'Rank':           i + 1,
-          'Advisor Name':   a.name,
-          'Location':       a.location,
-          'Net Sales':      a.netSales,
-          'Crossing Sales': a.crossingNet,
-          'Target':         a.target,
-          'Achievement %':  fmtPct(a.achievement),
-          'Contribution %': fmtPct(a.contribution),
-          'Trans Count':    a.transCount,
-        }));
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'MRA Retail BI Dashboard';
+      wb.created = new Date();
 
-      const COL_W_MONTH = [6,28,20,16,16,14,14,14,12].map(w => ({ wch: w }));
-      const COL_W_YEAR  = [6,28,20,16,16,14,14,16,12].map(w => ({ wch: w }));
+      // ── Color palette ─────────────────────────────────────────
+      const C = {
+        headerBg:   '1E3A5F',  // navy
+        headerFont: 'FFFFFF',
+        subBg:      '2563EB',  // blue (store group header)
+        subFont:    'FFFFFF',
+        rankBg:     'EFF6FF',  // light blue for rank col
+        altRow:     'F8FAFC',
+        green:      '059669',
+        amber:      'D97706',
+        red:        'DC2626',
+        totalBg:    'E8F0FE',
+        totalFont:  '1E3A5F',
+        border:     'CBD5E1',
+      };
 
-      // ── Sheet 1: Summary Year (YTD) ───────────────────────────
-      const wsYear = XLSX.utils.json_to_sheet(
-        (ytdData?.advisors ?? []).map((a, i) => ({
-          'Rank':              i + 1,
-          'Advisor Name':      a.name,
-          'Location':          a.location,
-          'YTD Sales':         a.netSales,
-          'YTD Target':        a.target,
-          'Achievement %':     fmtPct(a.achievement),
-          'Contribution %':    fmtPct(a.contribution),
-          'Productive Months': a.productiveMonths,
-          'Trans Count':       a.transCount,
-        }))
-      );
-      wsYear['!cols'] = COL_W_YEAR;
+      const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
+      const allBorders = (color = C.border) => ({
+        top: thinBorder(color), bottom: thinBorder(color),
+        left: thinBorder(color), right: thinBorder(color),
+      });
+      const numFmt = '#,##0';
+      const pctFmt = '0.00"%"';
 
-      // ── Build workbook ─────────────────────────────────────────
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, wsYear, `Summary ${year}`);
+      const achvColor = (pct: number) => pct >= 100 ? C.green : pct >= 80 ? C.amber : C.red;
 
-      // Sheet per month: current + 4 previous
-      monthDataArr.forEach((mData, i) => {
-        const { m, y } = monthList[i];
-        const ws = XLSX.utils.json_to_sheet(makeMonthRows(mData.advisors));
-        ws['!cols'] = COL_W_MONTH;
-        // Sheet name max 31 chars (Excel limit)
-        const sheetName = `${m.slice(0,3)} ${y}`;
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      // ── Helper: apply header row style ────────────────────────
+      const styleHeader = (row: any, bgHex: string, fontHex: string) => {
+        row.eachCell((cell: any) => {
+          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgHex } };
+          cell.font   = { bold: true, color: { argb: 'FF' + fontHex }, size: 10 };
+          cell.border = allBorders(bgHex === C.headerBg ? '1E3A5F' : C.border);
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        });
+        row.height = 28;
+      };
+
+      // ── Helper: style a data row ──────────────────────────────
+      const styleDataRow = (row: any, isAlt: boolean) => {
+        row.eachCell({ includeEmpty: true }, (cell: any) => {
+          if (isAlt) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.altRow } };
+          cell.border = allBorders();
+          cell.font   = { size: 10 };
+          cell.alignment = { vertical: 'middle' };
+        });
+        row.height = 20;
+      };
+
+      // ══════════════════════════════════════════════════════════
+      // SHEET 1: YTD Summary
+      // ══════════════════════════════════════════════════════════
+      const wsYtd = wb.addWorksheet(`Summary ${year}`, { views: [{ state: 'frozen', ySplit: 2 }] });
+      wsYtd.columns = [
+        { width: 6  }, { width: 30 }, { width: 22 },
+        { width: 18 }, { width: 18 }, { width: 14 },
+        { width: 14 }, { width: 16 }, { width: 12 },
+      ];
+
+      // Title row
+      wsYtd.mergeCells('A1:I1');
+      const titleCell = wsYtd.getCell('A1');
+      titleCell.value = `Advisor Performance — Year-to-Date ${year}`;
+      titleCell.font  = { bold: true, size: 13, color: { argb: 'FF' + C.headerBg } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      wsYtd.getRow(1).height = 32;
+
+      // Header row
+      const ytdHeaders = ['No','Advisor Name','Location','YTD Sales','YTD Target','Achv %','Contrib %','Active Months','Trx'];
+      const ytdHdrRow = wsYtd.addRow(ytdHeaders);
+      styleHeader(ytdHdrRow, C.headerBg, C.headerFont);
+
+      // Data
+      const ytdAdvisors = ytdData?.advisors ?? [];
+      ytdAdvisors.forEach((a, i) => {
+        const row = wsYtd.addRow([
+          i + 1, a.name, a.location,
+          a.netSales, a.target,
+          a.achievement / 100,
+          (a.contribution ?? 0) / 100,
+          a.productiveMonths ?? 0,
+          a.transCount,
+        ]);
+        styleDataRow(row, i % 2 === 1);
+
+        // Number formats
+        row.getCell(1).alignment = { horizontal: 'center' };
+        row.getCell(4).numFmt = numFmt;
+        row.getCell(5).numFmt = numFmt;
+        row.getCell(6).numFmt = pctFmt;
+        row.getCell(7).numFmt = pctFmt;
+        row.getCell(9).alignment = { horizontal: 'center' };
+
+        // Achievement color
+        const achv = a.achievement;
+        row.getCell(6).font = { bold: true, size: 10, color: { argb: 'FF' + achvColor(achv) } };
+
+        // Rank cell bg
+        row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.rankBg } };
       });
 
-      XLSX.writeFile(wb, `Advisor_Performance_${month}_${year}.xlsx`);
+      // Totals row
+      if (ytdAdvisors.length > 0) {
+        const totalSales  = ytdAdvisors.reduce((s, a) => s + a.netSales, 0);
+        const totalTarget = ytdAdvisors.reduce((s, a) => s + a.target, 0);
+        const totalRow = wsYtd.addRow(['', 'TOTAL', '', totalSales, totalTarget, totalTarget > 0 ? totalSales / totalTarget : 0, '', '', '']);
+        totalRow.eachCell({ includeEmpty: true }, cell => {
+          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.totalBg } };
+          cell.font   = { bold: true, size: 10, color: { argb: 'FF' + C.totalFont } };
+          cell.border = allBorders(C.totalFont);
+          cell.alignment = { vertical: 'middle' };
+        });
+        totalRow.getCell(4).numFmt = numFmt;
+        totalRow.getCell(5).numFmt = numFmt;
+        totalRow.getCell(6).numFmt = pctFmt;
+        totalRow.height = 22;
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // SHEETS 2–6: Monthly (current + 4 prev)
+      // ══════════════════════════════════════════════════════════
+      const STORES = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+      const STORE_COLORS: Record<string, string> = {
+        'Plaza Indonesia': '1D4ED8',
+        'Plaza Senayan':   'B45309',
+        'Bali':            '065F46',
+      };
+
+      monthDataArr.forEach((mData, mi) => {
+        const { m, y } = monthList[mi];
+        const ws = wb.addWorksheet(`${m.slice(0,3)} ${y}`, { views: [{ state: 'frozen', ySplit: 2 }] });
+        ws.columns = [
+          { width: 6  }, { width: 30 }, { width: 22 }, { width: 16 },
+          { width: 16 }, { width: 14 }, { width: 12 }, { width: 12 }, { width: 10 },
+        ];
+
+        // Title
+        ws.mergeCells('A1:I1');
+        const tc = ws.getCell('A1');
+        tc.value = `Advisor Performance — ${m} ${y}`;
+        tc.font  = { bold: true, size: 13, color: { argb: 'FF' + C.headerBg } };
+        tc.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(1).height = 32;
+
+        // Header
+        const hdrRow = ws.addRow(['No','Advisor Name','Location','Net Sales','Crossing Sales','Target','Achv %','Contrib %','Trx']);
+        styleHeader(hdrRow, C.headerBg, C.headerFont);
+
+        // Group by store
+        const grouped: Record<string, typeof mData.advisors> = {};
+        mData.advisors.forEach(a => {
+          const loc = a.location || 'Other';
+          if (!grouped[loc]) grouped[loc] = [];
+          grouped[loc].push(a);
+        });
+
+        const storeOrder = [
+          ...STORES.filter(s => grouped[s]),
+          ...Object.keys(grouped).filter(s => !STORES.includes(s)),
+        ];
+
+        storeOrder.forEach(store => {
+          const advisors = grouped[store];
+          if (!advisors?.length) return;
+
+          const storeColor = STORE_COLORS[store] || C.subBg;
+
+          // Store group header
+          ws.mergeCells(`A${ws.rowCount + 1}:I${ws.rowCount + 1}`);
+          const storeRow = ws.addRow([`▸ ${store}  (${advisors.length} advisors)`]);
+          storeRow.getCell(1).value = `▸ ${store}  (${advisors.length} advisors)`;
+          storeRow.eachCell({ includeEmpty: true }, cell => {
+            cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + storeColor } };
+            cell.font   = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+            cell.border = allBorders(storeColor);
+            cell.alignment = { vertical: 'middle', indent: 1 };
+          });
+          storeRow.height = 22;
+
+          const storeTotalSales  = advisors.reduce((s, a) => s + a.netSales, 0);
+          const storeTotalTarget = advisors.reduce((s, a) => s + a.target, 0);
+
+          // Advisor rows
+          advisors.forEach((a, i) => {
+            const row = ws.addRow([
+              i + 1, a.name, a.location,
+              a.netSales, a.crossingNet ?? 0, a.target,
+              a.achievement / 100,
+              (a.contribution ?? 0) / 100,
+              a.transCount,
+            ]);
+            styleDataRow(row, i % 2 === 1);
+            row.getCell(1).alignment  = { horizontal: 'center' };
+            row.getCell(4).numFmt = numFmt;
+            row.getCell(5).numFmt = numFmt;
+            row.getCell(6).numFmt = numFmt;
+            row.getCell(7).numFmt = pctFmt;
+            row.getCell(8).numFmt = pctFmt;
+            row.getCell(9).alignment  = { horizontal: 'center' };
+            row.getCell(6).font = { bold: true, size: 10, color: { argb: 'FF' + achvColor(a.achievement) } };
+            row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.rankBg } };
+          });
+
+          // Store subtotal
+          const subRow = ws.addRow(['', `Total ${store}`, '', storeTotalSales, '', storeTotalTarget,
+            storeTotalTarget > 0 ? storeTotalSales / storeTotalTarget : 0, '', '']);
+          subRow.eachCell({ includeEmpty: true }, cell => {
+            cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.totalBg } };
+            cell.font   = { bold: true, size: 10, color: { argb: 'FF' + C.totalFont } };
+            cell.border = allBorders(C.totalFont);
+          });
+          subRow.getCell(4).numFmt = numFmt;
+          subRow.getCell(6).numFmt = numFmt;
+          subRow.getCell(7).numFmt = pctFmt;
+          subRow.height = 20;
+        });
+
+        // Grand total
+        const allAdvisors = mData.advisors;
+        if (allAdvisors.length > 0) {
+          const grandSales  = allAdvisors.reduce((s, a) => s + a.netSales, 0);
+          const grandTarget = allAdvisors.reduce((s, a) => s + a.target, 0);
+          const gtRow = ws.addRow(['', 'GRAND TOTAL', '', grandSales, '', grandTarget,
+            grandTarget > 0 ? grandSales / grandTarget : 0, '', '']);
+          gtRow.eachCell({ includeEmpty: true }, cell => {
+            cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.headerBg } };
+            cell.font   = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+            cell.border = allBorders(C.headerBg);
+          });
+          gtRow.getCell(4).numFmt = numFmt;
+          gtRow.getCell(6).numFmt = numFmt;
+          gtRow.getCell(7).numFmt = pctFmt;
+          gtRow.height = 24;
+        }
+      });
+
+      // ── Download ──────────────────────────────────────────────
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url    = URL.createObjectURL(blob);
+      const a      = document.createElement('a');
+      a.href       = url;
+      a.download   = `Advisor_Performance_${month}_${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
     }
