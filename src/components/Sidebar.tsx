@@ -28,6 +28,7 @@ import {
   ContactRound,
   LogOut,
   ShieldCheck,
+  Boxes,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -65,6 +66,7 @@ const menuGroups = [
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
       { name: 'Crossing Sales',      icon: Repeat,          href: '/crossing-sales' },
       { name: 'Sales Data',          icon: Database,        href: '/sales', badge: 'SYNC', badgeColor: 'bg-emerald-500' },
+      { name: 'Inventory Val.',      icon: Boxes,           href: '/inventory', badge: 'NEW', badgeColor: 'bg-blue-500' },
     ]
   },
   {
