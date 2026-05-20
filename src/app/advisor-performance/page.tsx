@@ -619,6 +619,27 @@ export default function AdvisorPerformancePage() {
         gtRow.height = 24;
       }
 
+      // Add notes at the bottom
+      ws.addRow([]); // Blank row
+      ws.addRow([]); // Blank row
+
+      const noteHeaderRow = ws.addRow(['* CATATAN / NOTES:']);
+      noteHeaderRow.getCell(1).font = { bold: true, size: 9.5, color: { argb: 'FF1E3A5F' } };
+
+      const notes = [
+        '1. Rata-rata Bulanan dihitung dari: (Total Penjualan 6 Bulan) dibagi dengan (Jumlah Bulan Aktif).',
+        '2. Bulan Aktif dihitung berdasarkan jumlah bulan di mana staff memiliki Target > 0 dalam rentang 6 bulan terakhir.',
+        '3. Bagi staff baru yang bekerja kurang dari 6 bulan, rata-rata dihitung secara proporsional berdasarkan jumlah bulan aktif mereka bekerja di Bulgari Indonesia.',
+        '4. Staff dengan target = 0 pada bulan berjalan (seperti Supervisor, Store Manager, ASM, Operation Manager, atau staff yang telah resign) otomatis tidak disertakan dalam laporan ini.'
+      ];
+
+      notes.forEach(note => {
+        const row = ws.addRow([note]);
+        row.getCell(1).font = { italic: true, size: 9, color: { argb: 'FF475569' } };
+        ws.mergeCells(`A${row.number}:L${row.number}`);
+        row.height = 18;
+      });
+
       const buffer = await wb.xlsx.writeBuffer();
       const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url    = URL.createObjectURL(blob);
