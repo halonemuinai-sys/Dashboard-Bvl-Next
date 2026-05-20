@@ -77,6 +77,7 @@ export default function AdvisorPerformancePage() {
   }, [data]);
 
   const [exporting, setExporting] = useState(false);
+  const [exportingAverage, setExportingAverage] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailStatus, setEmailStatus] = useState<'idle'|'ok'|'err'>('idle');
 
@@ -373,6 +374,266 @@ export default function AdvisorPerformancePage() {
     }
   };
 
+  const export6MonthsAverage = async () => {
+    setExportingAverage(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const curMonthIdx = MONTHS.indexOf(month);
+      const curYear     = parseInt(year);
+
+      // 6 completed months before selected month (e.g. for May, Nov - Apr)
+      const monthList: { m: string; y: number }[] = [];
+      for (let i = 1; i <= 6; i++) {
+        let idx = curMonthIdx - i;
+        let yr  = curYear;
+        if (idx < 0) { idx += 12; yr -= 1; }
+        monthList.push({ m: MONTHS[idx], y: yr });
+      }
+      monthList.reverse(); // chronological
+
+      // Fetch advisor data for the selected month AND the 6 historical months
+      const [currentMonthData, ...historicalMonthsData] = await Promise.all([
+        dashboardService.getAdvisorPerformance(month, curYear),
+        ...monthList.map(({ m, y }) => dashboardService.getAdvisorPerformance(m, y))
+      ]);
+
+      // List all advisors that are active in the selected month (active = target > 0)
+      const activeAdvisors = currentMonthData.advisors.filter(a => a.target > 0);
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'MRA Retail BI Dashboard';
+      wb.created = new Date();
+
+      const C = {
+        headerBg:   '1E3A5F',  // navy
+        headerFont: 'FFFFFF',
+        subBg:      '2563EB',  // blue (store group header)
+        rankBg:     'EFF6FF',  // light blue
+        altRow:     'F8FAFC',
+        totalBg:    'E8F0FE',
+        totalFont:  '1E3A5F',
+        border:     'CBD5E1',
+      };
+
+      const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
+      const allBorders = (color = C.border) => ({
+        top: thinBorder(color), bottom: thinBorder(color),
+        left: thinBorder(color), right: thinBorder(color),
+      });
+      const numFmt = '#,##0';
+
+      const styleHeader = (row: any, bgHex: string, fontHex: string) => {
+        row.eachCell((cell: any) => {
+          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgHex } };
+          cell.font   = { bold: true, color: { argb: 'FF' + fontHex }, size: 9 };
+          cell.border = allBorders('1E3A5F');
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        });
+        row.height = 30;
+      };
+
+      const styleDataRow = (row: any, isAlt: boolean) => {
+        row.eachCell({ includeEmpty: true }, (cell: any) => {
+          if (isAlt) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.altRow } };
+          cell.border = allBorders();
+          cell.font   = { size: 9.5 };
+          cell.alignment = { vertical: 'middle' };
+        });
+        row.height = 20;
+      };
+
+      const ws = wb.addWorksheet('Rata-rata 6 Bulan', { views: [{ state: 'frozen', ySplit: 2 }] });
+      
+      // Set columns (12 columns)
+      ws.columns = [
+        { width: 6 },   // A: No
+        { width: 28 },  // B: Nama Advisor
+        { width: 20 },  // C: Lokasi
+        { width: 14 },  // D: Month 1
+        { width: 14 },  // E: Month 2
+        { width: 14 },  // F: Month 3
+        { width: 14 },  // G: Month 4
+        { width: 14 },  // H: Month 5
+        { width: 14 },  // I: Month 6
+        { width: 16 },  // J: Total 6 Months
+        { width: 12 },  // K: Active Months
+        { width: 18 },  // L: Average Sales
+      ];
+
+      // Title
+      ws.mergeCells('A1:L1');
+      const tc = ws.getCell('A1');
+      tc.value = `Laporan Rata-Rata Penjualan 6 Bulan Terakhir (${monthList[0].m.slice(0,3)} ${monthList[0].y} - ${monthList[5].m.slice(0,3)} ${monthList[5].y}) - Staf Aktif ${month} ${year}`;
+      tc.font  = { bold: true, size: 12, color: { argb: 'FF' + C.headerBg } };
+      tc.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 32;
+
+      // Header headers
+      const monthlyHeaders = monthList.map(({ m, y }) => `${m.slice(0,3)} ${y}`);
+      const headers = [
+        'No', 'Nama Advisor', 'Lokasi', 
+        ...monthlyHeaders, 
+        'Total 6 Bulan', 'Bln Aktif', 'Rata-rata Bulanan'
+      ];
+      const hdrRow = ws.addRow(headers);
+      styleHeader(hdrRow, C.headerBg, C.headerFont);
+
+      // Group by store
+      const grouped: Record<string, typeof activeAdvisors> = {};
+      activeAdvisors.forEach(a => {
+        const loc = a.location || 'Other';
+        if (!grouped[loc]) grouped[loc] = [];
+        grouped[loc].push(a);
+      });
+
+      const STORES = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+      const STORE_COLORS: Record<string, string> = {
+        'Plaza Indonesia': '1D4ED8',
+        'Plaza Senayan':   'B45309',
+        'Bali':            '065F46',
+      };
+      
+      const storeOrder = [
+        ...STORES.filter(s => grouped[s]),
+        ...Object.keys(grouped).filter(s => !STORES.includes(s)),
+      ];
+
+      storeOrder.forEach(store => {
+        const advisors = grouped[store];
+        if (!advisors?.length) return;
+
+        const storeColor = STORE_COLORS[store] || C.subBg;
+
+        // Store group header
+        const rowNum = ws.rowCount + 1;
+        ws.mergeCells(`A${rowNum}:L${rowNum}`);
+        const storeRow = ws.addRow([`▸ ${store}  (${advisors.length} advisors)`]);
+        storeRow.eachCell({ includeEmpty: true }, cell => {
+          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + storeColor } };
+          cell.font   = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          cell.border = allBorders(storeColor);
+          cell.alignment = { vertical: 'middle', indent: 1 };
+        });
+        storeRow.height = 22;
+
+        advisors.forEach((adv, i) => {
+          const key = adv.name.toLowerCase();
+          
+          // sales values for each month
+          const salesVals = historicalMonthsData.map(hData => {
+            const match = hData.advisors.find(a => a.name.toLowerCase() === key);
+            return match ? match.netSales : 0;
+          });
+
+          // targets for each month to verify if they are active (target > 0)
+          const activeMonthsCount = historicalMonthsData.reduce((count, hData) => {
+            const match = hData.advisors.find(a => a.name.toLowerCase() === key);
+            return count + (match && match.target > 0 ? 1 : 0);
+          }, 0);
+
+          const activeMonths = activeMonthsCount > 0 ? activeMonthsCount : 1;
+          const totalSales = salesVals.reduce((sum, val) => sum + val, 0);
+          const averageSales = activeMonthsCount > 0 ? totalSales / activeMonths : 0;
+
+          const row = ws.addRow([
+            i + 1,
+            adv.name,
+            adv.location,
+            ...salesVals,
+            totalSales,
+            activeMonthsCount,
+            averageSales
+          ]);
+
+          styleDataRow(row, i % 2 === 1);
+          
+          row.getCell(1).alignment = { horizontal: 'center' };
+          row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.rankBg } };
+          
+          // Format sales columns (col 4 to 9)
+          for (let colIdx = 4; colIdx <= 9; colIdx++) {
+            row.getCell(colIdx).numFmt = numFmt;
+            row.getCell(colIdx).alignment = { horizontal: 'right' };
+          }
+          // Total 6 Months
+          row.getCell(10).numFmt = numFmt;
+          row.getCell(10).font = { bold: true, size: 9.5 };
+          
+          // Active Months
+          row.getCell(11).alignment = { horizontal: 'center' };
+          row.getCell(11).font = { bold: true, size: 9.5 };
+
+          // Average Sales
+          row.getCell(12).numFmt = numFmt;
+          row.getCell(12).font = { bold: true, color: { argb: 'FF1E3A5F' }, size: 10 };
+        });
+      });
+
+      // Grand total
+      if (activeAdvisors.length > 0) {
+        const totalSalesVals = monthList.map((_, mIdx) => {
+          return activeAdvisors.reduce((sum, adv) => {
+            const key = adv.name.toLowerCase();
+            const match = historicalMonthsData[mIdx].advisors.find(a => a.name.toLowerCase() === key);
+            return sum + (match ? match.netSales : 0);
+          }, 0);
+        });
+
+        const grandTotal6Months = totalSalesVals.reduce((sum, val) => sum + val, 0);
+        
+        const sumAverageSales = activeAdvisors.reduce((sum, adv) => {
+          const key = adv.name.toLowerCase();
+          const salesVals = historicalMonthsData.map(hData => {
+            const match = hData.advisors.find(a => a.name.toLowerCase() === key);
+            return match ? match.netSales : 0;
+          });
+          const activeMonthsCount = historicalMonthsData.reduce((count, hData) => {
+            const match = hData.advisors.find(a => a.name.toLowerCase() === key);
+            return count + (match && match.target > 0 ? 1 : 0);
+          }, 0);
+          const activeMonths = activeMonthsCount > 0 ? activeMonthsCount : 1;
+          const totalSales = salesVals.reduce((sVal, val) => sVal + val, 0);
+          return sum + (activeMonthsCount > 0 ? totalSales / activeMonths : 0);
+        }, 0);
+
+        const gtRow = ws.addRow([
+          '',
+          'GRAND TOTAL',
+          '',
+          ...totalSalesVals,
+          grandTotal6Months,
+          '',
+          sumAverageSales
+        ]);
+
+        gtRow.eachCell({ includeEmpty: true }, cell => {
+          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.headerBg } };
+          cell.font   = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          cell.border = allBorders(C.headerBg);
+        });
+
+        for (let colIdx = 4; colIdx <= 10; colIdx++) {
+          gtRow.getCell(colIdx).numFmt = numFmt;
+        }
+        gtRow.getCell(12).numFmt = numFmt;
+        gtRow.height = 24;
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url    = URL.createObjectURL(blob);
+      const a      = document.createElement('a');
+      a.href       = url;
+      a.download   = `Advisor_RataRata_6Bulan_${month}_${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setExportingAverage(false);
+    }
+  };
+
   if (loading || !data) return <BvlgariLoader message="Analyzing Advisor Performance..." />;
 
   return (
@@ -408,6 +669,11 @@ export default function AdvisorPerformancePage() {
             className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed">
             {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export Excel'}</span>
+          </button>
+          <button type="button" onClick={export6MonthsAverage} disabled={exportingAverage}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100 disabled:opacity-50 disabled:cursor-not-allowed">
+            {exportingAverage ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            <span className="hidden sm:inline">{exportingAverage ? 'Exporting...' : 'Export Rata-rata 6 Bln'}</span>
           </button>
           <button type="button" onClick={sendEmail} disabled={sendingEmail}
             className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
