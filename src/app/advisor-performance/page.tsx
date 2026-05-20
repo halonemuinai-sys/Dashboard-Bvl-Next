@@ -596,7 +596,7 @@ export default function AdvisorPerformancePage() {
             return { sales, target, achv };
           });
 
-          const activeMonthsCount = monthlyData.filter(m => m.target > 0).length;
+          const activeMonthsCount = monthlyData.filter(m => m.target > 0 || m.sales > 0).length;
           const activeMonths = activeMonthsCount > 0 ? activeMonthsCount : 1;
           
           const totalSales = monthlyData.reduce((sum, m) => sum + m.sales, 0);
@@ -685,7 +685,7 @@ export default function AdvisorPerformancePage() {
           });
           const activeMonthsCount = historicalMonthsData.reduce((count, hData) => {
             const match = hData.advisors.find(a => a.name.toLowerCase() === key);
-            return count + (match && match.target > 0 ? 1 : 0);
+            return count + (match && (match.target > 0 || match.netSales > 0) ? 1 : 0);
           }, 0);
           const activeMonths = activeMonthsCount > 0 ? activeMonthsCount : 1;
           const totalSales = salesVals.reduce((sVal, val) => sVal + val, 0);
@@ -738,7 +738,7 @@ export default function AdvisorPerformancePage() {
 
       const notes = [
         '1. Rata-rata Bulanan dihitung dari: (Total Penjualan 6 Bulan) dibagi dengan (Jumlah Bulan Aktif).',
-        '2. Bulan Aktif dihitung berdasarkan jumlah bulan di mana staff memiliki Target > 0 dalam rentang 6 bulan terakhir.',
+        '2. Bulan Aktif dihitung berdasarkan jumlah bulan di mana staff memiliki Target > 0 atau Penjualan > 0 dalam rentang 6 bulan terakhir.',
         '3. Bagi staff baru yang bekerja kurang dari 6 bulan, rata-rata dihitung secara proporsional berdasarkan jumlah bulan aktif mereka bekerja di Bulgari Indonesia.',
         '4. Staff dengan target = 0 pada bulan berjalan (seperti Supervisor, Store Manager, ASM, Operation Manager, atau staff yang telah resign) otomatis tidak disertakan dalam laporan ini.'
       ];
