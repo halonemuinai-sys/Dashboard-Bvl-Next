@@ -422,16 +422,6 @@ export default function AdvisorPerformancePage() {
       });
       const numFmt = '#,##0';
 
-      const styleHeader = (row: any, bgHex: string, fontHex: string) => {
-        row.eachCell((cell: any) => {
-          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgHex } };
-          cell.font   = { bold: true, color: { argb: 'FF' + fontHex }, size: 9 };
-          cell.border = allBorders('1E3A5F');
-          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-        });
-        row.height = 30;
-      };
-
       const styleDataRow = (row: any, isAlt: boolean) => {
         row.eachCell({ includeEmpty: true }, (cell: any) => {
           if (isAlt) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.altRow } };
@@ -442,41 +432,120 @@ export default function AdvisorPerformancePage() {
         row.height = 20;
       };
 
-      const ws = wb.addWorksheet('Rata-rata 6 Bulan', { views: [{ state: 'frozen', ySplit: 2 }] });
+      const ws = wb.addWorksheet('Rata-rata 6 Bulan', { views: [{ state: 'frozen', ySplit: 3 }] });
       
-      // Set columns (12 columns)
+      // Set columns (25 columns total, from A to Y)
       ws.columns = [
         { width: 6 },   // A: No
         { width: 28 },  // B: Nama Advisor
         { width: 20 },  // C: Lokasi
-        { width: 14 },  // D: Month 1
-        { width: 14 },  // E: Month 2
-        { width: 14 },  // F: Month 3
-        { width: 14 },  // G: Month 4
-        { width: 14 },  // H: Month 5
-        { width: 14 },  // I: Month 6
-        { width: 16 },  // J: Total 6 Months
-        { width: 12 },  // K: Active Months
-        { width: 18 },  // L: Average Sales
+        // Month 1
+        { width: 14 },  // D: Sales
+        { width: 14 },  // E: Target
+        { width: 10 },  // F: Achv %
+        // Month 2
+        { width: 14 },  // G: Sales
+        { width: 14 },  // H: Target
+        { width: 10 },  // I: Achv %
+        // Month 3
+        { width: 14 },  // J: Sales
+        { width: 14 },  // K: Target
+        { width: 10 },  // L: Achv %
+        // Month 4
+        { width: 14 },  // M: Sales
+        { width: 14 },  // N: Target
+        { width: 10 },  // O: Achv %
+        // Month 5
+        { width: 14 },  // P: Sales
+        { width: 14 },  // Q: Target
+        { width: 10 },  // R: Achv %
+        // Month 6
+        { width: 14 },  // S: Sales
+        { width: 14 },  // T: Target
+        { width: 10 },  // U: Achv %
+        // Totals
+        { width: 16 },  // V: Total Sales
+        { width: 16 },  // W: Total Target
+        { width: 12 },  // X: Bln Aktif
+        { width: 18 },  // Y: Rata-rata Bulanan
       ];
 
       // Title
-      ws.mergeCells('A1:L1');
+      ws.mergeCells('A1:Y1');
       const tc = ws.getCell('A1');
       tc.value = `Laporan Rata-Rata Penjualan 6 Bulan Terakhir (${monthList[0].m.slice(0,3)} ${monthList[0].y} - ${monthList[5].m.slice(0,3)} ${monthList[5].y}) - Staf Aktif ${month} ${year}`;
       tc.font  = { bold: true, size: 12, color: { argb: 'FF' + C.headerBg } };
       tc.alignment = { horizontal: 'center', vertical: 'middle' };
       ws.getRow(1).height = 32;
 
-      // Header headers
-      const monthlyHeaders = monthList.map(({ m, y }) => `${m.slice(0,3)} ${y}`);
-      const headers = [
-        'No', 'Nama Advisor', 'Lokasi', 
-        ...monthlyHeaders, 
-        'Total 6 Bulan', 'Bln Aktif', 'Rata-rata Bulanan'
-      ];
-      const hdrRow = ws.addRow(headers);
-      styleHeader(hdrRow, C.headerBg, C.headerFont);
+      // Header Row 2 (Monthly Titles)
+      const row2Values: any[] = [];
+      row2Values[1] = 'No';
+      row2Values[2] = 'Nama Advisor';
+      row2Values[3] = 'Lokasi';
+      
+      monthList.forEach(({ m, y }, idx) => {
+        const startCol = 4 + idx * 3;
+        row2Values[startCol] = `${m.slice(0,3)} ${y}`;
+      });
+      
+      row2Values[22] = 'Total Sales (6 Bln)';
+      row2Values[23] = 'Total Target (6 Bln)';
+      row2Values[24] = 'Bln Aktif';
+      row2Values[25] = 'Rata-rata Bulanan';
+      
+      const r2 = ws.addRow(row2Values);
+
+      // Header Row 3 (Subheadings)
+      const row3Values: any[] = [];
+      row3Values[1] = '';
+      row3Values[2] = '';
+      row3Values[3] = '';
+      
+      monthList.forEach((_, idx) => {
+        const startCol = 4 + idx * 3;
+        row3Values[startCol] = 'Sales';
+        row3Values[startCol + 1] = 'Target';
+        row3Values[startCol + 2] = 'Achv %';
+      });
+      
+      row3Values[22] = '';
+      row3Values[23] = '';
+      row3Values[24] = '';
+      row3Values[25] = '';
+      
+      const r3 = ws.addRow(row3Values);
+
+      // Style Headers
+      const styleHeader = (row: any, bgHex: string, fontHex: string) => {
+        row.eachCell({ includeEmpty: true }, (cell: any) => {
+          cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgHex } };
+          cell.font   = { bold: true, color: { argb: 'FF' + fontHex }, size: 9 };
+          cell.border = allBorders('1E3A5F');
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        });
+        row.height = 24;
+      };
+
+      styleHeader(r2, C.headerBg, C.headerFont);
+      styleHeader(r3, C.headerBg, C.headerFont);
+
+      // Merge vertical header cells
+      ws.mergeCells('A2:A3');
+      ws.mergeCells('B2:B3');
+      ws.mergeCells('C2:C3');
+      
+      monthList.forEach((_, idx) => {
+        const startCol = 4 + idx * 3;
+        const letterStart = ws.getColumn(startCol).letter;
+        const letterEnd = ws.getColumn(startCol + 2).letter;
+        ws.mergeCells(`${letterStart}2:${letterEnd}2`);
+      });
+      
+      ws.mergeCells('V2:V3');
+      ws.mergeCells('W2:W3');
+      ws.mergeCells('X2:X3');
+      ws.mergeCells('Y2:Y3');
 
       // Group by store
       const grouped: Record<string, typeof activeAdvisors> = {};
@@ -506,7 +575,7 @@ export default function AdvisorPerformancePage() {
 
         // Store group header
         const rowNum = ws.rowCount + 1;
-        ws.mergeCells(`A${rowNum}:L${rowNum}`);
+        ws.mergeCells(`A${rowNum}:Y${rowNum}`);
         const storeRow = ws.addRow([`▸ ${store}  (${advisors.length} advisors)`]);
         storeRow.eachCell({ includeEmpty: true }, cell => {
           cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + storeColor } };
@@ -519,67 +588,94 @@ export default function AdvisorPerformancePage() {
         advisors.forEach((adv, i) => {
           const key = adv.name.toLowerCase();
           
-          // sales values for each month
-          const salesVals = historicalMonthsData.map(hData => {
+          const monthlyData = historicalMonthsData.map(hData => {
             const match = hData.advisors.find(a => a.name.toLowerCase() === key);
-            return match ? match.netSales : 0;
+            const sales = match ? match.netSales : 0;
+            const target = match ? match.target : 0;
+            const achv = target > 0 ? (sales / target) * 100 : 0;
+            return { sales, target, achv };
           });
 
-          // targets for each month to verify if they are active (target > 0)
-          const activeMonthsCount = historicalMonthsData.reduce((count, hData) => {
-            const match = hData.advisors.find(a => a.name.toLowerCase() === key);
-            return count + (match && match.target > 0 ? 1 : 0);
-          }, 0);
-
+          const activeMonthsCount = monthlyData.filter(m => m.target > 0).length;
           const activeMonths = activeMonthsCount > 0 ? activeMonthsCount : 1;
-          const totalSales = salesVals.reduce((sum, val) => sum + val, 0);
+          
+          const totalSales = monthlyData.reduce((sum, m) => sum + m.sales, 0);
+          const totalTarget = monthlyData.reduce((sum, m) => sum + m.target, 0);
           const averageSales = activeMonthsCount > 0 ? totalSales / activeMonths : 0;
 
-          const row = ws.addRow([
+          // Build row values
+          const rowVals: any[] = [
             i + 1,
             adv.name,
-            adv.location,
-            ...salesVals,
-            totalSales,
-            activeMonthsCount,
-            averageSales
-          ]);
+            adv.location
+          ];
+          monthlyData.forEach(m => {
+            rowVals.push(m.sales);
+            rowVals.push(m.target);
+            rowVals.push(m.achv);
+          });
+          rowVals.push(totalSales);
+          rowVals.push(totalTarget);
+          rowVals.push(activeMonthsCount);
+          rowVals.push(averageSales);
 
+          const row = ws.addRow(rowVals);
           styleDataRow(row, i % 2 === 1);
           
           row.getCell(1).alignment = { horizontal: 'center' };
           row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.rankBg } };
           
-          // Format sales columns (col 4 to 9)
-          for (let colIdx = 4; colIdx <= 9; colIdx++) {
-            row.getCell(colIdx).numFmt = numFmt;
-            row.getCell(colIdx).alignment = { horizontal: 'right' };
-          }
-          // Total 6 Months
-          row.getCell(10).numFmt = numFmt;
-          row.getCell(10).font = { bold: true, size: 9.5 };
+          // Format numeric columns (sales, targets, achv%)
+          monthList.forEach((_, idx) => {
+            const startCol = 4 + idx * 3;
+            row.getCell(startCol).numFmt = numFmt;
+            row.getCell(startCol).alignment = { horizontal: 'right' };
+            
+            row.getCell(startCol + 1).numFmt = numFmt;
+            row.getCell(startCol + 1).alignment = { horizontal: 'right' };
+            
+            row.getCell(startCol + 2).numFmt = '0.0"%"';
+            row.getCell(startCol + 2).alignment = { horizontal: 'right' };
+            row.getCell(startCol + 2).font = { size: 9, color: { argb: 'FF4B5563' } };
+          });
+
+          // Total Sales
+          row.getCell(22).numFmt = numFmt;
+          row.getCell(22).font = { bold: true, size: 9.5 };
           
+          // Total Target
+          row.getCell(23).numFmt = numFmt;
+          row.getCell(23).font = { bold: true, size: 9.5, color: { argb: 'FF475569' } };
+
           // Active Months
-          row.getCell(11).alignment = { horizontal: 'center' };
-          row.getCell(11).font = { bold: true, size: 9.5 };
+          row.getCell(24).alignment = { horizontal: 'center' };
+          row.getCell(24).font = { bold: true, size: 9.5 };
 
           // Average Sales
-          row.getCell(12).numFmt = numFmt;
-          row.getCell(12).font = { bold: true, color: { argb: 'FF1E3A5F' }, size: 10 };
+          row.getCell(25).numFmt = numFmt;
+          row.getCell(25).font = { bold: true, color: { argb: 'FF1E3A5F' }, size: 10 };
         });
       });
 
       // Grand total
       if (activeAdvisors.length > 0) {
         const totalSalesVals = monthList.map((_, mIdx) => {
-          return activeAdvisors.reduce((sum, adv) => {
+          const sales = activeAdvisors.reduce((sum, adv) => {
             const key = adv.name.toLowerCase();
             const match = historicalMonthsData[mIdx].advisors.find(a => a.name.toLowerCase() === key);
             return sum + (match ? match.netSales : 0);
           }, 0);
+          const target = activeAdvisors.reduce((sum, adv) => {
+            const key = adv.name.toLowerCase();
+            const match = historicalMonthsData[mIdx].advisors.find(a => a.name.toLowerCase() === key);
+            return sum + (match ? match.target : 0);
+          }, 0);
+          const achv = target > 0 ? (sales / target) * 100 : 0;
+          return { sales, target, achv };
         });
 
-        const grandTotal6Months = totalSalesVals.reduce((sum, val) => sum + val, 0);
+        const grandTotalSales = totalSalesVals.reduce((sum, m) => sum + m.sales, 0);
+        const grandTotalTarget = totalSalesVals.reduce((sum, m) => sum + m.target, 0);
         
         const sumAverageSales = activeAdvisors.reduce((sum, adv) => {
           const key = adv.name.toLowerCase();
@@ -596,26 +692,40 @@ export default function AdvisorPerformancePage() {
           return sum + (activeMonthsCount > 0 ? totalSales / activeMonths : 0);
         }, 0);
 
-        const gtRow = ws.addRow([
+        const gtVals: any[] = [
           '',
           'GRAND TOTAL',
-          '',
-          ...totalSalesVals,
-          grandTotal6Months,
-          '',
-          sumAverageSales
-        ]);
+          ''
+        ];
+        totalSalesVals.forEach(m => {
+          gtVals.push(m.sales);
+          gtVals.push(m.target);
+          gtVals.push(m.achv);
+        });
+        gtVals.push(grandTotalSales);
+        gtVals.push(grandTotalTarget);
+        gtVals.push(''); // active months blank for grand total
+        gtVals.push(sumAverageSales);
+
+        const gtRow = ws.addRow(gtVals);
 
         gtRow.eachCell({ includeEmpty: true }, cell => {
           cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.headerBg } };
-          cell.font   = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          cell.font   = { bold: true, size: 9.5, color: { argb: 'FFFFFFFF' } };
           cell.border = allBorders(C.headerBg);
         });
 
-        for (let colIdx = 4; colIdx <= 10; colIdx++) {
-          gtRow.getCell(colIdx).numFmt = numFmt;
-        }
-        gtRow.getCell(12).numFmt = numFmt;
+        // Format Grand Total cells
+        monthList.forEach((_, idx) => {
+          const startCol = 4 + idx * 3;
+          gtRow.getCell(startCol).numFmt = numFmt;
+          gtRow.getCell(startCol + 1).numFmt = numFmt;
+          gtRow.getCell(startCol + 2).numFmt = '0.0"%"';
+        });
+        
+        gtRow.getCell(22).numFmt = numFmt;
+        gtRow.getCell(23).numFmt = numFmt;
+        gtRow.getCell(25).numFmt = numFmt;
         gtRow.height = 24;
       }
 
@@ -636,7 +746,7 @@ export default function AdvisorPerformancePage() {
       notes.forEach(note => {
         const row = ws.addRow([note]);
         row.getCell(1).font = { italic: true, size: 9, color: { argb: 'FF475569' } };
-        ws.mergeCells(`A${row.number}:L${row.number}`);
+        ws.mergeCells(`A${row.number}:Y${row.number}`);
         row.height = 18;
       });
 
