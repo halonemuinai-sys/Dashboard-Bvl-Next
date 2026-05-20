@@ -634,9 +634,27 @@ export default function AdvisorPerformancePage() {
             row.getCell(startCol + 1).numFmt = numFmt;
             row.getCell(startCol + 1).alignment = { horizontal: 'right' };
             
-            row.getCell(startCol + 2).numFmt = '0.0"%"';
-            row.getCell(startCol + 2).alignment = { horizontal: 'right' };
-            row.getCell(startCol + 2).font = { size: 9, color: { argb: 'FF4B5563' } };
+            const achvCell = row.getCell(startCol + 2);
+            achvCell.numFmt = '0.0"%"';
+            achvCell.alignment = { horizontal: 'right' };
+            
+            const achvVal = monthlyData[idx].achv;
+            const targetVal = monthlyData[idx].target;
+            
+            if (targetVal > 0) {
+              if (achvVal < 80) {
+                achvCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; // Light Red
+                achvCell.font = { bold: true, color: { argb: 'FF991B1B' }, size: 9 };
+              } else if (achvVal <= 100) {
+                achvCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Light Green
+                achvCell.font = { bold: true, color: { argb: 'FF065F46' }, size: 9 };
+              } else {
+                achvCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }; // Light Blue
+                achvCell.font = { bold: true, color: { argb: 'FF1E3A5F' }, size: 9 };
+              }
+            } else {
+              achvCell.font = { size: 9, color: { argb: 'FF94A3B8' } };
+            }
           });
 
           // Total Sales
@@ -740,7 +758,8 @@ export default function AdvisorPerformancePage() {
         '1. Rata-rata Bulanan dihitung dari: (Total Penjualan 6 Bulan) dibagi dengan (Jumlah Bulan Aktif).',
         '2. Bulan Aktif dihitung berdasarkan jumlah bulan di mana staff memiliki Target > 0 atau Penjualan > 0 dalam rentang 6 bulan terakhir.',
         '3. Bagi staff baru yang bekerja kurang dari 6 bulan, rata-rata dihitung secara proporsional berdasarkan jumlah bulan aktif mereka bekerja di Bulgari Indonesia.',
-        '4. Staff dengan target = 0 pada bulan berjalan (seperti Supervisor, Store Manager, ASM, Operation Manager, atau staff yang telah resign) otomatis tidak disertakan dalam laporan ini.'
+        '4. Staff dengan target = 0 pada bulan berjalan (seperti Supervisor, Store Manager, ASM, Operation Manager, atau staff yang telah resign) otomatis tidak disertakan dalam laporan ini.',
+        '5. Pewarnaan Kolom Achv %: Biru (Di atas 100%), Hijau (80% s/d 100%), dan Merah (Di bawah 80%).'
       ];
 
       notes.forEach(note => {
