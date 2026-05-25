@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, Users, Plus, Trash2, Save, RefreshCw, Check, Lock, Unlock, X, Crown } from 'lucide-react';
+import { ShieldCheck, Users, Plus, Trash2, Save, RefreshCw, Check, Lock, Unlock, X, Crown, ClipboardList, Search, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import BvlgariLoader from '@/components/BvlgariLoader';
@@ -47,6 +47,17 @@ const ROLE_BADGE: Record<Role, string> = {
   management_it:    'bg-indigo-100 text-indigo-700',
   operations_sales: 'bg-amber-100 text-amber-700',
   crm:              'bg-emerald-100 text-emerald-700',
+};
+
+const TABLE_LABEL: Record<string, string> = {
+  dashboard_users: 'User Access Control',
+  role_menu_access: 'Menu Permission Access',
+  advisors: 'Advisor Profile',
+  advisor_rotations: 'Advisor Rotation',
+  advisor_targets: 'Advisor Monthly Target',
+  footfall_store: 'Traffic Footfall (Store)',
+  footfall_crm: 'Traffic Footfall (CRM)',
+  clean_master: 'Transactions Data',
 };
 
 const MENU_GROUPS = [
@@ -105,7 +116,7 @@ export default function UserAccessPage() {
   const { role: currentUserRole } = useUserAccess();
   const isSuperAdmin = currentUserRole === 'super_admin';
 
-  const [tab, setTab] = useState<'users' | 'permissions'>('users');
+  const [tab, setTab] = useState<'users' | 'permissions' | 'audit'>('users');
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [menuAccess, setMenuAccess] = useState<MenuAccess[]>([]);
@@ -119,6 +130,17 @@ export default function UserAccessPage() {
   const [newRole, setNewRole] = useState<Role>('operations_sales');
   const [addingUser, setAddingUser] = useState(false);
 
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState<string>('ALL');
+  const [selectedAudit, setSelectedAudit] = useState<any | null>(null);
+
+  const ITEMS_PER_PAGE = 15;
+
   const load = useCallback(async () => {
     setLoading(true);
     const [usersRes, accessRes] = await Promise.all([
@@ -130,7 +152,41 @@ export default function UserAccessPage() {
     setLoading(false);
   }, []);
 
+  const loadAuditLogs = useCallback(async () => {
+    setAuditLoading(true);
+    let query = supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact' });
+
+    if (auditSearch.trim()) {
+      query = query.ilike('user_email', `%${auditSearch.trim()}%`);
+    }
+
+    if (auditActionFilter !== 'ALL') {
+      query = query.eq('action_type', auditActionFilter);
+    }
+
+    const from = (auditPage - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    const { data, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (!error) {
+      setAuditLogs(data || []);
+      setAuditTotal(count || 0);
+    }
+    setAuditLoading(false);
+  }, [auditPage, auditSearch, auditActionFilter]);
+
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (tab === 'audit') {
+      loadAuditLogs();
+    }
+  }, [tab, loadAuditLogs]);
 
   const isAllowed = (role: PermRole, path: string) =>
     menuAccess.some(m => m.role === role && m.menu_path === path && m.allowed);
@@ -235,13 +291,13 @@ export default function UserAccessPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {(['users', 'permissions'] as const).map(t => (
-          <button key={t} type="button" onClick={() => setTab(t)}
+        {(['users', 'permissions', 'audit'] as const).map(t => (
+          <button key={t} type="button" onClick={() => { setTab(t); if (t === 'audit') setAuditPage(1); }}
             className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all',
               tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
-            {t === 'users'
-              ? <span className="flex items-center gap-2"><Users className="w-4 h-4" />Users</span>
-              : <span className="flex items-center gap-2"><Lock className="w-4 h-4" />Permissions</span>}
+            {t === 'users' && <span className="flex items-center gap-2"><Users className="w-4 h-4" />Users</span>}
+            {t === 'permissions' && <span className="flex items-center gap-2"><Lock className="w-4 h-4" />Permissions</span>}
+            {t === 'audit' && <span className="flex items-center gap-2"><ClipboardList className="w-4 h-4" />Audit Trail</span>}
           </button>
         ))}
       </div>
@@ -423,6 +479,279 @@ export default function UserAccessPage() {
           </div>
         </div>
       )}
+
+      {/* ── TAB: AUDIT TRAIL ──────────────────────────────────────── */}
+      {tab === 'audit' && (
+        <div className="space-y-4">
+          {/* Filters and Search */}
+          <div className="flex flex-col sm:flex-row gap-3 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex-1 relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+              <input
+                type="text"
+                placeholder="Cari berdasarkan email admin..."
+                value={auditSearch}
+                onChange={e => { setAuditSearch(e.target.value); setAuditPage(1); }}
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 outline-none text-sm transition-all"
+              />
+            </div>
+            <div className="w-full sm:w-48">
+              <select
+                value={auditActionFilter}
+                onChange={e => { setAuditActionFilter(e.target.value); setAuditPage(1); }}
+                aria-label="Filter Action Type"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 outline-none text-sm bg-white"
+              >
+                <option value="ALL">Semua Tindakan</option>
+                <option value="INSERT">INSERT (Tambah)</option>
+                <option value="UPDATE">UPDATE (Ubah)</option>
+                <option value="DELETE">DELETE (Hapus)</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={loadAuditLogs}
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition-all shrink-0"
+            >
+              Cari
+            </button>
+          </div>
+
+          {/* Audit Logs Table */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Waktu (WITA)</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Admin</th>
+                    <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Aksi</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Modul / Tabel</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Record ID</th>
+                    <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Detail</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {auditLoading ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10">
+                        <RefreshCw className="w-6 h-6 animate-spin text-indigo-600 mx-auto" />
+                        <p className="text-xs text-slate-400 mt-2 font-medium">Memuat log aktivitas...</p>
+                      </td>
+                    </tr>
+                  ) : auditLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-slate-400 text-sm italic">
+                        Tidak ada log aktivitas admin ditemukan
+                      </td>
+                    </tr>
+                  ) : (
+                    auditLogs.map((log: any) => {
+                      let badgeColor = 'bg-slate-100 text-slate-700';
+                      if (log.action_type === 'INSERT') badgeColor = 'bg-emerald-100 text-emerald-800';
+                      else if (log.action_type === 'UPDATE') badgeColor = 'bg-amber-100 text-amber-800';
+                      else if (log.action_type === 'DELETE') badgeColor = 'bg-rose-100 text-rose-800';
+
+                      // Format date in WITA (Asia/Makassar) since Bvlgari outlets are in Bali and Jakarta
+                      const logDate = new Date(log.created_at).toLocaleString('id-ID', {
+                        timeZone: 'Asia/Makassar',
+                        dateStyle: 'short',
+                        timeStyle: 'medium'
+                      });
+
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 text-slate-500 font-mono text-xs whitespace-nowrap">{logDate}</td>
+                          <td className="px-4 py-3 font-medium text-slate-800">{log.user_email}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={cn('text-[10px] font-black px-2 py-0.5 rounded-full', badgeColor)}>
+                              {log.action_type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 font-medium">
+                            {TABLE_LABEL[log.table_name] || log.table_name}
+                            <div className="text-[10px] text-slate-400 font-mono">{log.table_name}</div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 font-mono text-xs max-w-[150px] truncate hover:text-clip" title={log.record_id}>
+                            {log.record_id || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAudit(log)}
+                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors inline-flex items-center gap-1 text-xs font-semibold"
+                            >
+                              <Eye className="w-4 h-4" /> Lihat
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {auditTotal > ITEMS_PER_PAGE && (
+              <div className="bg-slate-50 px-4 py-3 border-t border-slate-100 flex items-center justify-between">
+                <p className="text-xs text-slate-500 font-medium">
+                  Menampilkan <span className="font-bold text-slate-800">{(auditPage - 1) * ITEMS_PER_PAGE + 1}</span> - <span className="font-bold text-slate-800">{Math.min(auditPage * ITEMS_PER_PAGE, auditTotal)}</span> dari <span className="font-bold text-slate-800">{auditTotal}</span> aktivitas
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={auditPage === 1 || auditLoading}
+                    onClick={() => setAuditPage(prev => Math.max(1, prev - 1))}
+                    className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-all shrink-0"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={auditPage * ITEMS_PER_PAGE >= auditTotal || auditLoading}
+                    onClick={() => setAuditPage(prev => prev + 1)}
+                    className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-all shrink-0"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Visual Diff Modal */}
+      {selectedAudit && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  Detail Log Perubahan
+                  <span className={cn(
+                    'text-[10px] font-black px-2 py-0.5 rounded-full',
+                    selectedAudit.action_type === 'INSERT' && 'bg-emerald-100 text-emerald-800',
+                    selectedAudit.action_type === 'UPDATE' && 'bg-amber-100 text-amber-800',
+                    selectedAudit.action_type === 'DELETE' && 'bg-rose-100 text-rose-800'
+                  )}>
+                    {selectedAudit.action_type}
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 font-mono mt-0.5">Audit ID: #{selectedAudit.id}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAudit(null)}
+                className="p-1.5 rounded-xl hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                <div>
+                  <p className="text-slate-400 text-xs font-semibold">ADMIN</p>
+                  <p className="font-bold text-slate-800">{selectedAudit.user_email}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs font-semibold">TANGGAL & WAKTU (WITA)</p>
+                  <p className="font-bold text-slate-800 font-mono text-xs">
+                    {new Date(selectedAudit.created_at).toLocaleString('id-ID', {
+                      timeZone: 'Asia/Makassar',
+                      dateStyle: 'long',
+                      timeStyle: 'medium'
+                    })}
+                  </p>
+                </div>
+                <div className="md:mt-2">
+                  <p className="text-slate-400 text-xs font-semibold">MODUL / TABEL</p>
+                  <p className="font-bold text-slate-800">
+                    {TABLE_LABEL[selectedAudit.table_name] || selectedAudit.table_name} 
+                    <span className="font-mono font-medium text-slate-400 text-xs ml-1">({selectedAudit.table_name})</span>
+                  </p>
+                </div>
+                <div className="md:mt-2">
+                  <p className="text-slate-400 text-xs font-semibold">RECORD ID</p>
+                  <p className="font-bold text-slate-800 font-mono text-xs">{selectedAudit.record_id || '-'}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Perbedaan Data (JSON Diff)</p>
+                {renderJSONDiff(selectedAudit.old_values, selectedAudit.new_values)}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 px-6 py-3.5 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedAudit(null)}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold rounded-xl transition-all"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── JSON Diff Helper ───────────────────────────────────────────────────────
+function renderJSONDiff(oldVal: any, newVal: any) {
+  const allKeys = Array.from(new Set([
+    ...Object.keys(oldVal || {}),
+    ...Object.keys(newVal || {})
+  ])).sort();
+
+  return (
+    <div className="border border-slate-200 rounded-2xl overflow-hidden text-xs font-mono max-h-[350px] overflow-y-auto bg-white shadow-sm">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase tracking-widest text-[9px]">
+            <th className="text-left px-4 py-2 font-bold">Kolom</th>
+            <th className="text-left px-4 py-2 font-bold bg-red-50/20 text-red-600">Sebelum (Old)</th>
+            <th className="text-left px-4 py-2 font-bold bg-emerald-50/20 text-emerald-600">Sesudah (New)</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {allKeys.map(key => {
+            if (key === 'created_at' || key === 'updated_at') return null;
+
+            const oldRaw = oldVal ? oldVal[key] : undefined;
+            const newRaw = newVal ? newVal[key] : undefined;
+
+            const oStr = oldRaw !== undefined ? (typeof oldRaw === 'object' ? JSON.stringify(oldRaw) : String(oldRaw)) : undefined;
+            const nStr = newRaw !== undefined ? (typeof newRaw === 'object' ? JSON.stringify(newRaw) : String(newRaw)) : undefined;
+            const isDiff = oStr !== nStr;
+
+            return (
+              <tr key={key} className={cn(isDiff ? 'bg-amber-50/20' : 'hover:bg-slate-50/50')}>
+                <td className="px-4 py-2.5 font-bold text-slate-700 border-r border-slate-100">{key}</td>
+                <td className={cn(
+                  "px-4 py-2.5 text-slate-500 max-w-[250px] break-all border-r border-slate-100",
+                  isDiff && oStr !== undefined && "text-red-700 bg-red-50/40 font-bold"
+                )}>
+                  {oStr !== undefined ? oStr : <span className="text-slate-300 italic">none</span>}
+                </td>
+                <td className={cn(
+                  "px-4 py-2.5 text-slate-500 max-w-[250px] break-all",
+                  isDiff && nStr !== undefined && "text-emerald-700 bg-emerald-50/40 font-bold"
+                )}>
+                  {nStr !== undefined ? nStr : <span className="text-slate-300 italic">none</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
