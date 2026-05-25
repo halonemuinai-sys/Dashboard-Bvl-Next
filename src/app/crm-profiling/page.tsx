@@ -421,6 +421,15 @@ export default function CrmProfilingPage() {
             <FileDown className="w-4 h-4" />
             <span className="hidden sm:inline">Export CSV</span>
           </button>
+          <a
+            href="/crm_profiling_export.xlsx"
+            download="CRM_Profiling_Tier_Export.xlsx"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+          >
+            <FileDown className="w-4 h-4" />
+            <span className="hidden sm:inline">Download Custom Excel</span>
+            <span className="sm:hidden">Excel Custom</span>
+          </a>
         </div>
       </div>
 
