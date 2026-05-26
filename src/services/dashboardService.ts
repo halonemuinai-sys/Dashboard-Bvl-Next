@@ -1037,7 +1037,7 @@ export const dashboardService = {
           mtdTotalQty: s.mtdQty,
           mtdCostPct: s.mtdGross > 0 ? ((s.mtdComm + s.mtdValDisc) / s.mtdGross) * 100 : 0,
           mtdMdrPct: s.mtdGross > 0 ? (s.mtdComm / s.mtdGross) * 100 : 0,
-          mtdAvgDisc: s.mtdGross > 0 ? (s.mtdValDisc / s.mtdGross) * 100 : 0,
+          avgDiscMtd: s.mtdGross > 0 ? (s.mtdValDisc / s.mtdGross) * 100 : 0,
           target,
           remaining,
           achievement,
