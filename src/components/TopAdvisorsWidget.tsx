@@ -30,7 +30,7 @@ export default function TopAdvisorsWidget({ advisors }: Props) {
   // If both lists are empty, hide the entire widget
   if (metPerformers.length === 0 && unmetPerformers.length === 0) return null;
 
-  const displayedPerformers = (activeTab === 'met' ? metPerformers : unmetPerformers).slice(0, 10);
+  const displayedPerformers = activeTab === 'met' ? metPerformers : unmetPerformers;
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden chart-reveal" style={{ '--delay': '400ms' } as any}>
