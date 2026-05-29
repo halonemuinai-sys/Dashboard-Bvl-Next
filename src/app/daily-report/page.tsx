@@ -29,23 +29,6 @@ const getLocalDateString = (d: Date) => {
   return `${y}-${m}-${dd}`;
 };
 
-const chunkStores = (stores: any[]) => {
-  const pagesList: any[][] = [];
-  if (!stores || stores.length === 0) return pagesList;
-  
-  // Page 1: fits up to 2 stores
-  pagesList.push(stores.slice(0, 2));
-  
-  // Subsequent pages: fit up to 3 stores
-  let currentIdx = 2;
-  while (currentIdx < stores.length) {
-    pagesList.push(stores.slice(currentIdx, currentIdx + 3));
-    currentIdx += 3;
-  }
-  
-  return pagesList;
-};
-
 export default function DailyReportPage() {
   const [date, setDate] = useState(getLocalDateString(new Date()));
   const [loading, setLoading] = useState(true);
@@ -82,50 +65,49 @@ export default function DailyReportPage() {
     const html2canvas = (await import('html2canvas-pro')).default;
     const { jsPDF } = await import('jspdf');
     
-    // Target the professional off-screen document container
-    const container = document.getElementById('pdf-document');
-    if (!container) return;
+    // Target the professional off-screen document
+    const element = document.getElementById('pdf-document');
+    if (!element) return;
     
     // Briefly make it visible but absolute to avoid layout shift, so html2canvas can capture it properly
-    container.style.left = '0';
-    container.style.top = '0';
-    container.style.position = 'absolute';
-    container.style.zIndex = '-100';
+    element.style.left = '0';
+    element.style.top = '0';
+    element.style.position = 'absolute';
+    element.style.zIndex = '-100';
 
-    try {
-      const pages = container.querySelectorAll('.pdf-page');
-      if (pages.length === 0) return;
+    // Capture the element
+    const canvas = await html2canvas(element, {
+      scale: 2.0,
+      useCORS: true,
+      windowWidth: 794 // A4 width
+    });
 
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
+    // Re-hide the element
+    element.style.left = '-9999px';
+    
+    const imgData = canvas.toDataURL('image/jpeg', 0.85);
+    
+    // Create PDF
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    
+    // Calculate dimensions to maintain aspect ratio
+    let drawWidth = pdfWidth;
+    let drawHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      for (let i = 0; i < pages.length; i++) {
-        const pageEl = pages[i] as HTMLElement;
-        
-        const canvas = await html2canvas(pageEl, {
-          scale: 3.0,
-          useCORS: true,
-          windowWidth: 794 // A4 width
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        
-        if (i > 0) {
-          pdf.addPage();
-        }
-        
-        // Draw the page-sized canvas perfectly on the A4 PDF page without scaling distortion
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      }
-      
-      pdf.save(`Daily_Report_Sales_${date}.pdf`);
-    } catch (err) {
-      console.error('Error generating PDF:', err);
-    } finally {
-      // Re-hide the container off-screen
-      container.style.left = '-9999px';
+    // Force fit onto 1 single page if it's too tall
+    if (drawHeight > pdfHeight) {
+      drawHeight = pdfHeight;
+      drawWidth = (canvas.width * pdfHeight) / canvas.height;
     }
+
+    // Center horizontally if scaled down
+    const xPos = (pdfWidth - drawWidth) / 2;
+
+    pdf.addImage(imgData, 'JPEG', xPos, 0, drawWidth, drawHeight);
+    
+    pdf.save(`Daily_Report_Sales_${date}.pdf`);
   };
 
   const handleShareWhatsApp = () => {
@@ -167,9 +149,6 @@ export default function DailyReportPage() {
   }, [date]);
 
   if (loading || !data) return <BvlgariLoader message="Loading Daily Report..." />;
-
-  const storePages = chunkStores(data.stores);
-  const totalPages = storePages.length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-10">
@@ -493,181 +472,155 @@ export default function DailyReportPage() {
       {/* --- PROFESSIONAL PDF DOCUMENT (OFF-SCREEN) --- */}
       <div 
         id="pdf-document" 
-        className="absolute -left-[9999px] top-0 w-[794px] text-black font-sans"
+        className="absolute -left-[9999px] top-0 w-[794px] bg-white text-black font-sans p-8 box-border"
+        style={{ minHeight: '1123px' }}
       >
-        {storePages.map((pageStores, pageIdx) => {
-          const isFirstPage = pageIdx === 0;
-          return (
-            <div 
-              key={pageIdx} 
-              className="pdf-page w-[794px] h-[1123px] bg-white p-8 relative box-border flex flex-col justify-between border border-gray-100"
-            >
-              <div>
-                {isFirstPage ? (
-                  <>
-                    {/* Header */}
-                    <div className="bg-slate-900 text-white py-4 px-6 mb-4 -mx-8 -mt-8">
-                      <h1 className="text-2xl font-serif uppercase tracking-[0.25em] text-white text-center">Bvlgari</h1>
-                      <h2 className="text-sm mt-1 font-medium text-slate-300 tracking-widest uppercase text-center">Daily Sales Performance Report</h2>
-                      <p className="text-[10px] text-slate-400 mt-1 text-center">
-                        {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                      </p>
-                    </div>
+        {/* Header */}
+        <div className="bg-slate-900 text-white py-4 px-6 mb-4 -mx-8 -mt-8">
+          <h1 className="text-2xl font-serif uppercase tracking-[0.25em] text-white text-center">Bvlgari</h1>
+          <h2 className="text-sm mt-1 font-medium text-slate-300 tracking-widest uppercase text-center">Daily Sales Performance Report</h2>
+          <p className="text-[10px] text-slate-400 mt-1 text-center">
+            {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
 
-                    {/* Executive Summary */}
-                    {data.globalKPIs && (
-                      <div className="mb-4">
-                        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1 mb-2">Executive Summary</h3>
-                        <div className="grid grid-cols-2 gap-6">
-                          <table className="w-full text-xs">
-                            <tbody>
-                              <tr className="border-b border-gray-100">
-                                <td className="py-1 text-gray-600">Total Sales (Incl. HO)</td>
-                                <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.totalSales}/></td>
-                              </tr>
-                              <tr className="border-b border-gray-100">
-                                <td className="py-1 text-gray-600">Store Sales (Excl. HO)</td>
-                                <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.storeSales}/></td>
-                              </tr>
-                              <tr className="border-b border-gray-100">
-                                <td className="py-1 text-gray-600">Global Target MTD</td>
-                                <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.globalTarget}/></td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          <table className="w-full text-xs">
-                            <tbody>
-                              <tr className="border-b border-gray-100">
-                                <td className="py-1 text-gray-600">Global Achievement</td>
-                                <td className="py-1 text-right font-mono font-bold">
-                                  <span className="bg-slate-900 text-white px-2 py-0.5 rounded-sm">
-                                    {fmtPct(data.globalKPIs.globalAchievement)}
-                                  </span>
-                                </td>
-                              </tr>
-                              <tr className="border-b border-gray-100">
-                                <td className="py-1 text-gray-600">MTD Cost % (MDR + Disc)</td>
-                                <td className="py-1 text-right font-mono font-bold text-rose-600">{fmtPct(data.globalKPIs.mtdCostPct)}</td>
-                              </tr>
-                              <tr className="border-b border-gray-100">
-                                <td className="py-1 text-gray-600">Average Discount MTD</td>
-                                <td className="py-1 text-right font-mono font-bold text-amber-600">{fmtPct(data.globalKPIs.avgDiscMtd)}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
+        {/* Executive Summary */}
+        {data.globalKPIs && (
+        <div className="mb-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1 mb-2">Executive Summary</h3>
+          <div className="grid grid-cols-2 gap-6">
+            <table className="w-full text-xs">
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 text-gray-600">Total Sales (Incl. HO)</td>
+                  <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.totalSales}/></td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 text-gray-600">Store Sales (Excl. HO)</td>
+                  <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.storeSales}/></td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 text-gray-600">Global Target MTD</td>
+                  <td className="py-1 text-right font-mono font-bold"><Amt value={data.globalKPIs.globalTarget}/></td>
+                </tr>
+              </tbody>
+            </table>
+            <table className="w-full text-xs">
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 text-gray-600">Global Achievement</td>
+                  <td className="py-1 text-right font-mono font-bold">
+                    <span className="bg-slate-900 text-white px-2 py-0.5 rounded-sm">
+                      {fmtPct(data.globalKPIs.globalAchievement)}
+                    </span>
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 text-gray-600">MTD Cost % (MDR + Disc)</td>
+                  <td className="py-1 text-right font-mono font-bold text-rose-600">{fmtPct(data.globalKPIs.mtdCostPct)}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 text-gray-600">Average Discount MTD</td>
+                  <td className="py-1 text-right font-mono font-bold text-amber-600">{fmtPct(data.globalKPIs.avgDiscMtd)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        )}
 
-                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1 mb-3">Boutique Performance Breakdown</h3>
-                  </>
-                ) : (
-                  <>
-                    {/* Header for subsequent pages */}
-                    <div className="bg-slate-900 text-white py-2 px-6 mb-4 -mx-8 -mt-8 flex justify-between items-center">
-                      <span className="text-[10px] font-serif uppercase tracking-[0.2em] text-white">Bvlgari Daily Sales Report</span>
-                      <span className="text-[9px] text-slate-400">
-                        {new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
-                  </>
-                )}
-
-                {/* Render stores for this page */}
-                {pageStores.map((store: any) => (
-                  <div key={store.storeName} className="mb-4">
-                    {/* Store Header */}
-                    <div className="bg-slate-800 text-white py-1.5 px-3 mb-2 flex justify-between items-center">
-                      <h4 className="font-bold text-sm">{store.storeName}</h4>
-                      <div className="text-right text-[10px]">
-                        <span className="text-slate-300 mr-2 uppercase tracking-tighter">MTD Achievement:</span>
-                        <span className="font-black bg-white text-slate-900 px-2 py-0.5 rounded-sm shadow-sm">
-                          {fmtPct(store.metrics.achievement)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Store Metrics */}
-                    <div className="grid grid-cols-7 gap-1.5 mb-2 text-[10px]">
-                      <div className="border border-gray-100 p-1.5">
-                        <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD Sales</div>
-                        <div className="font-bold font-mono"><Amt value={store.metrics.mtdSales} /></div>
-                      </div>
-                      <div className="border border-gray-100 p-1.5">
-                        <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">Target</div>
-                        <div className="font-bold font-mono"><Amt value={store.metrics.target} /></div>
-                      </div>
-                      <div className="border border-gray-100 p-1.5 bg-rose-50/30">
-                        <div className="text-rose-500 mb-0.5 text-[9px] leading-tight">Rem. to Target</div>
-                        <div className="font-bold font-mono text-rose-600"><Amt value={store.metrics.remaining} /></div>
-                      </div>
-                      <div className="border border-gray-100 p-1.5">
-                        <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">Today's Sales</div>
-                        <div className="font-bold font-mono"><Amt value={store.metrics.todaySales} /></div>
-                      </div>
-                      <div className="border border-gray-100 p-1.5">
-                        <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD Cost %</div>
-                        <div className="font-bold font-mono text-rose-600">{fmtPct(store.metrics.mtdCostPct)}</div>
-                      </div>
-                      <div className="border border-gray-100 p-1.5">
-                        <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD MDR %</div>
-                        <div className="font-bold font-mono">{fmtPct(store.metrics.mtdMdrPct)}</div>
-                      </div>
-                      <div className="border border-gray-100 p-1.5">
-                        <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">AVG Disc MTD</div>
-                        <div className="font-bold font-mono text-amber-600">{fmtPct(store.metrics.avgDiscMtd)}</div>
-                      </div>
-                    </div>
-
-                    {/* Store Table */}
-                    <table className="w-full text-[10px] text-left border-collapse border border-slate-200">
-                      <thead>
-                        <tr className="bg-slate-800 text-white text-[9px] uppercase tracking-wider">
-                          <th className="border border-slate-700 py-1 px-2">Category</th>
-                          <th className="border border-slate-700 py-1 px-2 text-center">Qty (Sold)</th>
-                          <th className="border border-slate-700 py-1 px-2 text-right">Reg Sales</th>
-                          <th className="border border-slate-700 py-1 px-2 text-right">SMI Sales</th>
-                          <th className="border border-slate-700 py-1 px-2 text-center">Disc %</th>
-                          <th className="border border-slate-700 py-1 px-2 text-center">Rem. Stock</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(store.tableData).map(([cat, vals]: any) => (
-                          <tr key={cat}>
-                            <td className="border border-gray-200 py-1 px-2 font-medium">{cat}</td>
-                            <td className="border border-gray-200 py-1 px-2 text-center font-mono">{vals.qty}</td>
-                            <td className="border border-gray-200 py-1 px-2 text-right font-mono"><Amt value={vals.netNonSMI} /></td>
-                            <td className="border border-gray-200 py-1 px-2 text-right font-mono"><Amt value={vals.netSMI} /></td>
-                            <td className="border border-gray-200 py-1 px-2 text-center font-mono">
-                              {vals.gross > 0 ? ((vals.valDisc / vals.gross) * 100).toFixed(1) : '0.0'}%
-                            </td>
-                            <td className="border border-gray-200 py-1 px-2 text-center font-mono font-bold text-red-600">{vals.stock}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
-
-              {/* Footer */}
-              <div className="pt-2 border-t border-slate-200 text-[9px] text-slate-400 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-slate-600 tracking-widest uppercase">Confidential</p>
-                  <p>Internal Use Only — Bvlgari Indonesia</p>
-                </div>
-                <div className="text-center font-bold text-slate-500">
-                  Page {pageIdx + 1} of {totalPages}
-                </div>
-                <div className="text-right">
-                  <p>Generated via Bvlgari Dashboard</p>
-                  <p className="font-bold text-slate-500">MRA Retail</p>
-                  <p className="text-[7px] mt-0.5">{new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })}</p>
+        {/* Store Breakdown */}
+        <div className="mb-2">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1 mb-3">Boutique Performance Breakdown</h3>
+          
+          {data.stores.map((store: any) => (
+            <div key={store.storeName} className="mb-4">
+              {/* Store Header */}
+              <div className="bg-slate-800 text-white py-1.5 px-3 mb-2 flex justify-between items-center">
+                <h4 className="font-bold text-sm">{store.storeName}</h4>
+                <div className="text-right text-[10px]">
+                  <span className="text-slate-300 mr-2 uppercase tracking-tighter">MTD Achievement:</span>
+                  <span className="font-black bg-white text-slate-900 px-2 py-0.5 rounded-sm shadow-sm">
+                    {fmtPct(store.metrics.achievement)}
+                  </span>
                 </div>
               </div>
+
+              {/* Store Metrics */}
+              <div className="grid grid-cols-7 gap-1.5 mb-2 text-[10px]">
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD Sales</div>
+                  <div className="font-bold font-mono"><Amt value={store.metrics.mtdSales} /></div>
+                </div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">Target</div>
+                  <div className="font-bold font-mono"><Amt value={store.metrics.target} /></div>
+                </div>
+                <div className="border border-gray-100 p-1.5 bg-rose-50/30">
+                  <div className="text-rose-500 mb-0.5 text-[9px] leading-tight">Rem. to Target</div>
+                  <div className="font-bold font-mono text-rose-600"><Amt value={store.metrics.remaining} /></div>
+                </div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">Today's Sales</div>
+                  <div className="font-bold font-mono"><Amt value={store.metrics.todaySales} /></div>
+                </div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD Cost %</div>
+                  <div className="font-bold font-mono text-rose-600">{fmtPct(store.metrics.mtdCostPct)}</div>
+                </div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">MTD MDR %</div>
+                  <div className="font-bold font-mono">{fmtPct(store.metrics.mtdMdrPct)}</div>
+                </div>
+                <div className="border border-gray-100 p-1.5">
+                  <div className="text-gray-500 mb-0.5 text-[9px] leading-tight">AVG Disc MTD</div>
+                  <div className="font-bold font-mono text-amber-600">{fmtPct(store.metrics.avgDiscMtd)}</div>
+                </div>
+              </div>
+
+              {/* Store Table */}
+              <table className="w-full text-[10px] text-left border-collapse border border-slate-200">
+                <thead>
+                  <tr className="bg-slate-800 text-white text-[9px] uppercase tracking-wider">
+                    <th className="border border-slate-700 py-1 px-2">Category</th>
+                    <th className="border border-slate-700 py-1 px-2 text-center">Qty (Sold)</th>
+                    <th className="border border-slate-700 py-1 px-2 text-right">Reg Sales</th>
+                    <th className="border border-slate-700 py-1 px-2 text-right">SMI Sales</th>
+                    <th className="border border-slate-700 py-1 px-2 text-center">Disc %</th>
+                    <th className="border border-slate-700 py-1 px-2 text-center">Rem. Stock</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(store.tableData).map(([cat, vals]: any) => (
+                    <tr key={cat}>
+                      <td className="border border-gray-200 py-1 px-2 font-medium">{cat}</td>
+                      <td className="border border-gray-200 py-1 px-2 text-center font-mono">{vals.qty}</td>
+                      <td className="border border-gray-200 py-1 px-2 text-right font-mono"><Amt value={vals.netNonSMI} /></td>
+                      <td className="border border-gray-200 py-1 px-2 text-right font-mono"><Amt value={vals.netSMI} /></td>
+                      <td className="border border-gray-200 py-1 px-2 text-center font-mono">
+                        {vals.gross > 0 ? ((vals.valDisc / vals.gross) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="border border-gray-200 py-1 px-2 text-center font-mono font-bold text-red-600">{vals.stock}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          );
-        })}
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="absolute bottom-6 left-8 right-8 pt-2 border-t border-slate-200 text-[9px] text-slate-400 flex justify-between items-center">
+          <div>
+            <p className="font-bold text-slate-600 tracking-widest uppercase">Confidential</p>
+            <p>Internal Use Only — Bvlgari Indonesia</p>
+          </div>
+          <div className="text-right">
+            <p>Generated via Bvlgari Dashboard</p>
+            <p className="font-bold text-slate-500">MRA Retail</p>
+            <p className="text-[7px] mt-0.5">{new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })}</p>
+          </div>
+        </div>
       </div>
 
     </div>
