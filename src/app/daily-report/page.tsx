@@ -107,7 +107,7 @@ export default function DailyReportPage() {
 
     pdf.addImage(imgData, 'JPEG', xPos, 0, drawWidth, drawHeight);
     
-    pdf.save(`Daily_Report_Sales_${date}.pdf`);
+    pdf.save(`Daily Sales Report - ${date}.pdf`);
   };
 
   const handleShareWhatsApp = () => {
