@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Users, Home, RotateCcw, RefreshCw, Save, Check, ChevronDown, CalendarIcon, AlertCircle, Target
+  Users, Home, RotateCcw, RefreshCw, Save, Check, ChevronDown, CalendarIcon, AlertCircle, Target, Store
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService, AdvisorProfile, AdvisorRotation } from '@/services/dashboardService';
@@ -25,7 +25,7 @@ const STORE_FILTER_COLORS: Record<string, string> = {
   'Head Office':     'bg-slate-600 text-white border-slate-600',
 };
 
-type Tab = 'homebase' | 'rotation' | 'target';
+type Tab = 'homebase' | 'rotation' | 'target' | 'store-target';
 
 export default function AdvisorSetupPage() {
   const today = new Date();
@@ -40,10 +40,12 @@ export default function AdvisorSetupPage() {
   const [advisors, setAdvisors] = useState<AdvisorProfile[]>([]);
   const [rotations, setRotations] = useState<AdvisorRotation[]>([]);
   const [targets, setTargets] = useState<{ advisor_name: string; month_number: number; target_value: number }[]>([]);
+  const [storeTargets, setStoreTargets] = useState<{ store_name: string; month_number: number; target_value: number }[]>([]);
   const [filterStore, setFilterStore] = useState<string | null>(null);
   const [homeEdits, setHomeEdits] = useState<Record<string, string>>({});
   const [rotEdits, setRotEdits] = useState<Record<string, string>>({}); // key: "advisorName||monthNum"
   const [targetEdits, setTargetEdits] = useState<Record<string, string>>({}); // key: "advisorName||monthNum"
+  const [storeTargetEdits, setStoreTargetEdits] = useState<Record<string, string>>({}); // key: "storeName||monthNum"
 
   const load = async () => {
     setLoading(true);
@@ -53,9 +55,11 @@ export default function AdvisorSetupPage() {
       setAdvisors(data.advisors);
       setRotations(data.rotations);
       setTargets(data.targets);
+      setStoreTargets(data.storeTargets || []);
       setHomeEdits({});
       setRotEdits({});
       setTargetEdits({});
+      setStoreTargetEdits({});
       setSaved(new Set());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load advisor data');
@@ -83,6 +87,16 @@ export default function AdvisorSetupPage() {
     });
     return map;
   }, [targets]);
+
+  // Build store target lookup: storeName -> monthNum -> targetValue
+  const storeTargetLookup = useMemo(() => {
+    const map: Record<string, Record<number, number>> = {};
+    storeTargets.forEach(t => {
+      if (!map[t.store_name]) map[t.store_name] = {};
+      map[t.store_name][t.month_number] = t.target_value;
+    });
+    return map;
+  }, [storeTargets]);
 
   // Sorted by STORE_ORDER then name, filtered by selected store
   const displayAdvisors = useMemo(() => {
@@ -156,7 +170,25 @@ export default function AdvisorSetupPage() {
     } finally { setSaving(null); }
   };
 
-  if (loading) return <BvlgariLoader message="Loading Advisor Setup..." />;
+  const saveStoreTarget = async (storeName: string, monthNum: number, rawValue: string) => {
+    const key = `${storeName}||${monthNum}`;
+    const targetValue = parseFloat(rawValue.replace(/[^0-9.-]/g, '')) || 0;
+    setSaving(key);
+    setError(null);
+    try {
+      await dashboardService.saveStoreTarget(storeName, parseInt(year), monthNum, targetValue);
+      setStoreTargets(prev => {
+        const filtered = prev.filter(t => !(t.store_name === storeName && t.month_number === monthNum));
+        return [...filtered, { store_name: storeName, year: parseInt(year), month_number: monthNum, target_value: targetValue }];
+      });
+      setStoreTargetEdits(prev => { const n = { ...prev }; delete n[key]; return n; });
+      flash(key);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save store target');
+    } finally { setSaving(null); }
+  };
+
+  if (loading) return <BvlgariLoader message="Loading Setup & Targets..." />;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
@@ -165,9 +197,9 @@ export default function AdvisorSetupPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <Users className="w-5 h-5 text-blue-600" />
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Advisor Setup</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Setup & Targets</h1>
           </div>
-          <p className="text-slate-500 text-sm">Manage home base & monthly rotation assignments</p>
+          <p className="text-slate-500 text-sm">Manage home base, monthly rotations, and sales targets</p>
         </div>
         <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
           <CalendarIcon className="w-4 h-4 text-blue-600" />
@@ -207,7 +239,7 @@ export default function AdvisorSetupPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {(['homebase', 'rotation', 'target'] as Tab[]).map(t => (
+        {(['homebase', 'rotation', 'target', 'store-target'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all",
@@ -216,7 +248,8 @@ export default function AdvisorSetupPage() {
             {t === 'homebase' && <Home className="w-4 h-4" />}
             {t === 'rotation' && <RotateCcw className="w-4 h-4" />}
             {t === 'target' && <Target className="w-4 h-4" />}
-            {t === 'homebase' ? 'Home Base' : t === 'rotation' ? 'Monthly Rotation' : 'Monthly Targets'}
+            {t === 'store-target' && <Store className="w-4 h-4" />}
+            {t === 'homebase' ? 'Home Base' : t === 'rotation' ? 'Monthly Rotation' : t === 'target' ? 'Monthly Targets' : 'Store Targets'}
           </button>
         ))}
       </div>
@@ -491,6 +524,101 @@ export default function AdvisorSetupPage() {
                         <td className="py-3 px-5">
                           {hasChange && (
                             <button onClick={() => saveTarget(advisor.name, monthNum, edited!)} disabled={isSavingThis}
+                              className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all",
+                                isSaved
+                                  ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                  : "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                              )}>
+                              {isSavingThis ? <RefreshCw className="w-3 h-3 animate-spin" /> : isSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                              {isSaved ? 'Saved' : 'Save'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB: STORE TARGET ── */}
+      {tab === 'store-target' && (
+        <div className="space-y-4">
+          {/* Month selector */}
+          <div className="flex flex-wrap gap-2">
+            {MONTH_SHORT.map((m, i) => (
+              <button key={m} onClick={() => setSelectedMonth(i)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all",
+                  selectedMonth === i
+                    ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                    : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                )}>
+                {m}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+              <span className="w-2 h-2 bg-indigo-500 rounded-full" />
+              <h3 className="text-sm font-bold text-slate-900">
+                Store Targets — {MONTHS[selectedMonth]} {year}
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100">
+                  <tr>
+                    <th className="py-3 px-5">Store Name</th>
+                    <th className="py-3 px-5">Target Value (Rp)</th>
+                    <th className="py-3 px-5 w-28"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {STORES.map(storeName => {
+                    const monthNum = selectedMonth + 1;
+                    const editKey = `${storeName}||${monthNum}`;
+                    const existingTarget = storeTargetLookup[storeName]?.[monthNum] || 0;
+                    const edited = storeTargetEdits[editKey];
+                    // Display string: if editing, show edit value. Else formatted existing target.
+                    const displayVal = edited !== undefined ? edited : new Intl.NumberFormat('id-ID').format(existingTarget);
+                    
+                    const isSavingThis = saving === editKey;
+                    const isSaved = saved.has(editKey);
+                    
+                    // Consider it changed if edited exists and parsing it differs from existing target
+                    const parsedEdited = edited !== undefined ? parseFloat(edited.replace(/[^0-9.-]/g, '')) || 0 : existingTarget;
+                    const hasChange = edited !== undefined && parsedEdited !== existingTarget;
+
+                    return (
+                      <tr key={storeName} className="hover:bg-slate-50 transition-colors text-sm">
+                        <td className="py-3 px-5 font-bold text-slate-800">{storeName}</td>
+                        <td className="py-3 px-5">
+                          <div className="relative w-64">
+                            <input
+                              type="text"
+                              value={displayVal}
+                              onChange={e => {
+                                // Allow only digits, dots, commas
+                                const val = e.target.value.replace(/[^0-9.,]/g, '');
+                                setStoreTargetEdits(prev => ({ ...prev, [editKey]: val }));
+                              }}
+                              className={cn(
+                                "w-full appearance-none bg-slate-50 border rounded-lg px-3 py-1.5 text-xs font-bold outline-none",
+                                hasChange ? "border-indigo-300 text-indigo-700" : existingTarget > 0 ? "border-indigo-200 text-indigo-700 bg-indigo-50" : "border-slate-200 text-slate-600"
+                              )}
+                              placeholder="0"
+                            />
+                          </div>
+                        </td>
+                        <td className="py-3 px-5">
+                          {hasChange && (
+                            <button onClick={() => saveStoreTarget(storeName, monthNum, edited!)} disabled={isSavingThis}
                               className={cn(
                                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all",
                                 isSaved

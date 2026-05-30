@@ -87,7 +87,7 @@ const MENU_GROUPS = [
     items: [
       { path: '/product-rank',        label: 'Product Rank' },
       { path: '/product-projection',  label: 'Product Projection' },
-      { path: '/advisor-setup',       label: 'Advisor Setup' },
+      { path: '/advisor-setup',       label: 'Setup & Targets' },
       { path: '/advisor-performance', label: 'Advisor Performance' },
     ],
   },
