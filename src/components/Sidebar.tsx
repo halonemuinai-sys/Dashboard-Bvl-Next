@@ -74,7 +74,7 @@ const menuGroups = [
     items: [
       { name: 'Product Rank',        icon: Zap,             href: '/product-rank' },
       { name: 'Product Projection',  icon: Presentation,    href: '/product-projection' },
-      { name: 'Advisor Setup',       icon: Users2,          href: '/advisor-setup' },
+      { name: 'Setup & Targets',     icon: Users2,          href: '/advisor-setup' },
       { name: 'Advisor Performance', icon: Briefcase,       href: '/advisor-performance' },
     ]
   },

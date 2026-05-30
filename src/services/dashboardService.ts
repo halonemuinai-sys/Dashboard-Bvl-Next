@@ -140,6 +140,7 @@ export interface AdvisorSetupData {
   advisors: AdvisorProfile[];
   rotations: AdvisorRotation[];
   targets: { advisor_name: string; year: number; month_number: number; target_value: number }[];
+  storeTargets: { store_name: string; year: number; month_number: number; target_value: number }[];
 }
 
 export interface CrmProfilingRow {
@@ -1078,15 +1079,17 @@ export const dashboardService = {
    * Advisor Setup — fetch all advisors + rotations for a given year
    */
   async getAdvisorSetup(year: number): Promise<AdvisorSetupData> {
-    const [{ data: advisors }, { data: rotations }, { data: targets }] = await Promise.all([
+    const [{ data: advisors }, { data: rotations }, { data: targets }, { data: storeTargets }] = await Promise.all([
       supabase.from('advisors').select('name, home_location').order('name'),
       supabase.from('advisor_rotations').select('advisor_name, year, month_number, assigned_location').eq('year', year),
-      supabase.from('advisor_targets').select('advisor_name, year, month_number, target_value').eq('year', year)
+      supabase.from('advisor_targets').select('advisor_name, year, month_number, target_value').eq('year', year),
+      supabase.from('targets').select('store_name, year, month_number, target_value').eq('year', year)
     ]);
     return {
       advisors: (advisors || []) as AdvisorProfile[],
       rotations: (rotations || []) as AdvisorRotation[],
-      targets: (targets || []) as any[]
+      targets: (targets || []) as any[],
+      storeTargets: (storeTargets || []) as any[]
     };
   },
 
@@ -1145,6 +1148,26 @@ export const dashboardService = {
       const { error: insertErr } = await supabase
         .from('advisor_targets')
         .insert({ advisor_name: advisorName, year, month_number: monthNumber, target_value: targetValue });
+      
+      if (insertErr) throw insertErr;
+    }
+  },
+
+  async saveStoreTarget(storeName: string, year: number, monthNumber: number, targetValue: number): Promise<void> {
+    const { data, error: updateErr } = await supabase
+      .from('targets')
+      .update({ target_value: targetValue })
+      .eq('store_name', storeName)
+      .eq('year', year)
+      .eq('month_number', monthNumber)
+      .select();
+
+    if (updateErr) throw updateErr;
+
+    if (!data || data.length === 0) {
+      const { error: insertErr } = await supabase
+        .from('targets')
+        .insert({ store_name: storeName, year, month_number: monthNumber, target_value: targetValue });
       
       if (insertErr) throw insertErr;
     }
