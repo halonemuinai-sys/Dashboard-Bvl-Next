@@ -288,6 +288,43 @@ export default function SalesSimulatorPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        @keyframes pulse-glow {
+          0%, 100% { transform: scale(1); opacity: 0.4; }
+          50% { transform: scale(1.1); opacity: 0.85; }
+        }
+        @keyframes shine {
+          0% { left: -100%; }
+          100% { left: 200%; }
+        }
+        .hover-float:hover .animate-icon {
+          animation: float 2s ease-in-out infinite;
+        }
+        .animate-pulse-glow {
+          animation: pulse-glow 2.5s ease-in-out infinite;
+        }
+        .shine-effect {
+          position: relative;
+          overflow: hidden;
+        }
+        .shine-effect::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          height: 100%;
+          width: 50%;
+          background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0) 100%);
+          transition: all 0.75s;
+          left: -100%;
+        }
+        .shine-effect:hover::after {
+          animation: shine 1.2s ease-in-out forwards;
+        }
+      `}</style>
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
@@ -330,82 +367,91 @@ export default function SalesSimulatorPage() {
           {/* ── Section 1: Global simulated P&L impact ────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
             {/* Total Target */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between">
+            <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl p-5 shadow-md flex items-center justify-between transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-slate-950/20 hover:border-amber-500/30 group cursor-default shine-effect hover-float">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Target</span>
-                <p className="text-3xl font-black text-slate-800 font-sans leading-none">
+                <p className="text-3xl font-black text-white font-sans leading-none tracking-tight">
                   {Math.round(totals.targetTotal / 1_000_000_000)}B
                 </p>
-                <span className="text-[10px] text-slate-400 font-bold block uppercase">IDR</span>
+                <span className="text-[10px] text-amber-500/80 font-bold block uppercase tracking-wider">IDR (Static Target)</span>
               </div>
-              <span className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-                <Target className="w-5 h-5 text-blue-500" />
+              <span className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center shrink-0 group-hover:border-amber-400/40 transition-all duration-500">
+                <Target className="w-5 h-5 text-amber-400 animate-icon transition-transform duration-500" />
               </span>
             </div>
 
             {/* Simulated Sales */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between">
+            <div className="bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 text-white rounded-2xl p-5 shadow-md flex items-center justify-between transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-blue-500/20 group cursor-default shine-effect hover-float">
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold text-blue-500 tracking-wider">Projected Sim Sales</span>
+                <span className="text-[10px] uppercase font-bold text-blue-200 tracking-wider">Projected Sim Sales</span>
                 <div className="flex items-baseline gap-1">
-                  <p className="text-3xl font-black text-blue-600 font-sans leading-none">
+                  <p className="text-3xl font-black text-white font-sans leading-none tracking-tight">
                     {(totals.simTotal / 1_000_000_000).toFixed(1)}B
                   </p>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">IDR</span>
+                  <span className="text-[10px] font-bold text-blue-200 uppercase">IDR</span>
                 </div>
-                <div className="text-[10px] text-slate-400 font-semibold leading-none">
+                <div className="text-[10px] text-blue-200 font-semibold leading-none opacity-90">
                   Baseline: {(totals.baseTotal / 1_000_000_000).toFixed(1)}B
                 </div>
               </div>
-              <span className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-                <TrendingUp className="w-5 h-5 text-blue-500" />
+              <span className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-all duration-500">
+                <TrendingUp className="w-5 h-5 text-white animate-icon transition-transform duration-500" />
               </span>
             </div>
 
             {/* Gap to Target */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between">
+            <div className={cn(
+              "rounded-2xl p-5 shadow-md flex items-center justify-between transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl group cursor-default shine-effect hover-float border",
+              totals.gap >= 0 
+                ? "bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-700 border-emerald-500/20 text-white hover:shadow-emerald-500/20" 
+                : "bg-gradient-to-br from-rose-600 via-rose-600 to-red-700 border-rose-500/20 text-white hover:shadow-rose-500/20"
+            )}>
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Gap / Excess</span>
+                <span className="text-[10px] uppercase font-bold text-white/85 tracking-wider">Gap / Excess</span>
                 <div className="flex items-baseline gap-1">
-                  <p className={cn("text-3xl font-black font-sans leading-none",
-                    totals.gap >= 0 ? "text-emerald-500" : "text-rose-500"
-                  )}>
+                  <p className="text-3xl font-black font-sans leading-none tracking-tight">
                     {totals.gap >= 0 ? '+' : ''}{(totals.gap / 1_000_000_000).toFixed(1)}B
                   </p>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">IDR</span>
+                  <span className="text-[10px] font-bold text-white/85 uppercase">IDR</span>
                 </div>
-                <div className="text-[10px] text-slate-400 font-semibold leading-none">
-                  Selisih proyeksi simulasi dengan target
+                <div className="text-[10px] text-white/80 font-semibold leading-none">
+                  Selisih proyeksi vs target
                 </div>
               </div>
-              <span className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                totals.gap >= 0 ? "bg-emerald-50" : "bg-rose-50"
-              )}>
+              <span className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-all duration-500">
                 {totals.gap >= 0 ? (
-                  <TrendingUp className="w-5 h-5 text-emerald-500" />
+                  <TrendingUp className="w-5 h-5 text-white animate-icon transition-transform duration-500" />
                 ) : (
-                  <TrendingDown className="w-5 h-5 text-rose-500" />
+                  <TrendingDown className="w-5 h-5 text-white animate-icon transition-transform duration-500" />
                 )}
               </span>
             </div>
 
             {/* Achievement Rate */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-1">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-md flex flex-col justify-between transition-all duration-500 hover:-translate-y-1.5 hover:shadow-lg hover:border-amber-450 group cursor-default relative overflow-hidden">
+              <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Projected Achv Rate</span>
-                <span className={cn("text-sm font-black px-1.5 py-0.5 rounded-full font-mono",
-                  totals.achv >= 100 ? "text-emerald-500" : totals.achv >= 80 ? "text-amber-500" : "text-rose-500"
+                <span className={cn("text-xs font-black px-2 py-0.5 rounded-full font-mono border transition-all duration-300",
+                  totals.achv >= 100 
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-250 animate-pulse-glow" 
+                    : totals.achv >= 80 
+                      ? "bg-amber-50 text-amber-600 border-amber-200" 
+                      : "bg-rose-50 text-rose-600 border-rose-200"
                 )}>
                   {totals.achv.toFixed(1)}%
                 </span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden my-1.5">
-                <div className={cn("h-full rounded-full transition-all duration-500",
-                  totals.achv >= 100 ? "bg-emerald-500" : totals.achv >= 80 ? "bg-amber-400" : "bg-rose-500"
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden my-1.5 p-0.5 border border-slate-200/50">
+                <div className={cn("h-full rounded-full transition-all duration-1000 ease-out bg-gradient-to-r",
+                  totals.achv >= 100 
+                    ? "from-emerald-400 to-teal-500" 
+                    : totals.achv >= 80 
+                      ? "from-amber-400 to-orange-500" 
+                      : "from-rose-500 to-red-500"
                 )} style={{ width: `${Math.min(totals.achv, 100)}%` }} />
               </div>
               <span className="text-[10px] text-slate-400 font-semibold leading-none">
-                Rasio pencapaian target kumulatif butik
+                Rasio target kumulatif 3 butik
               </span>
             </div>
           </div>
@@ -479,46 +525,49 @@ export default function SalesSimulatorPage() {
 
                       {/* Dropdown Menu Popup */}
                       {openCampaignDropdown[store.name] && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => toggleDropdown(store.name)} />
-                          <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200/90 rounded-xl p-1.5 shadow-xl z-50 space-y-0.5 max-h-[200px] overflow-y-auto">
-                            {CAMPAIGN_OPTIONS.map(c => {
-                              const isActive = !!sim.activeCampaigns?.[c.id];
-                              return (
-                                <button
-                                  key={c.id}
-                                  type="button"
-                                  onClick={() => toggleCampaign(store.name, c.id)}
-                                  className={cn(
-                                    "w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[10px] font-bold text-left transition-all border",
-                                    isActive
-                                      ? "bg-amber-50/40 border-amber-200 text-amber-900 font-extrabold"
-                                      : "bg-white border-transparent text-slate-650 hover:bg-slate-50 hover:border-slate-100"
-                                  )}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className={cn(
-                                      "w-3.5 h-3.5 rounded-md border flex items-center justify-center transition-all shrink-0",
-                                      isActive 
-                                        ? "bg-amber-500 border-amber-500 text-white shadow-sm" 
-                                        : "border-slate-350 bg-white"
-                                    )}>
-                                      {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                                    </span>
-                                    <span className="truncate">{c.name}</span>
-                                  </div>
-                                  <span className={cn(
-                                    "text-[9px] font-mono shrink-0 ml-1.5",
-                                    isActive ? "text-amber-600" : "text-slate-400"
-                                  )}>
-                                    +{Math.round(c.multiplier * 100)}%
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </>
+                        <div className="fixed inset-0 z-40 bg-black/[0.015] backdrop-blur-[1.2px]" onClick={() => toggleDropdown(store.name)} />
                       )}
+                      <div className={cn(
+                        "absolute left-0 right-0 mt-1.5 bg-white border border-slate-200/90 rounded-xl p-1.5 shadow-xl z-50 space-y-0.5 max-h-[200px] overflow-y-auto transition-all duration-200 origin-top transform",
+                        openCampaignDropdown[store.name]
+                          ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                          : "opacity-0 scale-95 -translate-y-2 pointer-events-none"
+                      )}>
+                        {CAMPAIGN_OPTIONS.map(c => {
+                          const isActive = !!sim.activeCampaigns?.[c.id];
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => toggleCampaign(store.name, c.id)}
+                              className={cn(
+                                "w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[10px] font-bold text-left transition-all border",
+                                isActive
+                                  ? "bg-amber-50/40 border-amber-200 text-amber-900 font-extrabold"
+                                  : "bg-white border-transparent text-slate-650 hover:bg-slate-50 hover:border-slate-100"
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "w-3.5 h-3.5 rounded-md border flex items-center justify-center transition-all shrink-0",
+                                  isActive 
+                                    ? "bg-amber-500 border-amber-500 text-white shadow-sm" 
+                                    : "border-slate-350 bg-white"
+                                )}>
+                                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                </span>
+                                <span className="truncate">{c.name}</span>
+                              </div>
+                              <span className={cn(
+                                "text-[9px] font-mono shrink-0 ml-1.5",
+                                isActive ? "text-amber-600" : "text-slate-400"
+                              )}>
+                                +{Math.round(c.multiplier * 100)}%
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Simulation Parameters Sliders */}
