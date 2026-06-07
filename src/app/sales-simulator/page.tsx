@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import {
   Sliders, RefreshCw, TrendingUp, TrendingDown, Target, Zap, AlertCircle,
-  Megaphone, Users2, ArrowUpRight, CheckCircle2, ChevronRight, Store
+  Megaphone, Users2, ArrowUpRight, CheckCircle2, ChevronRight, Store, HelpCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
@@ -377,7 +377,16 @@ export default function SalesSimulatorPage() {
 
                     {/* Campaign Type Dropdown */}
                     <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 mb-4">
-                      <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">Campaign Model</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block">Campaign Model</label>
+                        <div className="group relative inline-block">
+                          <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-pointer" />
+                          <div className="absolute bottom-full right-0 mb-1.5 w-56 hidden group-hover:block bg-slate-800 text-white text-[9.5px] p-2 rounded-lg shadow-lg z-50 leading-normal font-medium normal-case tracking-normal">
+                            Pengali aktivitas marketing (VIP Event, Public Promo) yang mendongkrak ketertarikan traffic butik.
+                            <div className="absolute top-full right-1.5 border-4 border-transparent border-t-slate-800" />
+                          </div>
+                        </div>
+                      </div>
                       <select
                         aria-label="Campaign Model"
                         value={sim.campaignMultiplier}
@@ -398,6 +407,13 @@ export default function SalesSimulatorPage() {
                           <div className="flex items-center gap-1.5 text-slate-500 font-bold">
                             <Users2 className="w-3.5 h-3.5 text-slate-400" />
                             <span>Daily Footfall (Traffic)</span>
+                            <div className="group relative inline-block">
+                              <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-pointer" />
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-52 hidden group-hover:block bg-slate-800 text-white text-[9.5px] p-2 rounded-lg shadow-lg z-50 leading-normal font-medium text-center normal-case">
+                                Rata-rata jumlah pengunjung fisik yang masuk ke butik per hari.
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                              </div>
+                            </div>
                           </div>
                           <span className="font-black text-slate-800 font-sans">
                             {sim.dailyFootfall} <span className="text-[10px] text-slate-400 font-normal">/day</span>
@@ -425,6 +441,13 @@ export default function SalesSimulatorPage() {
                           <div className="flex items-center gap-1.5 text-slate-500 font-bold">
                             <Users2 className="w-3.5 h-3.5 text-slate-400" />
                             <span>CRM Clienteling Reachout</span>
+                            <div className="group relative inline-block">
+                              <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-pointer" />
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-52 hidden group-hover:block bg-slate-800 text-white text-[9.5px] p-2 rounded-lg shadow-lg z-50 leading-normal font-medium text-center normal-case">
+                                Jumlah pelanggan database CRM yang dihubungi secara personal untuk datang ke butik.
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                              </div>
+                            </div>
                           </div>
                           <span className="font-black text-slate-800 font-sans">
                             {sim.crmOutreach} <span className="text-[10px] text-slate-400 font-normal">contacts</span>
@@ -452,6 +475,13 @@ export default function SalesSimulatorPage() {
                           <div className="flex items-center gap-1.5 text-slate-500 font-bold">
                             <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
                             <span>Conversion Rate (CR)</span>
+                            <div className="group relative inline-block">
+                              <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-pointer" />
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-52 hidden group-hover:block bg-slate-800 text-white text-[9.5px] p-2 rounded-lg shadow-lg z-50 leading-normal font-medium text-center normal-case">
+                                Persentase pengunjung butik yang berhasil dikonversi menjadi transaksi penjualan.
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                              </div>
+                            </div>
                           </div>
                           <span className="font-black text-slate-800 font-sans">
                             {sim.conversionRate.toFixed(1)}%
@@ -479,6 +509,13 @@ export default function SalesSimulatorPage() {
                           <div className="flex items-center gap-1.5 text-slate-500 font-bold">
                             <Store className="w-3.5 h-3.5 text-slate-400" />
                             <span>Average Ticket Size (ATS)</span>
+                            <div className="group relative inline-block">
+                              <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-pointer" />
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-52 hidden group-hover:block bg-slate-800 text-white text-[9.5px] p-2 rounded-lg shadow-lg z-50 leading-normal font-medium text-center normal-case">
+                                Rata-rata nominal nilai belanja per transaksi.
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                              </div>
+                            </div>
                           </div>
                           <span className="font-black text-slate-800 font-sans">
                             {(sim.ats / 1_000_000).toFixed(1)}M
