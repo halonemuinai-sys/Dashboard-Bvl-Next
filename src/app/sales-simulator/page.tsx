@@ -30,11 +30,13 @@ const MONTH_NAMES = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ];
 
-const CAMPAIGN_MULTIPLIERS = [
-  { name: 'Normal Operations', value: 1.0 },
-  { name: 'VIP Private Trunk Show', value: 1.3 },
-  { name: 'Mall Public Promotion', value: 1.15 },
-  { name: 'End of Season Sale', value: 1.25 },
+const CAMPAIGN_OPTIONS = [
+  { id: 'socialMedia', name: 'Social Media (Advisor)', multiplier: 0.10 },
+  { id: 'mallPromo', name: 'Mall Public Promotion', multiplier: 0.15 },
+  { id: 'endSeasonSale', name: 'End of Season Sale', multiplier: 0.25 },
+  { id: 'vipTrunkShow', name: 'VIP Private Trunk Show', multiplier: 0.30 },
+  { id: 'birthdayEvent', name: 'Private Birthday Event', multiplier: 0.35 },
+  { id: 'privateShowing', name: 'Private Viewing/Showing', multiplier: 0.45 },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -64,11 +66,12 @@ export default function SalesSimulatorPage() {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState<number>(now.getMonth()); // 0-indexed
   const [baselineData, setBaselineData] = useState<SimulatorData | null>(null);
+  const [prevBaselineData, setPrevBaselineData] = useState<SimulatorData | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Simulation states per store
   const [simulations, setSimulations] = useState<Record<string, {
-    campaignMultiplier: number;
+    activeCampaigns: Record<string, boolean>;
     dailyFootfall: number;
     crmOutreach: number;
     conversionRate: number;
@@ -78,17 +81,28 @@ export default function SalesSimulatorPage() {
   // Fetch baseline data
   useEffect(() => {
     setLoading(true);
-    dashboardService.getSimulatorBaseline(Number(year), month)
-      .then(res => {
-        setBaselineData(res);
+    let prevYearNum = Number(year);
+    let prevMonthNum = month - 1;
+    if (prevMonthNum < 0) {
+      prevMonthNum = 11;
+      prevYearNum -= 1;
+    }
+
+    Promise.all([
+      dashboardService.getSimulatorBaseline(Number(year), month),
+      dashboardService.getSimulatorBaseline(prevYearNum, prevMonthNum)
+    ])
+      .then(([currRes, prevRes]) => {
+        setBaselineData(currRes);
+        setPrevBaselineData(prevRes);
         // Initialize simulation values from baseline
         const initialSims: typeof simulations = {};
         const daysInMonth = new Date(Number(year), month + 1, 0).getDate();
 
-        Object.entries(res).forEach(([storeName, data]) => {
+        Object.entries(currRes).forEach(([storeName, data]) => {
           const avgDailyFootfall = Math.round(data.footfall / daysInMonth) || 25;
           initialSims[storeName] = {
-            campaignMultiplier: 1.0,
+            activeCampaigns: {},
             dailyFootfall: avgDailyFootfall,
             crmOutreach: Math.round(data.crmLeads * 0.4), // Target 40% CRM contact default
             conversionRate: data.cr,
@@ -105,6 +119,16 @@ export default function SalesSimulatorPage() {
     return new Date(Number(year), month + 1, 0).getDate();
   }, [year, month]);
 
+  const prevDaysInMonth = useMemo(() => {
+    let prevYearNum = Number(year);
+    let prevMonthNum = month - 1;
+    if (prevMonthNum < 0) {
+      prevMonthNum = 11;
+      prevYearNum -= 1;
+    }
+    return new Date(prevYearNum, prevMonthNum + 1, 0).getDate();
+  }, [year, month]);
+
   // Reset function to revert simulation to default baseline
   const handleReset = () => {
     if (!baselineData) return;
@@ -112,7 +136,7 @@ export default function SalesSimulatorPage() {
     Object.entries(baselineData).forEach(([storeName, data]) => {
       const avgDailyFootfall = Math.round(data.footfall / daysInMonth) || 25;
       resetSims[storeName] = {
-        campaignMultiplier: 1.0,
+        activeCampaigns: {},
         dailyFootfall: avgDailyFootfall,
         crmOutreach: Math.round(data.crmLeads * 0.4),
         conversionRate: data.cr,
@@ -144,12 +168,26 @@ export default function SalesSimulatorPage() {
           baseFootfall: Math.round(base.footfall / daysInMonth),
           baseCrm: base.crmLeads,
           baseAts: base.ats,
+          campaignMultiplier: 1.0,
         };
       }
 
+      // Calculate combined multiplier
+      let campaignMultiplier = 1.0;
+      if (sim.activeCampaigns) {
+        Object.entries(sim.activeCampaigns).forEach(([campaignId, active]) => {
+          if (active) {
+            const campaign = CAMPAIGN_OPTIONS.find(c => c.id === campaignId);
+            if (campaign) {
+              campaignMultiplier += campaign.multiplier;
+            }
+          }
+        });
+      }
+
       // Transactions = (Daily Footfall * Days * CampaignMultiplier * CR%) + (CRM Outreach * CRM Conversion Factor)
-      // CRM outreach assumes a 5% baseline conversion rates factor added to standard CR
-      const trafficTransactions = (sim.dailyFootfall * daysInMonth) * sim.campaignMultiplier * (sim.conversionRate / 100);
+      // CRM outreach assumes a 2% baseline conversion rates factor added to standard CR
+      const trafficTransactions = (sim.dailyFootfall * daysInMonth) * campaignMultiplier * (sim.conversionRate / 100);
       const crmTransactions = sim.crmOutreach * ((sim.conversionRate + 2.0) / 100);
       const totalSimTransactions = trafficTransactions + crmTransactions;
 
@@ -172,6 +210,7 @@ export default function SalesSimulatorPage() {
         baseFootfall: Math.round(base.footfall / daysInMonth),
         baseCrm: base.crmLeads,
         baseAts: base.ats,
+        campaignMultiplier,
       };
     });
   }, [baselineData, simulations, daysInMonth]);
@@ -209,6 +248,24 @@ export default function SalesSimulatorPage() {
         [key]: val
       }
     }));
+  };
+
+  const toggleCampaign = (storeName: string, campaignId: string) => {
+    setSimulations(prev => {
+      const storeSim = prev[storeName];
+      if (!storeSim) return prev;
+      const currentActive = storeSim.activeCampaigns || {};
+      return {
+        ...prev,
+        [storeName]: {
+          ...storeSim,
+          activeCampaigns: {
+            ...currentActive,
+            [campaignId]: !currentActive[campaignId]
+          }
+        }
+      };
+    });
   };
 
   const chartData = useMemo(() => {
@@ -377,26 +434,44 @@ export default function SalesSimulatorPage() {
 
                     {/* Campaign Type Dropdown */}
                     <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 mb-4">
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block">Campaign Model</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block">Active Campaigns</label>
                         <div className="group relative inline-block">
                           <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-pointer" />
                           <div className="absolute bottom-full right-0 mb-1.5 w-56 hidden group-hover:block bg-slate-800 text-white text-[9.5px] p-2 rounded-lg shadow-lg z-50 leading-normal font-medium normal-case tracking-normal">
-                            Pengali aktivitas marketing (VIP Event, Public Promo) yang mendongkrak ketertarikan traffic butik.
+                            Pengali aktivitas marketing (VIP Event, Public Promo, Social Media) yang mendongkrak ketertarikan traffic butik. Dapat dipilih lebih dari satu.
                             <div className="absolute top-full right-1.5 border-4 border-transparent border-t-slate-800" />
                           </div>
                         </div>
                       </div>
-                      <select
-                        aria-label="Campaign Model"
-                        value={sim.campaignMultiplier}
-                        onChange={(e) => updateSim(store.name, 'campaignMultiplier', parseFloat(e.target.value))}
-                        className="w-full bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-black text-slate-700 outline-none cursor-pointer"
-                      >
-                        {CAMPAIGN_MULTIPLIERS.map(c => (
-                          <option key={c.name} value={c.value}>{c.name} ({c.value}x)</option>
-                        ))}
-                      </select>
+                      <div className="grid grid-cols-1 gap-1.5 max-h-[120px] overflow-y-auto pr-1">
+                        {CAMPAIGN_OPTIONS.map(c => {
+                          const isActive = !!sim.activeCampaigns?.[c.id];
+                          return (
+                            <label key={c.id} className={cn(
+                              "flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-all select-none",
+                              isActive 
+                                ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm" 
+                                : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50"
+                            )}>
+                              <input
+                                type="checkbox"
+                                checked={isActive}
+                                onChange={() => toggleCampaign(store.name, c.id)}
+                                className="rounded text-blue-600 focus:ring-blue-500 w-3 h-3 cursor-pointer"
+                              />
+                              <span className="flex-1 truncate">{c.name}</span>
+                              <span className={cn("text-[9px] font-mono", isActive ? "text-blue-600" : "text-slate-450")}>
+                                +{Math.round(c.multiplier * 100)}%
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-[9px] text-slate-500 font-bold">
+                        <span>Combined Multiplier:</span>
+                        <span className="text-blue-600 font-sans text-xs font-black">{store.campaignMultiplier.toFixed(2)}x</span>
+                      </div>
                     </div>
 
                     {/* Simulation Parameters Sliders */}
@@ -415,9 +490,16 @@ export default function SalesSimulatorPage() {
                               </div>
                             </div>
                           </div>
-                          <span className="font-black text-slate-800 font-sans">
-                            {sim.dailyFootfall} <span className="text-[10px] text-slate-400 font-normal">/day</span>
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {prevBaselineData && prevBaselineData[store.name] && (
+                              <span className="text-[10px] text-purple-600 font-extrabold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100/80" title="Rata-rata footfall bulan lalu">
+                                Prev: {Math.round(prevBaselineData[store.name].footfall / prevDaysInMonth)}
+                              </span>
+                            )}
+                            <span className="font-black text-slate-800 font-sans">
+                              {sim.dailyFootfall} <span className="text-[10px] text-slate-400 font-normal">/day</span>
+                            </span>
+                          </div>
                         </div>
                         <input
                           type="range"
@@ -449,9 +531,16 @@ export default function SalesSimulatorPage() {
                               </div>
                             </div>
                           </div>
-                          <span className="font-black text-slate-800 font-sans">
-                            {sim.crmOutreach} <span className="text-[10px] text-slate-400 font-normal">contacts</span>
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {prevBaselineData && prevBaselineData[store.name] && (
+                              <span className="text-[10px] text-purple-600 font-extrabold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100/80" title="Outreach database CRM bulan lalu">
+                                Prev: {Math.round(prevBaselineData[store.name].crmLeads * 0.4)}
+                              </span>
+                            )}
+                            <span className="font-black text-slate-800 font-sans">
+                              {sim.crmOutreach} <span className="text-[10px] text-slate-400 font-normal">contacts</span>
+                            </span>
+                          </div>
                         </div>
                         <input
                           type="range"
