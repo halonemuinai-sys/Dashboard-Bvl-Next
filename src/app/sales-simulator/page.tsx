@@ -271,7 +271,6 @@ export default function SalesSimulatorPage() {
               <p className="text-2xl font-black text-slate-800 font-mono">
                 <Amt value={totals.targetTotal} short />
               </p>
-              <p className="text-[10px] text-slate-400 mt-1 font-medium">Berdasarkan data master target Supabase</p>
             </div>
 
             {/* Simulated Sales */}
