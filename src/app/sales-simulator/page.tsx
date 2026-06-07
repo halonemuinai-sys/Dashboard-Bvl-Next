@@ -538,7 +538,7 @@ export default function SalesSimulatorPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             {prevBaselineData && prevBaselineData[store.name] && (
-                              <span className="text-[10px] text-purple-600 font-extrabold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100/80" title="Rata-rata footfall bulan lalu">
+                              <span className="text-[10px] text-slate-650 font-extrabold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/80" title="Rata-rata footfall harian bulan lalu">
                                 Prev: {Math.round(prevBaselineData[store.name].footfall / prevDaysInMonth)}
                               </span>
                             )}
@@ -579,7 +579,7 @@ export default function SalesSimulatorPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             {prevBaselineData && prevBaselineData[store.name] && (
-                              <span className="text-[10px] text-purple-600 font-extrabold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100/80" title="Outreach database CRM bulan lalu">
+                              <span className="text-[10px] text-slate-650 font-extrabold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/80" title="Target outreach CRM bulan lalu (40% dari database)">
                                 Prev: {Math.round(prevBaselineData[store.name].crmLeads * 0.4)}
                               </span>
                             )}
@@ -618,9 +618,16 @@ export default function SalesSimulatorPage() {
                               </div>
                             </div>
                           </div>
-                          <span className="font-black text-slate-800 font-sans">
-                            {sim.conversionRate.toFixed(1)}%
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {prevBaselineData && prevBaselineData[store.name] && (
+                              <span className="text-[10px] text-slate-650 font-extrabold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/80" title="Conversion Rate bulan lalu">
+                                Prev: {prevBaselineData[store.name].cr.toFixed(1)}%
+                              </span>
+                            )}
+                            <span className="font-black text-slate-800 font-sans">
+                              {sim.conversionRate.toFixed(1)}%
+                            </span>
+                          </div>
                         </div>
                         <input
                           type="range"
@@ -652,9 +659,16 @@ export default function SalesSimulatorPage() {
                               </div>
                             </div>
                           </div>
-                          <span className="font-black text-slate-800 font-sans">
-                            {(sim.ats / 1_000_000).toFixed(1)}M
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {prevBaselineData && prevBaselineData[store.name] && (
+                              <span className="text-[10px] text-slate-650 font-extrabold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/80" title="Average Ticket Size bulan lalu">
+                                Prev: {(prevBaselineData[store.name].ats / 1_000_000).toFixed(1)}M
+                              </span>
+                            )}
+                            <span className="font-black text-slate-800 font-sans">
+                              {(sim.ats / 1_000_000).toFixed(1)}M
+                            </span>
+                          </div>
                         </div>
                         <input
                           type="range"
