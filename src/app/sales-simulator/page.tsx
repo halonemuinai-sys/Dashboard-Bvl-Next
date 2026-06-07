@@ -37,6 +37,28 @@ const CAMPAIGN_MULTIPLIERS = [
   { name: 'End of Season Sale', value: 1.25 },
 ];
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-xl text-xs min-w-[180px]">
+      <p className="text-slate-800 font-extrabold mb-2 text-center border-b border-slate-100 pb-1.5">{label}</p>
+      <div className="space-y-1.5">
+        {payload.map((p: any, i: number) => (
+          <div key={i} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.fill || p.color }} />
+              <span className="text-slate-500 font-bold">{p.name}:</span>
+            </div>
+            <span className="text-slate-900 font-black font-mono">
+              Rp {(p.value * 1_000_000).toLocaleString('id-ID')}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function SalesSimulatorPage() {
   const now = new Date();
   const [year, setYear] = useState(String(now.getFullYear()));
@@ -490,25 +512,29 @@ export default function SalesSimulatorPage() {
           {/* ── Section 3: Visual Charts & Action Playbooks ───────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Target vs Simulation Bar Chart (2/3) */}
-            <div className="bg-white rounded-2xl border border-slate-150 p-6 lg:col-span-2">
-              <div className="mb-4">
-                <h3 className="text-sm font-black text-slate-900">Scenario Target Gap Comparison</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Actual Target vs Simulated Performance (in IDR Millions)</p>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 lg:col-span-2">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Scenario Target Gap Comparison</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Actual Target vs Simulated Performance (in IDR Millions)</p>
+                </div>
+                <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400">
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded-sm bg-blue-500 inline-block" /> Simulated Sales</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded-sm bg-slate-300 inline-block" /> Target</span>
+                </div>
               </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="4 4" stroke="#F1F5F9" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{ background: '#0F172A', border: 'none', borderRadius: 12, color: '#fff', fontSize: 11, padding: '10px 14px' }}
-                    labelStyle={{ fontWeight: 800, marginBottom: 4 }}
-                  />
-                  <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: 11, fontWeight: 700 }} />
-                  <Bar dataKey="Target" fill="#94A3B8" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                  <Bar dataKey="Simulated Net Sales" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="h-[260px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="4 4" stroke="#F1F5F9" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} width={48} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="Target" name="Target" fill="#cbd5e1" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Bar dataKey="Simulated Net Sales" name="Simulated Sales" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
             {/* Playbook Penyelamatan Sales (1/3) */}
