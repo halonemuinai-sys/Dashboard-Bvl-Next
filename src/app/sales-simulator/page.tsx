@@ -263,69 +263,83 @@ export default function SalesSimulatorPage() {
           {/* ── Section 1: Global simulated P&L impact ────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
             {/* Total Target */}
-            <div className="bg-white rounded-2xl border border-slate-150 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between">
+              <div className="space-y-1">
                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Target</span>
-                <Target className="w-4 h-4 text-slate-400" />
+                <p className="text-3xl font-black text-slate-800 font-sans leading-none">
+                  {Math.round(totals.targetTotal / 1_000_000_000)}B
+                </p>
+                <span className="text-[10px] text-slate-400 font-bold block uppercase">IDR</span>
               </div>
-              <p className="text-2xl font-black text-slate-800 font-mono">
-                <Amt value={totals.targetTotal} short />
-              </p>
+              <span className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                <Target className="w-5 h-5 text-blue-500" />
+              </span>
             </div>
 
             {/* Simulated Sales */}
-            <div className="bg-white rounded-2xl border border-slate-150 p-5 shadow-sm relative overflow-hidden">
-              <div className="flex items-center justify-between mb-2">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between">
+              <div className="space-y-1">
                 <span className="text-[10px] uppercase font-bold text-blue-500 tracking-wider">Projected Sim Sales</span>
-                <Zap className="w-4 h-4 text-blue-500" />
+                <div className="flex items-baseline gap-1">
+                  <p className="text-3xl font-black text-blue-600 font-sans leading-none">
+                    {(totals.simTotal / 1_000_000_000).toFixed(1)}B
+                  </p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">IDR</span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-semibold leading-none">
+                  Baseline: {(totals.baseTotal / 1_000_000_000).toFixed(1)}B
+                </div>
               </div>
-              <p className="text-2xl font-black text-blue-600 font-mono">
-                <Amt value={totals.simTotal} short />
-              </p>
-              <div className="flex items-center gap-1 mt-1 text-[10px] font-bold text-slate-400">
-                <span>Baseline:</span>
-                <span className="text-slate-600 font-mono"><Amt value={totals.baseTotal} short /></span>
-              </div>
+              <span className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-5 h-5 text-blue-500" />
+              </span>
             </div>
 
             {/* Gap to Target */}
-            <div className={cn("rounded-2xl border p-5 shadow-sm",
-              totals.gap >= 0 ? "bg-emerald-50/40 border-emerald-100" : "bg-rose-50/40 border-rose-100"
-            )}>
-              <div className="flex items-center justify-between mb-2">
-                <span className={cn("text-[10px] uppercase font-bold tracking-wider",
-                  totals.gap >= 0 ? "text-emerald-600" : "text-rose-500"
-                )}>Gap / Excess</span>
-                {totals.gap >= 0 ? (
-                  <TrendingUp className="w-4 h-4 text-emerald-500" />
-                ) : (
-                  <TrendingDown className="w-4 h-4 text-rose-500" />
-                )}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Gap / Excess</span>
+                <div className="flex items-baseline gap-1">
+                  <p className={cn("text-3xl font-black font-sans leading-none",
+                    totals.gap >= 0 ? "text-emerald-500" : "text-rose-500"
+                  )}>
+                    {totals.gap >= 0 ? '+' : ''}{(totals.gap / 1_000_000_000).toFixed(1)}B
+                  </p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">IDR</span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-semibold leading-none">
+                  Selisih proyeksi simulasi dengan target
+                </div>
               </div>
-              <p className={cn("text-2xl font-black font-mono",
-                totals.gap >= 0 ? "text-emerald-700" : "text-rose-650"
+              <span className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                totals.gap >= 0 ? "bg-emerald-50" : "bg-rose-50"
               )}>
-                {totals.gap >= 0 ? '+' : ''}<Amt value={totals.gap} short />
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1 font-medium">Selisih proyeksi simulasi dengan target</p>
+                {totals.gap >= 0 ? (
+                  <TrendingUp className="w-5 h-5 text-emerald-500" />
+                ) : (
+                  <TrendingDown className="w-5 h-5 text-rose-500" />
+                )}
+              </span>
             </div>
 
             {/* Achievement Rate */}
-            <div className="bg-white rounded-2xl border border-slate-150 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Projected Achv Rate</span>
-                <span className={cn("text-xs font-black px-1.5 py-0.5 rounded-full font-mono",
-                  totals.achv >= 100 ? "bg-emerald-50 text-emerald-700" : totals.achv >= 80 ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Projected Achv Rate</span>
+                <span className={cn("text-sm font-black px-1.5 py-0.5 rounded-full font-mono",
+                  totals.achv >= 100 ? "text-emerald-500" : totals.achv >= 80 ? "text-amber-500" : "text-rose-500"
                 )}>
                   {totals.achv.toFixed(1)}%
                 </span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-2 mt-3 overflow-hidden">
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden my-1.5">
                 <div className={cn("h-full rounded-full transition-all duration-500",
                   totals.achv >= 100 ? "bg-emerald-500" : totals.achv >= 80 ? "bg-amber-400" : "bg-rose-500"
                 )} style={{ width: `${Math.min(totals.achv, 100)}%` }} />
               </div>
-              <p className="text-[9px] text-slate-400 mt-1.5 font-bold">Rasio pencapaian target kumulatif butik</p>
+              <span className="text-[10px] text-slate-400 font-semibold leading-none">
+                Rasio pencapaian target kumulatif butik
+              </span>
             </div>
           </div>
 
@@ -337,35 +351,32 @@ export default function SalesSimulatorPage() {
 
               return (
                 <div key={store.name} className={cn(
-                  "bg-white rounded-2xl border shadow-md p-5 flex flex-col justify-between transition-all duration-300 relative overflow-hidden",
-                  store.isMet ? "border-emerald-100 hover:border-emerald-300 hover:shadow-emerald-50" : "border-slate-200 hover:border-blue-200"
+                  "bg-white rounded-2xl border shadow-md p-5 flex flex-col justify-between transition-all duration-300 relative overflow-hidden border-slate-200/85 hover:shadow-lg",
+                  store.isMet && "hover:border-emerald-300 hover:shadow-emerald-50/20"
                 )}>
-                  {/* Store Status Accent Top */}
-                  <div className={cn("absolute top-0 left-0 right-0 h-1",
-                    store.isMet ? "bg-emerald-500" : "bg-slate-200"
-                  )} />
-
                   <div>
                     {/* Title */}
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-1.5">
-                          <Store className="w-4 h-4 text-slate-500" />
-                          <span>{store.name}</span>
-                        </h3>
-                        <p className="text-[10px] text-slate-400 font-bold mt-0.5 uppercase tracking-wide">
-                          Target: <Amt value={store.target} short />
-                        </p>
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 text-white shadow-sm shadow-blue-200">
+                          <Store className="w-5 h-5" />
+                        </span>
+                        <div>
+                          <h3 className="font-extrabold text-slate-800 text-base leading-tight">{store.name}</h3>
+                          <p className="text-[10px] text-slate-400 font-bold mt-0.5 uppercase tracking-wide">
+                            Target: {Math.round(store.target / 1_000_000_000)}B
+                          </p>
+                        </div>
                       </div>
-                      <span className={cn("text-xs font-black px-2 py-0.5 rounded-full font-mono",
-                        store.isMet ? "bg-emerald-50 text-emerald-700" : store.achv >= 80 ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-600"
+                      <span className={cn("text-xs font-black px-2 py-0.5 rounded-full font-mono border",
+                        store.isMet ? "bg-emerald-50 text-emerald-600 border-emerald-100" : store.achv >= 80 ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-rose-50 text-rose-600 border-rose-100"
                       )}>
                         {store.achv.toFixed(1)}%
                       </span>
                     </div>
 
                     {/* Campaign Type Dropdown */}
-                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-4">
+                    <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 mb-4">
                       <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">Campaign Model</label>
                       <select
                         aria-label="Campaign Model"
@@ -384,9 +395,12 @@ export default function SalesSimulatorPage() {
                       {/* Parameter 1: Daily Footfall */}
                       <div>
                         <div className="flex justify-between items-center text-xs mb-1">
-                          <span className="text-slate-500 font-bold">Daily Footfall (Traffic)</span>
-                          <span className="font-black text-slate-800 font-mono">
-                            {sim.dailyFootfall} <span className="text-[10px] text-slate-400">/day</span>
+                          <div className="flex items-center gap-1.5 text-slate-500 font-bold">
+                            <Users2 className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Daily Footfall (Traffic)</span>
+                          </div>
+                          <span className="font-black text-slate-800 font-sans">
+                            {sim.dailyFootfall} <span className="text-[10px] text-slate-400 font-normal">/day</span>
                           </span>
                         </div>
                         <input
@@ -408,15 +422,18 @@ export default function SalesSimulatorPage() {
                       {/* Parameter 2: CRM Outreach */}
                       <div>
                         <div className="flex justify-between items-center text-xs mb-1">
-                          <span className="text-slate-500 font-bold">CRM Clienteling Reachout</span>
-                          <span className="font-black text-slate-800 font-mono">
-                            {sim.crmOutreach} <span className="text-[10px] text-slate-400">contacts</span>
+                          <div className="flex items-center gap-1.5 text-slate-500 font-bold">
+                            <Users2 className="w-3.5 h-3.5 text-slate-400" />
+                            <span>CRM Clienteling Reachout</span>
+                          </div>
+                          <span className="font-black text-slate-800 font-sans">
+                            {sim.crmOutreach} <span className="text-[10px] text-slate-400 font-normal">contacts</span>
                           </span>
                         </div>
                         <input
                           type="range"
                           min="0"
-                          max="500"
+                          max={store.baseCrm}
                           step="10"
                           value={sim.crmOutreach}
                           onChange={(e) => updateSim(store.name, 'crmOutreach', parseInt(e.target.value))}
@@ -425,15 +442,18 @@ export default function SalesSimulatorPage() {
                         <div className="flex justify-between text-[8px] text-slate-400 font-bold mt-1">
                           <span>Min: 0</span>
                           <span>Max database: {store.baseCrm}</span>
-                          <span>Max: 500</span>
+                          <span>Max: {store.baseCrm}</span>
                         </div>
                       </div>
 
                       {/* Parameter 3: Conversion Rate */}
                       <div>
                         <div className="flex justify-between items-center text-xs mb-1">
-                          <span className="text-slate-500 font-bold">Conversion Rate (CR)</span>
-                          <span className="font-black text-slate-800 font-mono">
+                          <div className="flex items-center gap-1.5 text-slate-500 font-bold">
+                            <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Conversion Rate (CR)</span>
+                          </div>
+                          <span className="font-black text-slate-800 font-sans">
                             {sim.conversionRate.toFixed(1)}%
                           </span>
                         </div>
@@ -456,15 +476,18 @@ export default function SalesSimulatorPage() {
                       {/* Parameter 4: Average Ticket Size */}
                       <div>
                         <div className="flex justify-between items-center text-xs mb-1">
-                          <span className="text-slate-500 font-bold">Average Ticket Size (ATS)</span>
-                          <span className="font-black text-slate-800 font-mono">
-                            <Amt value={sim.ats} short />
+                          <div className="flex items-center gap-1.5 text-slate-500 font-bold">
+                            <Store className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Average Ticket Size (ATS)</span>
+                          </div>
+                          <span className="font-black text-slate-800 font-sans">
+                            {(sim.ats / 1_000_000).toFixed(1)}M
                           </span>
                         </div>
                         <input
                           type="range"
                           min="5000000"
-                          max="100000000"
+                          max="300000000"
                           step="1000000"
                           value={sim.ats}
                           onChange={(e) => updateSim(store.name, 'ats', parseInt(e.target.value))}
@@ -472,8 +495,8 @@ export default function SalesSimulatorPage() {
                         />
                         <div className="flex justify-between text-[8px] text-slate-400 font-bold mt-1">
                           <span>Min: 5M</span>
-                          <span>Base: <Amt value={store.baseAts} short /></span>
-                          <span>Max: 100M</span>
+                          <span>Base: {(store.baseAts / 1_000_000).toFixed(1)}M</span>
+                          <span>Max: 300M</span>
                         </div>
                       </div>
                     </div>
@@ -481,12 +504,12 @@ export default function SalesSimulatorPage() {
 
                   {/* Simulated Result Box for Store */}
                   <div className={cn("mt-6 border p-3.5 rounded-xl flex items-center justify-between",
-                    store.isMet ? "bg-emerald-50/50 border-emerald-100 text-emerald-800" : "bg-blue-50/30 border-blue-100 text-blue-900"
+                    store.isMet ? "bg-emerald-50/30 border-emerald-100 text-emerald-800" : "bg-blue-50/20 border-blue-100 text-blue-900"
                   )}>
                     <div>
                       <span className="text-[9px] uppercase font-extrabold tracking-wider block text-slate-400 mb-0.5">Projected Net Sales</span>
-                      <span className="text-lg font-black font-mono">
-                        <Amt value={store.simSales} />
+                      <span className="text-lg font-black font-sans tracking-tight">
+                        {store.simSales.toLocaleString('id-ID')}
                       </span>
                     </div>
                     {store.isMet ? (
@@ -498,7 +521,7 @@ export default function SalesSimulatorPage() {
                       <div className="text-right">
                         <span className="text-[9px] text-slate-400 block font-bold">Kekurangan:</span>
                         <span className="text-xs font-bold text-rose-500 font-mono">
-                          -<Amt value={Math.max(0, store.target - store.simSales)} short />
+                          -{(Math.max(0, store.target - store.simSales) / 1_000_000).toFixed(0)}M
                         </span>
                       </div>
                     )}
@@ -552,9 +575,13 @@ export default function SalesSimulatorPage() {
                 <div className="space-y-4 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
                   {simulatedResults.every(r => r.isMet) ? (
                     <div className="flex flex-col items-center justify-center text-center py-6">
-                      <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-2 animate-bounce" />
-                      <p className="text-xs font-black text-emerald-300">Target Semua Store Terpenuhi!</p>
-                      <p className="text-[10px] text-slate-400 mt-1">Skenario saat ini aman dan berada di atas target. Pastikan tim retail menjaga tingkat kepuasan pelanggan.</p>
+                      <div className="w-16 h-16 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center mb-3">
+                        <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                          <CheckCircle2 className="w-7 h-7 text-emerald-450" />
+                        </div>
+                      </div>
+                      <p className="text-xs font-black text-emerald-400">Target Semua Store Terpenuhi!</p>
+                      <p className="text-[10px] text-slate-400 mt-1.5 max-w-[240px] leading-relaxed">Skenario saat ini aman dan berada di atas target. Pastikan tim retail menjaga tingkat kepuasan pelanggan.</p>
                     </div>
                   ) : (
                     simulatedResults.map(r => {

@@ -1959,9 +1959,9 @@ export const dashboardService = {
         sales: 0,
         transactions: 0,
         footfall: 0,
-        target: 0,
-        crmLeads: Math.round((crmData?.length || 150) / 3),
-        ats: s === 'Plaza Indonesia' ? 35_000_000 : s === 'Plaza Senayan' ? 30_000_000 : 40_000_000,
+        target: s === 'Plaza Indonesia' ? 12_000_000_000 : 4_000_000_000,
+        crmLeads: 2762,
+        ats: s === 'Plaza Indonesia' ? 223_600_000 : s === 'Plaza Senayan' ? 84_000_000 : 74_500_000,
         cr: s === 'Plaza Indonesia' ? 2.5 : s === 'Plaza Senayan' ? 2.0 : 3.0
       };
     });
@@ -1991,10 +1991,11 @@ export const dashboardService = {
       }
     });
 
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
     stores.forEach(s => {
       const store = baseline[s];
       if (store.target === 0) {
-        store.target = s === 'Plaza Indonesia' ? 3_000_000_000 : s === 'Plaza Senayan' ? 2_000_000_000 : 2_500_000_000;
+        store.target = s === 'Plaza Indonesia' ? 12_000_000_000 : 4_000_000_000;
       }
       if (store.transactions > 0 && store.sales > 0) {
         store.ats = Math.round(store.sales / store.transactions);
@@ -2002,7 +2003,7 @@ export const dashboardService = {
       if (store.footfall > 0 && store.transactions > 0) {
         store.cr = parseFloat(((store.transactions / store.footfall) * 100).toFixed(2));
       } else {
-        store.footfall = Math.round(store.transactions / (store.cr / 100)) || (s === 'Plaza Indonesia' ? 800 : s === 'Plaza Senayan' ? 600 : 700);
+        store.footfall = Math.round(store.transactions / (store.cr / 100)) || (s === 'Plaza Indonesia' ? 40 * daysInMonth : s === 'Plaza Senayan' ? 7 * daysInMonth : 16 * daysInMonth);
       }
     });
 
