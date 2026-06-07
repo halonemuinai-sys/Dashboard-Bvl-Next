@@ -70,6 +70,7 @@ const MENU_GROUPS = [
       { path: '/annual-sales',        label: 'Annual Net Sales' },
       { path: '/store-performance',   label: 'Store Performance' },
       { path: '/forecasting',         label: 'Forecasting (AI)' },
+      { path: '/sales-simulator',     label: 'Sales Simulator' },
     ],
   },
   {

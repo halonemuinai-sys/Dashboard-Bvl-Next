@@ -1913,6 +1913,101 @@ export const dashboardService = {
       seasonalPattern,
     };
   },
+  async getSimulatorBaseline(year: number, month: number) {
+    const monthNum = month + 1; // 1-indexed
+    const mStart = `${year}-${String(monthNum).padStart(2, '0')}-01T00:00:00`;
+    const mEndStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}T23:59:59`;
+
+    const [
+      { data: salesData },
+      { data: targetData },
+      { data: footfallData },
+      { data: crmData }
+    ] = await Promise.all([
+      supabase.from('clean_master')
+        .select('location, net_sales, qty')
+        .gte('transaction_date', mStart)
+        .lte('transaction_date', mEndStr),
+      supabase.from('targets')
+        .select('store_name, target_value')
+        .eq('year', year)
+        .eq('month_number', monthNum),
+      supabase.from('footfall_store')
+        .select('location, traffic_count')
+        .gte('transaction_date', mStart.slice(0, 10))
+        .lte('transaction_date', mEndStr.slice(0, 10)),
+      supabase.from('crm_profiling')
+        .select('id')
+    ]);
+
+    const isHO = (l: string) => l.toLowerCase().includes('head office') || l.toLowerCase() === 'ho';
+    const cleanLoc = (l: string) => (l || '').trim();
+
+    const stores = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+    const baseline: Record<string, {
+      sales: number;
+      transactions: number;
+      footfall: number;
+      target: number;
+      crmLeads: number;
+      ats: number;
+      cr: number;
+    }> = {};
+
+    stores.forEach(s => {
+      baseline[s] = {
+        sales: 0,
+        transactions: 0,
+        footfall: 0,
+        target: 0,
+        crmLeads: Math.round((crmData?.length || 150) / 3),
+        ats: s === 'Plaza Indonesia' ? 35_000_000 : s === 'Plaza Senayan' ? 30_000_000 : 40_000_000,
+        cr: s === 'Plaza Indonesia' ? 2.5 : s === 'Plaza Senayan' ? 2.0 : 3.0
+      };
+    });
+
+    (salesData || []).forEach(r => {
+      const loc = cleanLoc(r.location || '');
+      const matchedStore = stores.find(s => loc.toLowerCase().includes(s.toLowerCase()));
+      if (matchedStore) {
+        baseline[matchedStore].sales += (r.net_sales || 0);
+        baseline[matchedStore].transactions += 1;
+      }
+    });
+
+    (targetData || []).forEach(t => {
+      const name = cleanLoc(t.store_name || '');
+      const matchedStore = stores.find(s => name.toLowerCase().includes(s.toLowerCase()));
+      if (matchedStore) {
+        baseline[matchedStore].target = t.target_value || 0;
+      }
+    });
+
+    (footfallData || []).forEach(f => {
+      const loc = cleanLoc(f.location || '');
+      const matchedStore = stores.find(s => loc.toLowerCase().includes(s.toLowerCase()));
+      if (matchedStore) {
+        baseline[matchedStore].footfall += (f.traffic_count || 0);
+      }
+    });
+
+    stores.forEach(s => {
+      const store = baseline[s];
+      if (store.target === 0) {
+        store.target = s === 'Plaza Indonesia' ? 3_000_000_000 : s === 'Plaza Senayan' ? 2_000_000_000 : 2_500_000_000;
+      }
+      if (store.transactions > 0 && store.sales > 0) {
+        store.ats = Math.round(store.sales / store.transactions);
+      }
+      if (store.footfall > 0 && store.transactions > 0) {
+        store.cr = parseFloat(((store.transactions / store.footfall) * 100).toFixed(2));
+      } else {
+        store.footfall = Math.round(store.transactions / (store.cr / 100)) || (s === 'Plaza Indonesia' ? 800 : s === 'Plaza Senayan' ? 600 : 700);
+      }
+    });
+
+    return baseline;
+  },
 
   async getCategorySalesTrend(baseYear: number) {
     const years = [baseYear - 3, baseYear - 2, baseYear - 1, baseYear];

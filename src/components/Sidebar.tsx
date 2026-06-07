@@ -29,6 +29,7 @@ import {
   LogOut,
   ShieldCheck,
   Boxes,
+  Sliders,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -56,6 +57,7 @@ const menuGroups = [
       { name: 'Annual Net Sales',    icon: TrendingUp,      href: '/annual-sales' },
       { name: 'Store Performance',   icon: Store,           href: '/store-performance' },
       { name: 'Forecasting',         icon: LineChart,       href: '/forecasting', badge: 'AI', badgeColor: 'bg-indigo-500' },
+      { name: 'Sales Simulator',     icon: Sliders,         href: '/sales-simulator', badge: 'NEW', badgeColor: 'bg-indigo-500' },
     ]
   },
   {
