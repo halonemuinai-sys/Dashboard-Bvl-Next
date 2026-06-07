@@ -78,6 +78,15 @@ export default function SalesSimulatorPage() {
     ats: number;
   }>>({});
 
+  const [openCampaignDropdown, setOpenCampaignDropdown] = useState<Record<string, boolean>>({});
+
+  const toggleDropdown = (storeName: string) => {
+    setOpenCampaignDropdown(prev => ({
+      ...prev,
+      [storeName]: !prev[storeName]
+    }));
+  };
+
   // Fetch baseline data
   useEffect(() => {
     setLoading(true);
@@ -408,7 +417,7 @@ export default function SalesSimulatorPage() {
 
               return (
                 <div key={store.name} className={cn(
-                  "bg-white rounded-2xl border shadow-md p-5 flex flex-col justify-between transition-all duration-300 relative overflow-hidden border-slate-200/85 hover:shadow-lg",
+                  "bg-white rounded-2xl border shadow-md p-5 flex flex-col justify-between transition-all duration-300 relative border-slate-200/85 hover:shadow-lg",
                   store.isMet && "hover:border-emerald-300 hover:shadow-emerald-50/20"
                 )}>
                   <div>
@@ -433,8 +442,8 @@ export default function SalesSimulatorPage() {
                     </div>
 
                     {/* Campaign Type Dropdown */}
-                    <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 mb-4">
-                      <div className="flex items-center justify-between mb-2">
+                    <div className="relative mb-4">
+                      <div className="flex items-center justify-between mb-1.5">
                         <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block">Active Campaigns</label>
                         <div className="group relative inline-block">
                           <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-pointer" />
@@ -444,34 +453,71 @@ export default function SalesSimulatorPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 gap-1.5 max-h-[120px] overflow-y-auto pr-1">
-                        {CAMPAIGN_OPTIONS.map(c => {
-                          const isActive = !!sim.activeCampaigns?.[c.id];
-                          return (
-                            <label key={c.id} className={cn(
-                              "flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-all select-none",
-                              isActive 
-                                ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm" 
-                                : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50"
-                            )}>
-                              <input
-                                type="checkbox"
-                                checked={isActive}
-                                onChange={() => toggleCampaign(store.name, c.id)}
-                                className="rounded text-blue-600 focus:ring-blue-500 w-3 h-3 cursor-pointer"
-                              />
-                              <span className="flex-1 truncate">{c.name}</span>
-                              <span className={cn("text-[9px] font-mono", isActive ? "text-blue-600" : "text-slate-450")}>
-                                +{Math.round(c.multiplier * 100)}%
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-[9px] text-slate-500 font-bold">
-                        <span>Combined Multiplier:</span>
-                        <span className="text-blue-600 font-sans text-xs font-black">{store.campaignMultiplier.toFixed(2)}x</span>
-                      </div>
+
+                      {/* Dropdown Toggle Button */}
+                      <button
+                        type="button"
+                        onClick={() => toggleDropdown(store.name)}
+                        className="w-full flex items-center justify-between bg-slate-50/80 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 px-3.5 py-2.5 rounded-xl text-[11px] font-bold text-slate-700 shadow-sm transition-all focus:outline-none"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Megaphone className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                          <span className="truncate">
+                            {Object.entries(sim.activeCampaigns || {}).filter(([_, val]) => val).length > 0
+                              ? Object.entries(sim.activeCampaigns || {})
+                                  .filter(([_, val]) => val)
+                                  .map(([id]) => CAMPAIGN_OPTIONS.find(c => c.id === id)?.name)
+                                  .join(', ')
+                              : 'Pilih Kampanye Aktif...'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-extrabold text-amber-700 shrink-0 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100/60 ml-2">
+                          {store.campaignMultiplier.toFixed(2)}x
+                        </span>
+                      </button>
+
+                      {/* Dropdown Menu Popup */}
+                      {openCampaignDropdown[store.name] && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => toggleDropdown(store.name)} />
+                          <div className="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200/90 rounded-xl p-1.5 shadow-xl z-50 space-y-0.5 max-h-[200px] overflow-y-auto">
+                            {CAMPAIGN_OPTIONS.map(c => {
+                              const isActive = !!sim.activeCampaigns?.[c.id];
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => toggleCampaign(store.name, c.id)}
+                                  className={cn(
+                                    "w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[10px] font-bold text-left transition-all border",
+                                    isActive
+                                      ? "bg-amber-50/40 border-amber-200 text-amber-900 font-extrabold"
+                                      : "bg-white border-transparent text-slate-650 hover:bg-slate-50 hover:border-slate-100"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className={cn(
+                                      "w-3.5 h-3.5 rounded-md border flex items-center justify-center transition-all shrink-0",
+                                      isActive 
+                                        ? "bg-amber-500 border-amber-500 text-white shadow-sm" 
+                                        : "border-slate-350 bg-white"
+                                    )}>
+                                      {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    </span>
+                                    <span className="truncate">{c.name}</span>
+                                  </div>
+                                  <span className={cn(
+                                    "text-[9px] font-mono shrink-0 ml-1.5",
+                                    isActive ? "text-amber-600" : "text-slate-400"
+                                  )}>
+                                    +{Math.round(c.multiplier * 100)}%
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* Simulation Parameters Sliders */}
