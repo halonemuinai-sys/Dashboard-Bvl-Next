@@ -1918,6 +1918,16 @@ export const dashboardService = {
     const mStart = `${year}-${String(monthNum).padStart(2, '0')}-01T00:00:00`;
     const mEndStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}T23:59:59`;
 
+    // Available CRM database for the current simulated month is up to the end of the previous month
+    let prevYearForCrm = year;
+    let prevMonthForCrm = month; // if month = 5 (June), prevMonthForCrm = 5 (May)
+    if (prevMonthForCrm === 0) {
+      prevMonthForCrm = 12;
+      prevYearForCrm = year - 1;
+    }
+    const lastDayOfPrevCrmMonth = new Date(prevYearForCrm, prevMonthForCrm, 0).getDate();
+    const crmCutoffDate = `${prevYearForCrm}-${String(prevMonthForCrm).padStart(2, '0')}-${String(lastDayOfPrevCrmMonth).padStart(2, '0')}`;
+
     const [
       { data: salesData },
       { data: targetData },
@@ -1938,6 +1948,7 @@ export const dashboardService = {
         .lte('transaction_date', mEndStr.slice(0, 10)),
       supabase.from('crm_profiling')
         .select('lokasi_store')
+        .lte('tanggal_input', crmCutoffDate)
     ]);
 
     const isHO = (l: string) => l.toLowerCase().includes('head office') || l.toLowerCase() === 'ho';
