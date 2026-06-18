@@ -13,7 +13,8 @@ import {
   TrendingUp,
   Clock,
   RefreshCw,
-  MessageCircle
+  MessageCircle,
+  FileSpreadsheet
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
@@ -35,6 +36,7 @@ export default function DailyReportPage() {
   const [data, setData] = useState<any>(null);
   const [sending, setSending] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   const handleSendEmail = async () => {
     if (!confirm(`Are you sure you want to send the Daily Report for ${date}?`)) return;
@@ -108,6 +110,418 @@ export default function DailyReportPage() {
     pdf.addImage(imgData, 'JPEG', xPos, 0, drawWidth, drawHeight);
     
     pdf.save(`Daily Sales Report - ${date}.pdf`);
+  };
+
+  const handleDownloadExcel = async () => {
+    setExportingExcel(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'MRA Retail BI Dashboard';
+      wb.created = new Date();
+
+      const C = {
+        navyBg:     '1E3A5F',
+        navyText:   'FFFFFF',
+        slateBg:    '475569',
+        slateText:  'FFFFFF',
+        lightBg:    'F8FAFC',
+        accentBg:   'F1F5F9',
+        border:     'E2E8F0',
+        greenText:  '059669',
+        amberText:  'D97706',
+        redText:    'DC2626',
+        summaryBg:  'F0FDF4',
+      };
+
+      const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
+      const borderAll = (color = C.border) => ({
+        top: thinBorder(color), bottom: thinBorder(color),
+        left: thinBorder(color), right: thinBorder(color)
+      });
+      const numFmt = 'Rp #,##0;[Red](Rp #,##0);"-"';
+      const pctFmt = '0.0%';
+
+      const formattedDate = new Date(date).toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+
+      // SHEET 1: Overview
+      const wsOverview = wb.addWorksheet('Overview', {
+        views: [{ showGridLines: true }]
+      });
+
+      wsOverview.columns = [
+        { width: 26 },
+        { width: 18 },
+        { width: 18 },
+        { width: 18 },
+        { width: 14 },
+        { width: 18 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 }
+      ];
+
+      wsOverview.mergeCells('A1:I1');
+      const titleCell = wsOverview.getCell('A1');
+      titleCell.value = 'BVLGARI - DAILY SALES REPORT';
+      titleCell.font = { name: 'Georgia', bold: true, size: 16, color: { argb: 'FF' + C.navyBg } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      wsOverview.getRow(1).height = 36;
+
+      wsOverview.mergeCells('A2:I2');
+      const dateCell = wsOverview.getCell('A2');
+      dateCell.value = formattedDate;
+      dateCell.font = { name: 'Arial', italic: true, size: 10, color: { argb: 'FF64748B' } };
+      dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      wsOverview.getRow(2).height = 20;
+
+      wsOverview.addRow([]);
+
+      const secRow1 = wsOverview.addRow(['GLOBAL OVERVIEW']);
+      secRow1.getCell(1).font = { name: 'Arial', bold: true, size: 11, color: { argb: 'FF' + C.navyBg } };
+      wsOverview.mergeCells('A4:I4');
+      wsOverview.getRow(4).height = 24;
+
+      const gHeaders = ['Metric Name', 'MTD Value', 'Target / Status', 'Achievement %', 'Cost % (MTD)', 'Average Discount'];
+      const gHdrRow = wsOverview.addRow(gHeaders);
+      gHdrRow.height = 26;
+      gHdrRow.eachCell((cell, colNumber) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.navyBg } };
+        cell.font = { name: 'Arial', bold: true, color: { argb: 'FF' + C.navyText }, size: 9.5 };
+        cell.alignment = { vertical: 'middle', horizontal: colNumber === 1 ? 'left' : 'right' };
+        cell.border = borderAll(C.navyBg);
+      });
+
+      const kpis = data.globalKPIs;
+      const kpiRows = [
+        ['Total Sales (Incl. HO)', kpis.totalSales, kpis.globalTarget, kpis.globalAchievement / 100, kpis.mtdCostPct / 100, kpis.avgDiscMtd / 100],
+        ['Store Sales (Excl. HO)', kpis.storeSales, `Growth: ${kpis.storeSalesGrowth >= 0 ? '+' : ''}${kpis.storeSalesGrowth.toFixed(1)}%`, '-', '-', '-']
+      ];
+
+      kpiRows.forEach((kRowData, idx) => {
+        const row = wsOverview.addRow(kRowData);
+        row.height = 22;
+        row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+          cell.border = borderAll();
+          cell.font = { name: 'Arial', size: 10 };
+          if (idx % 2 === 1) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+          }
+          if (colIdx === 1) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          } else if (colIdx === 2) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            cell.numFmt = numFmt;
+          } else if (colIdx === 3) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            if (typeof cell.value === 'number') {
+              cell.numFmt = numFmt;
+            } else {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+              cell.font = { name: 'Arial', size: 10, bold: true };
+            }
+          } else if (colIdx === 4) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            if (typeof cell.value === 'number') {
+              cell.numFmt = pctFmt;
+              cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF' + (cell.value >= 1.0 ? C.greenText : C.amberText) } };
+            } else {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            }
+          } else if (colIdx === 5 || colIdx === 6) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            if (typeof cell.value === 'number') {
+              cell.numFmt = pctFmt;
+            } else {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            }
+          }
+        });
+      });
+
+      wsOverview.addRow([]);
+      wsOverview.addRow([]);
+
+      const boutiqueStartRow = wsOverview.rowCount + 1;
+      const secRow2 = wsOverview.addRow(['BOUTIQUE PERFORMANCE SUMMARY']);
+      secRow2.getCell(1).font = { name: 'Arial', bold: true, size: 11, color: { argb: 'FF' + C.navyBg } };
+      wsOverview.mergeCells(`A${boutiqueStartRow}:I${boutiqueStartRow}`);
+      wsOverview.getRow(boutiqueStartRow).height = 24;
+
+      const bHeaders = [
+        'Boutique Name', 
+        "Today's Sales", 
+        'MTD Sales', 
+        'MTD Target', 
+        'Achv %', 
+        'Rem. to Target', 
+        'MTD Cost %', 
+        'MTD MDR %', 
+        'Avg Disc MTD'
+      ];
+      const bHdrRow = wsOverview.addRow(bHeaders);
+      bHdrRow.height = 26;
+      bHdrRow.eachCell((cell, colNumber) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.slateBg } };
+        cell.font = { name: 'Arial', bold: true, color: { argb: 'FF' + C.slateText }, size: 9.5 };
+        cell.alignment = { vertical: 'middle', horizontal: colNumber === 1 ? 'left' : 'right' };
+        cell.border = borderAll(C.slateBg);
+      });
+
+      data.stores.forEach((store: any, idx: number) => {
+        const row = wsOverview.addRow([
+          store.storeName,
+          store.metrics.todaySales,
+          store.metrics.mtdSales,
+          store.metrics.target,
+          store.metrics.achievement / 100,
+          store.metrics.remaining,
+          store.metrics.mtdCostPct / 100,
+          store.metrics.mtdMdrPct / 100,
+          store.metrics.avgDiscMtd / 100
+        ]);
+        row.height = 22;
+        row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+          cell.border = borderAll();
+          cell.font = { name: 'Arial', size: 9.5 };
+          
+          if (idx % 2 === 1) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+          }
+
+          if (colIdx === 1) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: false };
+            cell.font = { name: 'Arial', bold: true, size: 9.5 };
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            if (colIdx === 2 || colIdx === 3 || colIdx === 4 || colIdx === 6) {
+              cell.numFmt = numFmt;
+            } else if (colIdx === 5) {
+              cell.numFmt = pctFmt;
+              const val = cell.value as number;
+              cell.font = { 
+                name: 'Arial', 
+                bold: true, 
+                size: 9.5, 
+                color: { argb: 'FF' + (val >= 1.0 ? C.greenText : val >= 0.8 ? C.amberText : C.redText) } 
+              };
+            } else {
+              cell.numFmt = pctFmt;
+            }
+          }
+        });
+      });
+
+      const storeTotalSalesToday = data.stores.reduce((acc: number, s: any) => acc + s.metrics.todaySales, 0);
+      const storeTotalSalesMtd = data.stores.reduce((acc: number, s: any) => acc + s.metrics.todaySales ? s.metrics.mtdSales : 0, 0);
+      const storeTotalTarget = data.stores.reduce((acc: number, s: any) => acc + s.metrics.target, 0);
+      const storeTotalRemaining = data.stores.reduce((acc: number, s: any) => acc + s.metrics.remaining, 0);
+      const overallAchv = storeTotalTarget > 0 ? (storeTotalSalesMtd / storeTotalTarget) : 0;
+      
+      const totRow = wsOverview.addRow([
+        'Total Boutiques',
+        storeTotalSalesToday,
+        storeTotalSalesMtd,
+        storeTotalTarget,
+        overallAchv,
+        storeTotalRemaining,
+        '-',
+        '-',
+        '-'
+      ]);
+      totRow.height = 24;
+      totRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.accentBg } };
+        cell.border = borderAll(C.slateBg);
+        cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: 'FF' + C.navyBg } };
+        if (colIdx === 1) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        } else {
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+          if (colIdx === 2 || colIdx === 3 || colIdx === 4 || colIdx === 6) {
+            cell.numFmt = numFmt;
+          } else if (colIdx === 5) {
+            cell.numFmt = pctFmt;
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          }
+        }
+      });
+
+      // SHEET 2: Boutique Category Details
+      const wsDetails = wb.addWorksheet('Boutique Category Details', {
+        views: [{ showGridLines: true }]
+      });
+
+      wsDetails.columns = [
+        { width: 22 },
+        { width: 14 },
+        { width: 20 },
+        { width: 20 },
+        { width: 16 },
+        { width: 16 }
+      ];
+
+      wsDetails.mergeCells('A1:F1');
+      const detTitleCell = wsDetails.getCell('A1');
+      detTitleCell.value = 'BOUTIQUE CATEGORY BREAKDOWNS';
+      detTitleCell.font = { name: 'Georgia', bold: true, size: 14, color: { argb: 'FF' + C.navyBg } };
+      detTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      wsDetails.getRow(1).height = 32;
+
+      wsDetails.mergeCells('A2:F2');
+      const detDateCell = wsDetails.getCell('A2');
+      detDateCell.value = `As of ${formattedDate}`;
+      detDateCell.font = { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } };
+      detDateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      wsDetails.getRow(2).height = 18;
+
+      wsDetails.addRow([]);
+
+      data.stores.forEach((store: any) => {
+        const sHeaderRowIdx = wsDetails.rowCount + 1;
+        const storeBanner = wsDetails.addRow([store.storeName.toUpperCase()]);
+        storeBanner.height = 24;
+        wsDetails.mergeCells(`A${sHeaderRowIdx}:F${sHeaderRowIdx}`);
+        storeBanner.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.navyBg } };
+        storeBanner.getCell(1).font = { name: 'Arial', bold: true, size: 10.5, color: { argb: 'FFFFFFFF' } };
+        storeBanner.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        
+        const miniSummaryRow = wsDetails.addRow([
+          `Today Sales: Rp ${store.metrics.todaySales.toLocaleString('id-ID')} | Qty: ${store.metrics.todayQty} pcs`,
+          '',
+          `MTD: Rp ${store.metrics.mtdSales.toLocaleString('id-ID')} / Rp ${store.metrics.target.toLocaleString('id-ID')}`,
+          '',
+          `Achv: ${store.metrics.achievement.toFixed(1)}% | MTD Cost: ${store.metrics.mtdCostPct.toFixed(1)}%`,
+          ''
+        ]);
+        miniSummaryRow.height = 20;
+        wsDetails.mergeCells(`A${sHeaderRowIdx+1}:B${sHeaderRowIdx+1}`);
+        wsDetails.mergeCells(`C${sHeaderRowIdx+1}:D${sHeaderRowIdx+1}`);
+        wsDetails.mergeCells(`E${sHeaderRowIdx+1}:F${sHeaderRowIdx+1}`);
+        
+        miniSummaryRow.eachCell({ includeEmpty: false }, cell => {
+          cell.font = { name: 'Arial', size: 8.5, bold: true, color: { argb: 'FF475569' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.accentBg } };
+          cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          cell.border = borderAll();
+        });
+
+        const tHeaders = ['Category', 'Qty (Sold)', 'Reg Sales', 'SMI Sales', 'Disc %', 'Rem. Stock'];
+        const tHdrRow = wsDetails.addRow(tHeaders);
+        tHdrRow.height = 22;
+        tHdrRow.eachCell((cell, colNumber) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.slateBg } };
+          cell.font = { name: 'Arial', bold: true, color: { argb: 'FF' + C.slateText }, size: 9 };
+          cell.alignment = { vertical: 'middle', horizontal: colNumber === 1 ? 'left' : colNumber === 2 || colNumber === 5 || colNumber === 6 ? 'center' : 'right' };
+          cell.border = borderAll(C.slateBg);
+        });
+
+        const catData = Object.entries(store.tableData);
+        catData.forEach(([cat, vals]: any, catIdx) => {
+          const discPct = vals.gross > 0 ? (vals.valDisc / vals.gross) : 0;
+          const row = wsDetails.addRow([
+            cat,
+            vals.qty,
+            vals.netNonSMI,
+            vals.netSMI,
+            discPct,
+            vals.stock
+          ]);
+          row.height = 20;
+          row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+            cell.border = borderAll();
+            cell.font = { name: 'Arial', size: 9 };
+            if (catIdx % 2 === 1) {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+            }
+
+            if (colIdx === 1) {
+              cell.alignment = { vertical: 'middle', horizontal: 'left' };
+              cell.font = { name: 'Arial', bold: true, size: 9 };
+            } else if (colIdx === 2) {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+              cell.numFmt = '#,##0';
+            } else if (colIdx === 3 || colIdx === 4) {
+              cell.alignment = { vertical: 'middle', horizontal: 'right' };
+              cell.numFmt = numFmt;
+            } else if (colIdx === 5) {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+              cell.numFmt = pctFmt;
+              if (discPct > 0) {
+                cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF' + C.amberText } };
+              }
+            } else if (colIdx === 6) {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+              cell.numFmt = '#,##0';
+              cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF' + C.redText } };
+            }
+          });
+        });
+
+        const storeTotalQty = catData.reduce((acc: number, [_, v]: any) => acc + v.qty, 0);
+        const storeTotalReg = catData.reduce((acc: number, [_, v]: any) => acc + v.netNonSMI, 0);
+        const storeTotalSmi = catData.reduce((acc: number, [_, v]: any) => acc + v.netSMI, 0);
+        const storeTotalGross = catData.reduce((acc: number, [_, v]: any) => acc + v.gross, 0);
+        const storeTotalDiscVal = catData.reduce((acc: number, [_, v]: any) => acc + v.valDisc, 0);
+        const storeTotalStock = catData.reduce((acc: number, [_, v]: any) => acc + v.stock, 0);
+        const storeOverallDisc = storeTotalGross > 0 ? (storeTotalDiscVal / storeTotalGross) : 0;
+
+        const totalRow = wsDetails.addRow([
+          'Total',
+          storeTotalQty,
+          storeTotalReg,
+          storeTotalSmi,
+          storeOverallDisc,
+          storeTotalStock
+        ]);
+        totalRow.height = 22;
+        totalRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.accentBg } };
+          cell.border = borderAll(C.slateBg);
+          cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF' + C.navyBg } };
+          
+          if (colIdx === 1) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          } else if (colIdx === 2) {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.numFmt = '#,##0';
+          } else if (colIdx === 3 || colIdx === 4) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            cell.numFmt = numFmt;
+          } else if (colIdx === 5) {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.numFmt = pctFmt;
+          } else if (colIdx === 6) {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.numFmt = '#,##0';
+          }
+        });
+
+        wsDetails.addRow([]);
+        wsDetails.addRow([]);
+        wsDetails.addRow([]);
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Daily_Sales_Report_${date}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert('Error exporting Excel: ' + err.message);
+    } finally {
+      setExportingExcel(false);
+    }
   };
 
   const handleShareWhatsApp = () => {
@@ -232,6 +646,15 @@ export default function DailyReportPage() {
           >
             <Download className="w-4 h-4" />
             PDF
+          </button>
+
+          <button
+            onClick={handleDownloadExcel}
+            disabled={exportingExcel}
+            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold"
+          >
+            {exportingExcel ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            Excel
           </button>
 
           <button
