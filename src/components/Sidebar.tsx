@@ -30,6 +30,7 @@ import {
   ShieldCheck,
   Boxes,
   Sliders,
+  Table,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -64,6 +65,7 @@ const menuGroups = [
     title: "OPERASIONAL",
     items: [
       { name: 'Daily Report',        icon: Calendar,        href: '/daily-report' },
+      { name: 'Daily Breakdown',     icon: Table,           href: '/daily-breakdown' },
       { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions' },
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
       { name: 'Crossing Sales',      icon: Repeat,          href: '/crossing-sales' },

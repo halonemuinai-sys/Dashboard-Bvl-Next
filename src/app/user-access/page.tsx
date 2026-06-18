@@ -77,6 +77,7 @@ const MENU_GROUPS = [
     title: 'Operasional',
     items: [
       { path: '/daily-report',         label: 'Daily Report' },
+      { path: '/daily-breakdown',      label: 'Daily Breakdown' },
       { path: '/monthly-transactions', label: 'Monthly Transactions' },
       { path: '/heatmap-calendar',     label: 'Heatmap Calendar' },
       { path: '/crossing-sales',       label: 'Crossing Sales' },
