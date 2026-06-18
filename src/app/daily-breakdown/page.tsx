@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { 
   Calendar as CalendarIcon, 
   Filter, 
@@ -8,18 +8,33 @@ import {
   Download, 
   FileSpreadsheet, 
   Table,
-  Info
+  Info,
+  Trophy,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  Check,
+  TrendingUp,
+  Percent
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import { dashboardService } from '@/services/dashboardService';
 import BvlgariLoader from '@/components/BvlgariLoader';
 import { getDayType, getHolidayName } from '@/lib/holidays';
+import { supabase } from '@/lib/supabase';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June', 
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+const STORE_THEME: Record<string, { color: string; border: string; text: string; bg: string; fill: string }> = {
+  'Bali':            { color: '#2563EB', border: 'border-blue-200',   text: 'text-blue-600',   bg: 'bg-blue-50/50',    fill: 'bg-blue-600' },
+  'Head Office':     { color: '#64748B', border: 'border-slate-200',  text: 'text-slate-500',  bg: 'bg-slate-50/50',   fill: 'bg-slate-500' },
+  'Plaza Indonesia': { color: '#8B5CF6', border: 'border-purple-200', text: 'text-purple-600', bg: 'bg-purple-50/40',  fill: 'bg-purple-600' },
+  'Plaza Senayan':   { color: '#D97706', border: 'border-amber-200',  text: 'text-amber-600',  bg: 'bg-amber-50/40',   fill: 'bg-amber-500' }
+};
 
 export default function DailyBreakdownPage() {
   const today = new Date();
@@ -27,15 +42,46 @@ export default function DailyBreakdownPage() {
   const [year, setYear] = useState(String(today.getFullYear()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
+  const [monthlyTarget, setMonthlyTarget] = useState<number>(0);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
+
+  // Column Toggles
+  const [visibleStores, setVisibleStores] = useState<Record<string, boolean>>({
+    'Bali': true,
+    'Head Office': true,
+    'Plaza Indonesia': true,
+    'Plaza Senayan': true
+  });
+
+  // Crosshair hover state
+  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const [hoveredCol, setHoveredCol] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
+        const monthIdx = MONTHS.indexOf(month);
+        
+        // Fetch Daily breakdown
         const res = await dashboardService.getDailyBreakdown(month, parseInt(year));
         setData(res);
+
+        // Fetch Monthly Target from targets table
+        const { data: targetRows } = await supabase
+          .from('targets')
+          .select('target_value, store_name')
+          .eq('year', parseInt(year))
+          .eq('month_number', monthIdx + 1);
+        
+        let totalT = 0;
+        targetRows?.forEach((t: any) => {
+          if (!t.store_name.toLowerCase().includes('head office') && t.store_name.toLowerCase() !== 'ho') {
+            totalT += (t.target_value || 0);
+          }
+        });
+        setMonthlyTarget(totalT);
       } catch (e) {
         console.error(e);
       } finally {
@@ -78,6 +124,71 @@ export default function DailyBreakdownPage() {
     return t;
   }, [data]);
 
+  // Exclude HO for store-only metrics
+  const storeOnlySales = useMemo(() => {
+    return totals.totalSales - totals.hoSales;
+  }, [totals]);
+
+  // Find best sales day
+  const bestDayIdx = useMemo(() => {
+    let bestIdx = -1;
+    let maxSales = -Infinity;
+    data.forEach((d, i) => {
+      if (d.totalSales > 0 && d.totalSales > maxSales) {
+        maxSales = d.totalSales;
+        bestIdx = i;
+      }
+    });
+    return bestIdx;
+  }, [data]);
+
+  // Find worst sales day (exclude zero days)
+  const worstDayIdx = useMemo(() => {
+    let worstIdx = -1;
+    let minSales = Infinity;
+    data.forEach((d, i) => {
+      if (d.totalSales > 0 && d.totalSales < minSales) {
+        minSales = d.totalSales;
+        worstIdx = i;
+      }
+    });
+    return worstIdx;
+  }, [data]);
+
+  // Active days count & average sales
+  const activeDaysStats = useMemo(() => {
+    const activeDays = data.filter(d => d.totalSales > 0).length;
+    const avgSales = activeDays > 0 ? storeOnlySales / activeDays : 0;
+    return { activeDays, avgSales };
+  }, [data, storeOnlySales]);
+
+  // Targets circle tracker progress
+  const targetProgressPercent = useMemo(() => {
+    if (monthlyTarget <= 0) return 0;
+    return (storeOnlySales / monthlyTarget) * 100;
+  }, [storeOnlySales, monthlyTarget]);
+
+  // Dynamic store segments percentages
+  const storeContributionShares = useMemo(() => {
+    const baseSales = storeOnlySales || 1;
+    return [
+      { name: 'Plaza Indonesia', val: totals.piSales, pct: (totals.piSales / baseSales) * 100 },
+      { name: 'Plaza Senayan',   val: totals.psSales, pct: (totals.psSales / baseSales) * 100 },
+      { name: 'Bali',            val: totals.baliSales, pct: (totals.baliSales / baseSales) * 100 }
+    ].sort((a, b) => b.val - a.val);
+  }, [totals, storeOnlySales]);
+
+  const toggleStoreVisibility = (store: string) => {
+    setVisibleStores(prev => ({
+      ...prev,
+      [store]: !prev[store]
+    }));
+  };
+
+  const visibleColumnsCount = useMemo(() => {
+    return Object.values(visibleStores).filter(Boolean).length;
+  }, [visibleStores]);
+
   const handleDownloadExcel = async () => {
     setExportingExcel(true);
     try {
@@ -95,7 +206,8 @@ export default function DailyBreakdownPage() {
         accentBg:   'F1F5F9',
         border:     'E2E8F0',
         redText:    'DC2626',
-        redBg:      'FEF2F2'
+        redBg:      'FEF2F2',
+        goldBg:     'FEFCE8'
       };
 
       const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
@@ -109,31 +221,35 @@ export default function DailyBreakdownPage() {
         views: [{ showGridLines: true }]
       });
 
-      // Set columns (12 columns total: A to L)
-      ws.columns = [
-        { width: 14 }, // A: Date
-        { width: 12 }, // B: Day
-        { width: 18 }, // C: Total Sales
-        { width: 10 }, // D: Total Qty
-        { width: 16 }, // E: Bali Sales
-        { width: 8  }, // F: Bali Qty
-        { width: 16 }, // G: HO Sales
-        { width: 8  }, // H: HO Qty
-        { width: 16 }, // I: PI Sales
-        { width: 8  }, // J: PI Qty
-        { width: 16 }, // K: PS Sales
-        { width: 8  }  // L: PS Qty
+      // Define standard columns structure
+      const excelCols = [
+        { width: 14 }, // Date
+        { width: 12 }, // Day
+        { width: 18 }, // Total Sales
+        { width: 10 }  // Total Qty
       ];
 
+      // Dynamically add store columns depending on check status
+      const activeStoresList = Object.keys(visibleStores).filter(s => visibleStores[s]);
+      activeStoresList.forEach(() => {
+        excelCols.push({ width: 16 }); // Net Sales
+        excelCols.push({ width: 8  }); // Qty
+      });
+
+      ws.columns = excelCols;
+
       // Title Section
-      ws.mergeCells('A1:L1');
+      const totalHeaderWidth = 4 + (activeStoresList.length * 2);
+      const endColLetter = String.fromCharCode(64 + totalHeaderWidth);
+
+      ws.mergeCells(`A1:${endColLetter}1`);
       const titleCell = ws.getCell('A1');
-      titleCell.value = 'DAILY BREAKDOWN (ALL STORES)';
+      titleCell.value = 'BVLGARI - DAILY BREAKDOWN (ALL STORES)';
       titleCell.font = { name: 'Georgia', bold: true, size: 15, color: { argb: 'FF' + C.navyBg } };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
       ws.getRow(1).height = 36;
 
-      ws.mergeCells('A2:L2');
+      ws.mergeCells(`A2:${endColLetter}2`);
       const dateCell = ws.getCell('A2');
       dateCell.value = `Analysis Period: ${month} ${year}`;
       dateCell.font = { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } };
@@ -146,39 +262,40 @@ export default function DailyBreakdownPage() {
       const r4 = ws.getRow(4);
       r4.height = 24;
       
-      // Merge headers
       ws.mergeCells('A4:A5');
       ws.mergeCells('B4:B5');
       ws.mergeCells('C4:C5');
       ws.mergeCells('D4:D5');
-      ws.mergeCells('E4:F4');
-      ws.mergeCells('G4:H4');
-      ws.mergeCells('I4:J4');
-      ws.mergeCells('K4:L4');
 
       r4.getCell(1).value = 'DATE';
       r4.getCell(2).value = 'DAY';
       r4.getCell(3).value = 'TOTAL SALES';
       r4.getCell(4).value = 'TOTAL QTY';
-      r4.getCell(5).value = 'BALI';
-      r4.getCell(7).value = 'HEAD OFFICE';
-      r4.getCell(9).value = 'PLAZA INDONESIA';
-      r4.getCell(11).value = 'PLAZA SENAYAN';
+
+      activeStoresList.forEach((storeName, i) => {
+        const colIdxStart = 5 + (i * 2);
+        const colLetterStart = String.fromCharCode(64 + colIdxStart);
+        const colLetterEnd = String.fromCharCode(65 + colIdxStart);
+        
+        ws.mergeCells(`${colLetterStart}4:${colLetterEnd}4`);
+        r4.getCell(colIdxStart).value = storeName.toUpperCase();
+      });
 
       // Row 5: Sub-headers
       const r5 = ws.getRow(5);
       r5.height = 20;
-      r5.getCell(5).value = 'NET SALES'; r5.getCell(6).value = 'QTY';
-      r5.getCell(7).value = 'NET SALES'; r5.getCell(8).value = 'QTY';
-      r5.getCell(9).value = 'NET SALES'; r5.getCell(10).value = 'QTY';
-      r5.getCell(11).value = 'NET SALES'; r5.getCell(12).value = 'QTY';
+      activeStoresList.forEach((_, i) => {
+        const colIdxStart = 5 + (i * 2);
+        r5.getCell(colIdxStart).value = 'NET SALES';
+        r5.getCell(colIdxStart + 1).value = 'QTY';
+      });
 
       // Style Headers
       [4, 5].forEach(rowNum => {
         const row = ws.getRow(rowNum);
         row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + (colIdx <= 4 ? C.navyBg : C.slateBg) } };
-          cell.font = { name: 'Arial', bold: true, color: { argb: 'FF' + C.navyText }, size: 9 };
+          cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
           cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           cell.border = borderAll(C.border);
         });
@@ -190,34 +307,43 @@ export default function DailyBreakdownPage() {
         const dayType = getDayType(yearNum, monthIndex, dayNum);
         const holidayName = getHolidayName(yearNum, monthIndex, dayNum);
         const isRedDay = dayType === 'weekend' || dayType === 'holiday';
+        const isBestDay = idx === bestDayIdx;
+        const isWorstDay = idx === worstDayIdx;
 
-        const row = ws.addRow([
+        const rowData = [
           holidayName ? `${d.dateStr} *` : d.dateStr,
-          d.dayOfWeek,
+          isBestDay ? `${d.dayOfWeek} (Peak)` : d.dayOfWeek,
           d.totalSales,
-          d.totalQty,
-          d.stores['Bali'].netSales,
-          d.stores['Bali'].qty,
-          d.stores['Head Office'].netSales,
-          d.stores['Head Office'].qty,
-          d.stores['Plaza Indonesia'].netSales,
-          d.stores['Plaza Indonesia'].qty,
-          d.stores['Plaza Senayan'].netSales,
-          d.stores['Plaza Senayan'].qty
-        ]);
+          d.totalQty
+        ];
+
+        activeStoresList.forEach(storeName => {
+          rowData.push(d.stores[storeName].netSales);
+          rowData.push(d.stores[storeName].qty);
+        });
+
+        const row = ws.addRow(rowData);
         row.height = 20;
 
         row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
           cell.border = borderAll();
           cell.font = { name: 'Arial', size: 9 };
 
-          // Default backgrounds
+          // Default alternating background
           if (idx % 2 === 1) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
           }
 
+          // Best day gold highlight
+          if (isBestDay) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.goldBg } };
+            if (colIdx <= 2) {
+              cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFC27807' } };
+            }
+          }
+
           // Red highlights for weekends & holidays
-          if (isRedDay) {
+          if (isRedDay && !isBestDay) {
             if (colIdx === 1 || colIdx === 2) {
               cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF' + C.redText } };
               cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.redBg } };
@@ -229,7 +355,7 @@ export default function DailyBreakdownPage() {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
           } else if (colIdx === 2) {
             cell.alignment = { vertical: 'middle', horizontal: 'left' };
-          } else if (colIdx === 3 || colIdx === 5 || colIdx === 7 || colIdx === 9 || colIdx === 11) {
+          } else if (colIdx === 3 || (colIdx >= 5 && colIdx % 2 === 1)) {
             cell.alignment = { vertical: 'middle', horizontal: 'right' };
             cell.numFmt = numFmt;
             if (colIdx === 3) cell.font = { name: 'Arial', bold: true, size: 9 };
@@ -243,20 +369,26 @@ export default function DailyBreakdownPage() {
 
       // Total Row
       const totRowIdx = ws.rowCount + 1;
-      const totRow = ws.addRow([
+      const totalRowData = [
         'TOTAL',
         '',
         totals.totalSales,
-        totals.totalQty,
-        totals.baliSales,
-        totals.baliQty,
-        totals.hoSales,
-        totals.hoQty,
-        totals.piSales,
-        totals.piQty,
-        totals.psSales,
-        totals.psQty
-      ]);
+        totals.totalQty
+      ];
+
+      activeStoresList.forEach(storeName => {
+        if (storeName === 'Bali') {
+          totalRowData.push(totals.baliSales); totalRowData.push(totals.baliQty);
+        } else if (storeName === 'Head Office') {
+          totalRowData.push(totals.hoSales); totalRowData.push(totals.hoQty);
+        } else if (storeName === 'Plaza Indonesia') {
+          totalRowData.push(totals.piSales); totalRowData.push(totals.piQty);
+        } else if (storeName === 'Plaza Senayan') {
+          totalRowData.push(totals.psSales); totalRowData.push(totals.psQty);
+        }
+      });
+
+      const totRow = ws.addRow(totalRowData);
       totRow.height = 24;
       ws.mergeCells(`A${totRowIdx}:B${totRowIdx}`);
 
@@ -267,10 +399,10 @@ export default function DailyBreakdownPage() {
 
         if (colIdx === 1) {
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        } else if (colIdx === 3 || colIdx === 5 || colIdx === 7 || colIdx === 9 || colIdx === 11) {
+        } else if (colIdx === 3 || (colIdx >= 5 && colIdx % 2 === 1)) {
           cell.alignment = { vertical: 'middle', horizontal: 'right' };
           cell.numFmt = numFmt;
-        } else if (colIdx === 4 || colIdx === 6 || colIdx === 8 || colIdx === 10 || colIdx === 12) {
+        } else {
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
           cell.numFmt = '#,##0';
         }
@@ -344,11 +476,14 @@ export default function DailyBreakdownPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-      {/* Header */}
+      
+      {/* ── HEADER ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Table className="w-5 h-5 text-blue-600" />
+            <div className="p-2 rounded-xl bg-blue-50 text-blue-600 shadow-sm shadow-blue-100">
+              <Table className="w-5 h-5" />
+            </div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Daily Breakdown (All Stores)</h1>
           </div>
           <p className="text-slate-500 text-sm">Monthly daily sales tracking for all boutiques — {month} {year}</p>
@@ -392,10 +527,131 @@ export default function DailyBreakdownPage() {
         </div>
       </div>
 
-      {/* Main Table Screen View */}
+      {/* ── PREMIUM INTERACTIVE KPI CARDS ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        
+        {/* Card 1: Target Tracker (SVG Progress Ring) */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+          <div className="relative w-18 h-18 shrink-0 flex items-center justify-center">
+            {/* SVG Progress Circle */}
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <circle className="text-slate-100" strokeWidth="8" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"/>
+              <circle className="text-emerald-500 transition-all duration-1000" strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * Math.min(100, targetProgressPercent)) / 100} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"/>
+            </svg>
+            <span className="absolute text-[11px] font-black text-slate-800 leading-none">
+              {targetProgressPercent.toFixed(0)}%
+            </span>
+          </div>
+          <div className="min-w-0">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1 block">MTD TARGET ACHIEVED</span>
+            <h4 className="text-lg font-black text-slate-900 leading-none mb-1"><Amt value={storeOnlySales} /></h4>
+            <p className="text-[10px] text-slate-400 font-medium">Target: <Amt value={monthlyTarget} /> <span className="text-slate-300 font-normal">(Exc HO)</span></p>
+          </div>
+        </div>
+
+        {/* Card 2: Boutique Segment Share Contribution */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+          <div>
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5 block">BOUTIQUE SHARE SHARE</span>
+            {/* Stacked Segment Bar */}
+            <div className="w-full h-3 bg-slate-150 rounded-full overflow-hidden flex mb-2 border border-slate-200/50">
+              {storeContributionShares.map((sc, i) => {
+                const cfg = STORE_THEME[sc.name];
+                if (sc.pct <= 0) return null;
+                return (
+                  <div 
+                    key={sc.name}
+                    className={cn("h-full transition-all duration-500", cfg?.fill)}
+                    style={{ width: `${sc.pct}%` }}
+                    title={`${sc.name}: ${sc.pct.toFixed(1)}%`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex justify-between items-center text-[9px] font-black text-slate-500 pt-1">
+            {storeContributionShares.map(sc => {
+              const cfg = STORE_THEME[sc.name];
+              const label = sc.name === 'Plaza Indonesia' ? 'PI' : sc.name === 'Plaza Senayan' ? 'PS' : 'BL';
+              return (
+                <span key={sc.name} className="flex items-center gap-1">
+                  <span className={cn("w-1.5 h-1.5 rounded-full", cfg?.fill)} />
+                  {label} {sc.pct.toFixed(0)}%
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Card 3: Peak Sales Day (Trophy card with Gold Glow) */}
+        {bestDayIdx >= 0 && data[bestDayIdx] ? (
+          <div className="bg-gradient-to-br from-amber-50/60 to-orange-50/30 border border-amber-100 rounded-3xl p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-all relative overflow-hidden group">
+            <div className="absolute right-0 bottom-0 translate-y-4 translate-x-4 opacity-5 group-hover:scale-125 transition-transform duration-700 pointer-events-none">
+              <Trophy className="w-24 h-24 text-amber-600" />
+            </div>
+            <div>
+              <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest leading-none mb-1 block">MONTH'S PEAK SALES DAY</span>
+              <h4 className="text-lg font-black text-slate-900 leading-none mb-1"><Amt value={data[bestDayIdx].totalSales} /></h4>
+              <p className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
+                <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                {data[bestDayIdx].dateStr} ({data[bestDayIdx].dayOfWeek})
+              </p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shadow-inner shrink-0 relative">
+              <Trophy className="w-5 h-5 text-amber-600" />
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm" />
+        )}
+
+        {/* Card 4: Daily Performance Benchmark */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between">
+          <div>
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1 block">DAILY AVG BENCHMARK</span>
+            <h4 className="text-lg font-black text-slate-900 leading-none mb-1"><Amt value={activeDaysStats.avgSales} /></h4>
+            <p className="text-[10px] text-slate-400 font-medium">Over {activeDaysStats.activeDays} days with active sales</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-50/50 text-blue-600 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── INTERACTIVE COLUMN TOGGLES ── */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Info className="w-4 h-4 text-slate-400 shrink-0" />
+          <span className="text-xs font-bold text-slate-500">Toggle columns to focus comparison:</span>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          {Object.keys(visibleStores).map(storeName => {
+            const visible = visibleStores[storeName];
+            const cfg = STORE_THEME[storeName];
+            return (
+              <button
+                key={storeName}
+                onClick={() => toggleStoreVisibility(storeName)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer",
+                  visible 
+                    ? cn(cfg?.bg, cfg?.border, cfg?.text, "shadow-sm") 
+                    : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100"
+                )}
+              >
+                {visible ? <Check className="w-3 h-3" /> : <EyeOff className="w-3.5 h-3.5" />}
+                {storeName}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── MAIN INTERACTIVE TABLE ── */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-left border-collapse text-xs select-none">
             <thead>
               {/* Row 1: Stores */}
               <tr className="bg-slate-50 border-b border-slate-200/50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -403,119 +659,217 @@ export default function DailyBreakdownPage() {
                 <th className="py-3 px-4 border-r border-slate-200/60" rowSpan={2}>Day</th>
                 <th className="py-3 px-4 border-r border-slate-200/60 text-right" rowSpan={2}>Total Sales</th>
                 <th className="py-3 px-4 border-r border-slate-200/60 text-center" rowSpan={2}>Total Qty</th>
-                <th className="py-2 px-4 border-r border-slate-200/60 text-center bg-blue-50/30" colSpan={2}>Bali</th>
-                <th className="py-2 px-4 border-r border-slate-200/60 text-center bg-slate-100/30" colSpan={2}>Head Office</th>
-                <th className="py-2 px-4 border-r border-slate-200/60 text-center bg-indigo-50/20" colSpan={2}>Plaza Indonesia</th>
-                <th className="py-2 px-4 text-center bg-amber-50/20" colSpan={2}>Plaza Senayan</th>
+
+                {/* Dynamic Store Headers */}
+                {Object.keys(visibleStores).map(storeName => {
+                  if (!visibleStores[storeName]) return null;
+                  const theme = STORE_THEME[storeName];
+                  return (
+                    <th 
+                      key={storeName} 
+                      onMouseEnter={() => setHoveredCol(storeName)}
+                      onMouseLeave={() => setHoveredCol(null)}
+                      className={cn(
+                        "py-2 px-4 border-r border-slate-200/60 text-center transition-colors duration-150", 
+                        theme?.bg,
+                        hoveredCol === storeName && "bg-slate-200/40"
+                      )} 
+                      colSpan={2}
+                    >
+                      {storeName}
+                    </th>
+                  );
+                })}
               </tr>
               {/* Row 2: Sub-headers */}
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
-                <th className="py-2 px-4 border-r border-slate-200/60 text-right bg-blue-50/20">Net Sales</th>
-                <th className="py-2 px-3 border-r border-slate-200/60 text-center bg-blue-50/20">Qty</th>
-                <th className="py-2 px-4 border-r border-slate-200/60 text-right bg-slate-100/20">Net Sales</th>
-                <th className="py-2 px-3 border-r border-slate-200/60 text-center bg-slate-100/20">Qty</th>
-                <th className="py-2 px-4 border-r border-slate-200/60 text-right bg-indigo-50/10">Net Sales</th>
-                <th className="py-2 px-3 border-r border-slate-200/60 text-center bg-indigo-50/10">Qty</th>
-                <th className="py-2 px-4 border-r border-slate-200/60 text-right bg-amber-50/10">Net Sales</th>
-                <th className="py-2 px-3 text-center bg-amber-50/10">Qty</th>
+                {Object.keys(visibleStores).map(storeName => {
+                  if (!visibleStores[storeName]) return null;
+                  const theme = STORE_THEME[storeName];
+                  return (
+                    <Fragment key={storeName}>
+                      <th 
+                        onMouseEnter={() => setHoveredCol(storeName)}
+                        onMouseLeave={() => setHoveredCol(null)}
+                        className={cn(
+                          "py-2 px-4 border-r border-slate-200/60 text-right transition-colors duration-150",
+                          theme?.bg,
+                          hoveredCol === storeName && "bg-slate-200/60"
+                        )}
+                      >
+                        Net Sales
+                      </th>
+                      <th 
+                        onMouseEnter={() => setHoveredCol(storeName)}
+                        onMouseLeave={() => setHoveredCol(null)}
+                        className={cn(
+                          "py-2 px-3 border-r border-slate-200/60 text-center transition-colors duration-150",
+                          theme?.bg,
+                          hoveredCol === storeName && "bg-slate-200/60"
+                        )}
+                      >
+                        Qty
+                      </th>
+                    </Fragment>
+                  );
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {data.map((d) => {
+              {data.map((d, idx) => {
                 const dayNum = d.dayNum;
                 const dayType = getDayType(yearNum, monthIndex, dayNum);
                 const holidayName = getHolidayName(yearNum, monthIndex, dayNum);
                 const isRedDay = dayType === 'weekend' || dayType === 'holiday';
+                const isBestDay = idx === bestDayIdx;
+                const isWorstDay = idx === worstDayIdx;
 
                 return (
-                  <tr key={d.dayNum} className="hover:bg-indigo-50/10 transition-colors">
+                  <tr 
+                    key={d.dayNum} 
+                    onMouseEnter={() => setHoveredRow(idx)}
+                    onMouseLeave={() => setHoveredRow(null)}
+                    className={cn(
+                      "transition-colors duration-150 group/row hover:bg-slate-50",
+                      isBestDay && "bg-amber-50/20 hover:bg-amber-50/40",
+                      isWorstDay && "bg-rose-50/10 hover:bg-rose-50/30",
+                      hoveredRow === idx && "bg-slate-50/90"
+                    )}
+                    style={{
+                      animation: 'slideIn 0.3s ease-out forwards',
+                      animationDelay: `${idx * 15}ms`,
+                      opacity: 0,
+                      transform: 'translateY(8px)'
+                    }}
+                  >
                     {/* Date */}
-                    <td className="py-2.5 px-4 font-mono font-medium border-r border-slate-100 text-slate-600 text-center">
-                      <span className="flex items-center justify-center gap-1">
+                    <td className={cn(
+                      "py-2.5 px-4 font-mono font-bold border-r border-slate-100 text-center transition-colors duration-150",
+                      isBestDay ? "text-amber-700 bg-amber-50/30" : "text-slate-600",
+                      isWorstDay && "text-rose-700 bg-rose-50/20",
+                      hoveredRow === idx && "bg-slate-100/50"
+                    )}>
+                      <span className="flex items-center justify-center gap-1.5">
+                        {isBestDay && <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                        {isWorstDay && <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
                         {d.dateStr}
                         {holidayName && (
-                          <span className="text-rose-500 font-bold animate-pulse" title={holidayName}>*</span>
+                          <span className="text-rose-500 font-black animate-pulse" title={holidayName}>*</span>
                         )}
                       </span>
                     </td>
+                    
                     {/* Day */}
                     <td className={cn(
-                      "py-2.5 px-4 border-r border-slate-100 font-bold",
-                      isRedDay ? "text-rose-500" : "text-slate-700"
+                      "py-2.5 px-4 border-r border-slate-100 font-bold transition-colors duration-150",
+                      isBestDay && "text-amber-700 bg-amber-50/20",
+                      isWorstDay && "text-rose-700 bg-rose-50/10",
+                      !isBestDay && !isWorstDay && isRedDay ? "text-rose-500 bg-rose-50/30" : "text-slate-700",
+                      hoveredRow === idx && "bg-slate-100/50"
                     )} title={holidayName || undefined}>
                       {d.dayOfWeek}
                     </td>
+                    
                     {/* Total Sales */}
-                    <td className="py-2.5 px-4 border-r border-slate-100 text-right font-bold font-mono text-slate-800">
+                    <td className={cn(
+                      "py-2.5 px-4 border-r border-slate-100 text-right font-black font-mono text-slate-800 transition-colors duration-150",
+                      isBestDay && "text-amber-700 bg-amber-50/10",
+                      hoveredRow === idx && "bg-slate-100/50"
+                    )}>
                       <Amt value={d.totalSales} />
                     </td>
+                    
                     {/* Total Qty */}
-                    <td className="py-2.5 px-4 border-r border-slate-100 text-center font-bold font-mono text-slate-700">
+                    <td className={cn(
+                      "py-2.5 px-4 border-r border-slate-100 text-center font-black font-mono text-slate-700 transition-colors duration-150",
+                      isBestDay && "text-amber-700 bg-amber-50/10",
+                      hoveredRow === idx && "bg-slate-100/50"
+                    )}>
                       {d.totalQty}
                     </td>
 
-                    {/* Bali */}
-                    <td className="py-2.5 px-4 border-r border-slate-100 text-right font-mono text-slate-500">
-                      <Amt value={d.stores['Bali'].netSales} />
-                    </td>
-                    <td className="py-2.5 px-3 border-r border-slate-100 text-center font-mono text-slate-400">
-                      {d.stores['Bali'].qty}
-                    </td>
+                    {/* Stores Columns */}
+                    {Object.keys(visibleStores).map(storeName => {
+                      if (!visibleStores[storeName]) return null;
+                      const sData = d.stores[storeName];
+                      const theme = STORE_THEME[storeName];
+                      const colActive = hoveredCol === storeName;
 
-                    {/* Head Office */}
-                    <td className="py-2.5 px-4 border-r border-slate-100 text-right font-mono text-slate-400">
-                      <Amt value={d.stores['Head Office'].netSales} />
-                    </td>
-                    <td className="py-2.5 px-3 border-r border-slate-100 text-center font-mono text-slate-300">
-                      {d.stores['Head Office'].qty}
-                    </td>
-
-                    {/* Plaza Indonesia */}
-                    <td className="py-2.5 px-4 border-r border-slate-100 text-right font-mono text-slate-500">
-                      <Amt value={d.stores['Plaza Indonesia'].netSales} />
-                    </td>
-                    <td className="py-2.5 px-3 border-r border-slate-100 text-center font-mono text-slate-400">
-                      {d.stores['Plaza Indonesia'].qty}
-                    </td>
-
-                    {/* Plaza Senayan */}
-                    <td className="py-2.5 px-4 border-r border-slate-100 text-right font-mono text-slate-500">
-                      <Amt value={d.stores['Plaza Senayan'].netSales} />
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-mono text-slate-400">
-                      {d.stores['Plaza Senayan'].qty}
-                    </td>
+                      return (
+                        <Fragment key={storeName}>
+                          <td 
+                            onMouseEnter={() => setHoveredCol(storeName)}
+                            onMouseLeave={() => setHoveredCol(null)}
+                            className={cn(
+                              "py-2.5 px-4 border-r border-slate-100 text-right font-mono text-slate-600 transition-colors duration-150",
+                              colActive && "bg-slate-100",
+                              sData.netSales > 0 && "font-semibold text-slate-800"
+                            )}
+                          >
+                            <Amt value={sData.netSales} />
+                          </td>
+                          <td 
+                            onMouseEnter={() => setHoveredCol(storeName)}
+                            onMouseLeave={() => setHoveredCol(null)}
+                            className={cn(
+                              "py-2.5 px-3 border-r border-slate-100 text-center font-mono text-slate-400 transition-colors duration-150",
+                              colActive && "bg-slate-100",
+                              sData.qty > 0 && "font-bold text-slate-700"
+                            )}
+                          >
+                            {sData.qty}
+                          </td>
+                        </Fragment>
+                      );
+                    })}
                   </tr>
                 );
               })}
             </tbody>
             {/* Totals Footer */}
-            <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-800">
+            <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-800 relative z-10 shadow-lg">
               <tr>
                 <td className="py-3 px-4 text-center border-r border-slate-200/60" colSpan={2}>TOTAL</td>
-                <td className="py-3 px-4 border-r border-slate-200/60 text-right font-mono text-slate-900"><Amt value={totals.totalSales} /></td>
-                <td className="py-3 px-4 border-r border-slate-200/60 text-center font-mono text-slate-900">{totals.totalQty}</td>
+                <td className="py-3 px-4 border-r border-slate-200/60 text-right font-black font-mono text-slate-900"><Amt value={totals.totalSales} /></td>
+                <td className="py-3 px-4 border-r border-slate-200/60 text-center font-black font-mono text-slate-900">{totals.totalQty}</td>
                 
-                {/* Bali */}
-                <td className="py-3 px-4 border-r border-slate-200/60 text-right font-mono text-slate-700"><Amt value={totals.baliSales} /></td>
-                <td className="py-3 px-3 border-r border-slate-200/60 text-center font-mono text-slate-600">{totals.baliQty}</td>
+                {/* Dynamic Store Totals */}
+                {Object.keys(visibleStores).map(storeName => {
+                  if (!visibleStores[storeName]) return null;
+                  let storeSalesTotal = 0;
+                  let storeQtyTotal = 0;
+                  if (storeName === 'Bali') {
+                    storeSalesTotal = totals.baliSales; storeQtyTotal = totals.baliQty;
+                  } else if (storeName === 'Head Office') {
+                    storeSalesTotal = totals.hoSales; storeQtyTotal = totals.hoQty;
+                  } else if (storeName === 'Plaza Indonesia') {
+                    storeSalesTotal = totals.piSales; storeQtyTotal = totals.piQty;
+                  } else if (storeName === 'Plaza Senayan') {
+                    storeSalesTotal = totals.psSales; storeQtyTotal = totals.psQty;
+                  }
 
-                {/* Head Office */}
-                <td className="py-3 px-4 border-r border-slate-200/60 text-right font-mono text-slate-500"><Amt value={totals.hoSales} /></td>
-                <td className="py-3 px-3 border-r border-slate-200/60 text-center font-mono text-slate-400">{totals.hoQty}</td>
-
-                {/* Plaza Indonesia */}
-                <td className="py-3 px-4 border-r border-slate-200/60 text-right font-mono text-slate-700"><Amt value={totals.piSales} /></td>
-                <td className="py-3 px-3 border-r border-slate-200/60 text-center font-mono text-slate-600">{totals.piQty}</td>
-
-                {/* Plaza Senayan */}
-                <td className="py-3 px-4 border-r border-slate-200/60 text-right font-mono text-slate-700"><Amt value={totals.psSales} /></td>
-                <td className="py-3 px-3 text-center font-mono text-slate-600">{totals.psQty}</td>
+                  return (
+                    <Fragment key={storeName}>
+                      <td className="py-3 px-4 border-r border-slate-200/60 text-right font-black font-mono text-slate-800"><Amt value={storeSalesTotal} /></td>
+                      <td className="py-3 px-3 border-r border-slate-200/60 text-center font-black font-mono text-slate-800">{storeQtyTotal}</td>
+                    </Fragment>
+                  );
+                })}
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
+
+      {/* Load Animations Inject CSS */}
+      <style jsx global>{`
+        @keyframes slideIn {
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
 
       {/* --- PROFESSIONAL LANDSCAPE PDF DOCUMENT (OFF-SCREEN) --- */}
       <div 
@@ -547,7 +901,7 @@ export default function DailyBreakdownPage() {
           </div>
           <div className="border border-slate-200 p-2.5 rounded-lg">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Boutique Sales (Excl. HO)</span>
-            <div className="text-base font-black text-emerald-600"><Amt value={totals.totalSales - totals.hoSales} /></div>
+            <div className="text-base font-black text-emerald-600"><Amt value={storeOnlySales} /></div>
           </div>
           <div className="border border-slate-200 p-2.5 rounded-lg bg-slate-50">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Head Office (HO) Sales</span>
