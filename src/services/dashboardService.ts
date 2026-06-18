@@ -2676,4 +2676,72 @@ export const dashboardService = {
     if (error) throw error;
     return (data || []) as CrmProfilingRow[];
   },
+
+  async getDailyBreakdown(month: string, year: number) {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const monthIdx = MONTH_NAMES.indexOf(month);
+    if (monthIdx === -1) throw new Error('Invalid month');
+    const monthNum = monthIdx + 1;
+    const lastDay = new Date(year, monthNum, 0).getDate();
+    const from = `${year}-${pad(monthNum)}-01T00:00:00`;
+    const to   = `${year}-${pad(monthNum)}-${pad(lastDay)}T23:59:59`;
+
+    const { data: rows, error } = await supabase
+      .from('clean_master')
+      .select('transaction_date, location, net_sales, qty')
+      .gte('transaction_date', from)
+      .lte('transaction_date', to);
+
+    if (error) throw error;
+
+    const daysData = Array.from({ length: lastDay }, (_, i) => {
+      const dayNum = i + 1;
+      const d = new Date(year, monthIdx, dayNum);
+      const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
+      const dateStr = `${dayNum} ${month.slice(0, 3)} ${year}`;
+      
+      return {
+        dayNum,
+        dateStr,
+        dayOfWeek,
+        totalSales: 0,
+        totalQty: 0,
+        stores: {
+          'Bali':            { netSales: 0, qty: 0 },
+          'Head Office':     { netSales: 0, qty: 0 },
+          'Plaza Indonesia': { netSales: 0, qty: 0 },
+          'Plaza Senayan':   { netSales: 0, qty: 0 }
+        }
+      };
+    });
+
+    const getStoreKey = (loc: string) => {
+      const l = loc.trim().toLowerCase();
+      if (l.includes('head office') || l === 'ho') return 'Head Office';
+      if (l.includes('plaza indonesia') || l === 'pi') return 'Plaza Indonesia';
+      if (l.includes('plaza senayan') || l === 'ps') return 'Plaza Senayan';
+      if (l.includes('bali') || l === 'bl') return 'Bali';
+      return null;
+    };
+
+    (rows || []).forEach(row => {
+      const rowDate = new Date(row.transaction_date);
+      const dayNum = rowDate.getDate();
+      if (dayNum >= 1 && dayNum <= lastDay) {
+        const storeKey = getStoreKey(row.location || '');
+        if (storeKey) {
+          const net = row.net_sales || 0;
+          const qty = row.qty || 0;
+          const idx = dayNum - 1;
+          
+          daysData[idx].stores[storeKey].netSales += net;
+          daysData[idx].stores[storeKey].qty += qty;
+          daysData[idx].totalSales += net;
+          daysData[idx].totalQty += qty;
+        }
+      }
+    });
+
+    return daysData;
+  },
 };
