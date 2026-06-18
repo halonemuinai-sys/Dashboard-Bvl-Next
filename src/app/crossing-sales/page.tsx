@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { Repeat, Calendar as CalendarIcon, Filter, RefreshCw, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { Repeat, Calendar as CalendarIcon, Filter, RefreshCw, ArrowRight, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import { dashboardService, CrossingSalesData } from '@/services/dashboardService';
@@ -23,6 +23,294 @@ export default function CrossingSalesPage() {
   const [year, setYear]   = useState(String(today.getFullYear()));
   const [loading, setLoading] = useState(true);
   const [data, setData]   = useState<CrossingSalesData | null>(null);
+  const [exportingExcel, setExportingExcel] = useState(false);
+
+  const handleDownloadExcel = async () => {
+    if (!data) return;
+    setExportingExcel(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'MRA Retail BI Dashboard';
+      wb.created = new Date();
+
+      const C = {
+        navyBg:     '1E3A5F',
+        navyText:   'FFFFFF',
+        slateBg:    '475569',
+        slateText:  'FFFFFF',
+        lightBg:    'F8FAFC',
+        accentBg:   'F1F5F9',
+        border:     'E2E8F0',
+        greenText:  '059669',
+        amberText:  'D97706',
+        redText:    'DC2626',
+      };
+
+      const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
+      const borderAll = (color = C.border) => ({
+        top: thinBorder(color), bottom: thinBorder(color),
+        left: thinBorder(color), right: thinBorder(color)
+      });
+      const numFmt = 'Rp #,##0;[Red](Rp #,##0);"-"';
+      const pctFmt = '+0.0%;-0.0%;0.0%';
+
+      const ws = wb.addWorksheet('Crossing Sales', {
+        views: [{ showGridLines: true }]
+      });
+
+      ws.columns = [
+        { width: 28 },
+        { width: 20 },
+        { width: 8  },
+        { width: 20 },
+        { width: 22 },
+        { width: 12 }
+      ];
+
+      ws.mergeCells('A1:F1');
+      const titleCell = ws.getCell('A1');
+      titleCell.value = 'BVLGARI - CROSSING SALES & MOBILITY';
+      titleCell.font = { name: 'Georgia', bold: true, size: 15, color: { argb: 'FF' + C.navyBg } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 36;
+
+      ws.mergeCells('A2:F2');
+      const dateCell = ws.getCell('A2');
+      dateCell.value = `Analysis of Inter-Boutique Operations — ${month} ${year}`;
+      dateCell.font = { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } };
+      dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(2).height = 18;
+
+      ws.addRow([]);
+
+      const secRow1 = ws.addRow(['SUMMARY KEY PERFORMANCE INDICATORS']);
+      secRow1.getCell(1).font = { name: 'Arial', bold: true, size: 10.5, color: { argb: 'FF' + C.navyBg } };
+      ws.mergeCells('A4:F4');
+      ws.getRow(4).height = 24;
+
+      const kpiHdr = ['KPI Item', 'Total Generated Value', 'Crossing Value', 'Excluded HO Value', '', ''];
+      const kpiHdrRow = ws.addRow(kpiHdr);
+      kpiHdrRow.height = 22;
+      ws.mergeCells('D5:F5');
+      kpiHdrRow.eachCell((cell, colIdx) => {
+        if (colIdx <= 4) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.navyBg } };
+          cell.font = { name: 'Arial', bold: true, color: { argb: 'FF' + C.navyText }, size: 9 };
+          cell.border = borderAll(C.navyBg);
+          cell.alignment = { vertical: 'middle', horizontal: colIdx === 1 ? 'left' : 'right' };
+        }
+      });
+
+      const rSales = ws.addRow([
+        'Total Net Sales Generated', 
+        data.totalNetSalesGenerated, 
+        data.totalNet, 
+        data.hoExcludedNet || 0,
+        '', ''
+      ]);
+      rSales.height = 20;
+      ws.mergeCells('D6:F6');
+      rSales.eachCell((cell, colIdx) => {
+        if (colIdx <= 4) {
+          cell.border = borderAll();
+          cell.font = { name: 'Arial', size: 9.5 };
+          if (colIdx === 1) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            cell.numFmt = numFmt;
+            if (colIdx === 2) cell.font = { name: 'Arial', bold: true, size: 9.5 };
+          }
+        }
+      });
+
+      const rQty = ws.addRow([
+        'Total Net Qty Generated', 
+        data.totalQtyGenerated, 
+        data.totalQty, 
+        data.hoExcludedQty || 0,
+        '', ''
+      ]);
+      rQty.height = 20;
+      ws.mergeCells('D7:F7');
+      rQty.eachCell((cell, colIdx) => {
+        if (colIdx <= 4) {
+          cell.border = borderAll();
+          cell.font = { name: 'Arial', size: 9.5 };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+          if (colIdx === 1) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            cell.numFmt = '#,##0';
+            if (colIdx === 2) cell.font = { name: 'Arial', bold: true, size: 9.5 };
+          }
+        }
+      });
+
+      ws.addRow([]);
+      ws.addRow([]);
+
+      const adjStartRow = ws.rowCount + 1;
+      const secRow2 = ws.addRow(['BOUTIQUE PERFORMANCE ADJUSTMENT SUMMARY']);
+      secRow2.getCell(1).font = { name: 'Arial', bold: true, size: 10.5, color: { argb: 'FF' + C.navyBg } };
+      ws.mergeCells(`A${adjStartRow}:F${adjStartRow}`);
+      ws.getRow(adjStartRow).height = 24;
+
+      const adjHeaders = ['Boutique Location', 'Physical Sales', 'Adjusted Sales', 'Net Impact', 'Variance %', ''];
+      const adjHdrRow = ws.addRow(adjHeaders);
+      adjHdrRow.height = 22;
+      ws.mergeCells(`E${adjStartRow+1}:F${adjStartRow+1}`);
+      adjHdrRow.eachCell((cell, colIdx) => {
+        if (colIdx <= 5) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.slateBg } };
+          cell.font = { name: 'Arial', bold: true, color: { argb: 'FF' + C.slateText }, size: 9 };
+          cell.border = borderAll(C.slateBg);
+          cell.alignment = { vertical: 'middle', horizontal: colIdx === 1 ? 'left' : colIdx === 5 ? 'center' : 'right' };
+        }
+      });
+
+      storeCards.forEach((sc, idx) => {
+        const rowIdx = ws.rowCount + 1;
+        const row = ws.addRow([
+          sc.store,
+          sc.physical,
+          sc.adjusted,
+          sc.impact,
+          sc.varPct / 100,
+          ''
+        ]);
+        row.height = 20;
+        ws.mergeCells(`E${rowIdx}:F${rowIdx}`);
+        row.eachCell((cell, colIdx) => {
+          if (colIdx <= 5) {
+            cell.border = borderAll();
+            cell.font = { name: 'Arial', size: 9.5 };
+            if (idx % 2 === 1) {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+            }
+
+            if (colIdx === 1) {
+              cell.alignment = { vertical: 'middle', horizontal: 'left' };
+              cell.font = { name: 'Arial', bold: true, size: 9.5 };
+            } else if (colIdx === 2 || colIdx === 3 || colIdx === 4) {
+              cell.alignment = { vertical: 'middle', horizontal: 'right' };
+              cell.numFmt = numFmt;
+              if (colIdx === 4) {
+                cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + (sc.impact >= 0 ? C.greenText : C.redText) } };
+              }
+            } else if (colIdx === 5) {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+              cell.numFmt = pctFmt;
+              cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + (sc.impact >= 0 ? C.greenText : C.redText) } };
+            }
+          }
+        });
+      });
+
+      ws.addRow([]);
+      ws.addRow([]);
+
+      const actStartRow = ws.rowCount + 1;
+      const secRow3 = ws.addRow(['CROSSING ACTIVITY DETAILS']);
+      secRow3.getCell(1).font = { name: 'Arial', bold: true, size: 10.5, color: { argb: 'FF' + C.navyBg } };
+      ws.mergeCells(`A${actStartRow}:F${actStartRow}`);
+      ws.getRow(actStartRow).height = 24;
+
+      const actHeaders = ['Sales Advisor', 'Base Location', '', 'Crossing Destination', 'Net Sales Generated', 'Qty (pcs)'];
+      const actHdrRow = ws.addRow(actHeaders);
+      actHdrRow.height = 22;
+      actHdrRow.eachCell((cell, colIdx) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.slateBg } };
+        cell.font = { name: 'Arial', bold: true, color: { argb: 'FF' + C.slateText }, size: 9 };
+        cell.border = borderAll(C.slateBg);
+        cell.alignment = { vertical: 'middle', horizontal: colIdx === 1 || colIdx === 2 || colIdx === 4 ? 'left' : colIdx === 3 || colIdx === 6 ? 'center' : 'right' };
+      });
+
+      if (data.records.length === 0) {
+        const row = ws.addRow(['No crossing sales recorded for this period', '', '', '', '', '']);
+        row.height = 24;
+        ws.mergeCells(`A${ws.rowCount}:F${ws.rowCount}`);
+        row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        row.getCell(1).font = { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } };
+        row.getCell(1).border = borderAll();
+      } else {
+        data.records.forEach((rec, idx) => {
+          const row = ws.addRow([
+            rec.salesman,
+            rec.baseLoc,
+            '→',
+            rec.crossingLoc,
+            rec.net,
+            rec.qty
+          ]);
+          row.height = 20;
+          row.eachCell((cell, colIdx) => {
+            cell.border = borderAll();
+            cell.font = { name: 'Arial', size: 9 };
+            if (idx % 2 === 1) {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+            }
+
+            if (colIdx === 1) {
+              cell.alignment = { vertical: 'middle', horizontal: 'left' };
+              cell.font = { name: 'Arial', bold: true, size: 9 };
+            } else if (colIdx === 2 || colIdx === 4) {
+              cell.alignment = { vertical: 'middle', horizontal: 'left' };
+            } else if (colIdx === 3) {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+              cell.font = { name: 'Arial', color: { argb: 'FF94A3B8' }, size: 9 };
+            } else if (colIdx === 5) {
+              cell.alignment = { vertical: 'middle', horizontal: 'right' };
+              cell.numFmt = numFmt;
+            } else if (colIdx === 6) {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+              cell.numFmt = '#,##0';
+            }
+          });
+        });
+
+        const totRowIdx = ws.rowCount + 1;
+        const totRow = ws.addRow([
+          'Total Crossing Sales',
+          '', '', '',
+          data.totalNet,
+          data.totalQty
+        ]);
+        totRow.height = 22;
+        ws.mergeCells(`A${totRowIdx}:D${totRowIdx}`);
+        totRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.accentBg } };
+          cell.border = borderAll(C.slateBg);
+          cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF' + C.navyBg } };
+          if (colIdx === 1) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          } else if (colIdx === 5) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            cell.numFmt = numFmt;
+          } else if (colIdx === 6) {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.numFmt = '#,##0';
+          }
+        });
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Crossing_Sales_Report_${month}_${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert('Error exporting Excel: ' + err.message);
+    } finally {
+      setExportingExcel(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -78,6 +366,15 @@ export default function CrossingSalesPage() {
               <option value="2024">2024</option>
             </select>
           </div>
+
+          <button
+            onClick={handleDownloadExcel}
+            disabled={exportingExcel}
+            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10"
+          >
+            {exportingExcel ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            Excel
+          </button>
         </div>
       </div>
 
