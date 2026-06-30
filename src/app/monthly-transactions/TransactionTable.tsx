@@ -162,7 +162,7 @@ export default function TransactionTable({
                         value={commVal}
                         disabled={isSaving}
                         onChange={e => {
-                          let clean = e.target.value.replace(/[,.]00$/, '');
+                          let clean = e.target.value.trim().replace(/[,.]00$/, '');
                           clean = clean.replace(/[^0-9-]/g, '');
                           onCommEdit(r.id, clean);
                         }}
