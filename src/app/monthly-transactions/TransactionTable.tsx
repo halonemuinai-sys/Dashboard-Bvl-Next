@@ -161,7 +161,11 @@ export default function TransactionTable({
                         aria-label="Edit comm"
                         value={commVal}
                         disabled={isSaving}
-                        onChange={e => onCommEdit(r.id, e.target.value)}
+                        onChange={e => {
+                          let clean = e.target.value.replace(/[,.]00$/, '');
+                          clean = clean.replace(/[^0-9-]/g, '');
+                          onCommEdit(r.id, clean);
+                        }}
                         onBlur={() => onCommBlur(r.id)}
                         onKeyDown={e => {
                           if (e.key === 'Enter')  (e.target as HTMLInputElement).blur();

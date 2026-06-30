@@ -162,7 +162,9 @@ export default function MonthlyTransactionsPage() {
   const saveComm = async (id: number) => {
     const raw = commEdits[id];
     if (raw === undefined) return;
-    const val = parseFloat(raw.replace(/[^0-9.-]/g, '')) || 0;
+    let clean = raw.replace(/[,.]00$/, '');
+    clean = clean.replace(/[^0-9-]/g, '');
+    const val = parseInt(clean, 10) || 0;
     const current = rows.find(r => r.id === id)?.comm ?? 0;
     if (val === current) { setCommEdits(prev => { const n = { ...prev }; delete n[id]; return n; }); return; }
     setSavingId(id);
