@@ -840,6 +840,8 @@ export const dashboardService = {
     const mStartStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
     const mEndStr   = new Date(year, monthIdx + 1, 0).toISOString().split('T')[0];
 
+    const isPreJuly2026 = year < 2026 || (year === 2026 && monthIdx < 6);
+
     const [{ data: rows, error }, { data: lmRows }, { data: targetRows }, { data: stockRows }, { data: valuationRows }] = await Promise.all([
       supabase
         .from('clean_master')
@@ -860,11 +862,13 @@ export const dashboardService = {
         .from('stock_store')
         .select('*')
         .eq('year', year),
-      supabase
-        .from('inventory_valuation')
-        .select('snapshot_date, location_name, location_code, main_category, collection_code, qoh')
-        .gte('snapshot_date', mStartStr)
-        .lte('snapshot_date', mEndStr)
+      !isPreJuly2026
+        ? supabase
+            .from('inventory_valuation')
+            .select('snapshot_date, location_name, location_code, main_category, collection_code, qoh')
+            .gte('snapshot_date', mStartStr)
+            .lte('snapshot_date', mEndStr)
+        : Promise.resolve({ data: [], error: null } as any)
     ]);
 
     const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -890,13 +894,15 @@ export const dashboardService = {
       return trimmed;
     };
 
-    const snapshotDates = Array.from(new Set((valuationRows || []).map(r => r.snapshot_date))).sort();
+    const snapshotDates = isPreJuly2026
+      ? []
+      : Array.from(new Set((valuationRows || []).map((r: any) => r.snapshot_date))).sort();
     const earliestSnapshotDate = snapshotDates[0];
 
     const valStockMap: Record<string, Record<string, number>> = {};
     if (earliestSnapshotDate) {
-      const earliestRows = (valuationRows || []).filter(r => r.snapshot_date === earliestSnapshotDate);
-      earliestRows.forEach(r => {
+      const earliestRows = (valuationRows || []).filter((r: any) => r.snapshot_date === earliestSnapshotDate);
+      earliestRows.forEach((r: any) => {
         const loc = normalizeStoreName(r.location_name || r.location_code || '');
         const collCode = (r.collection_code || '').split(',')[0].trim().toUpperCase();
         const mainCat = (r.main_category || '').toUpperCase();
