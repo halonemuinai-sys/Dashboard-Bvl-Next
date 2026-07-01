@@ -27,6 +27,12 @@ const STORE_FILTER_COLORS: Record<string, string> = {
 
 type Tab = 'homebase' | 'rotation' | 'target' | 'store-target';
 
+// Strip dots/commas (Indonesian thousand separators) and parse as whole Rupiah
+const parseTargetValue = (raw: string): number => {
+  const digits = raw.replace(/[^0-9]/g, '');
+  return digits ? parseInt(digits, 10) : 0;
+};
+
 export default function AdvisorSetupPage() {
   const today = new Date();
   const [tab, setTab] = useState<Tab>('homebase');
@@ -154,7 +160,7 @@ export default function AdvisorSetupPage() {
 
   const saveTarget = async (advisorName: string, monthNum: number, rawValue: string) => {
     const key = `${advisorName}||${monthNum}`;
-    const targetValue = parseFloat(rawValue.replace(/[^0-9.-]/g, '')) || 0;
+    const targetValue = parseTargetValue(rawValue);
     setSaving(key);
     setError(null);
     try {
@@ -172,7 +178,7 @@ export default function AdvisorSetupPage() {
 
   const saveStoreTarget = async (storeName: string, monthNum: number, rawValue: string) => {
     const key = `${storeName}||${monthNum}`;
-    const targetValue = parseFloat(rawValue.replace(/[^0-9.-]/g, '')) || 0;
+    const targetValue = parseTargetValue(rawValue);
     setSaving(key);
     setError(null);
     try {
@@ -186,6 +192,16 @@ export default function AdvisorSetupPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save store target');
     } finally { setSaving(null); }
+  };
+
+  // Appends "000" by multiplying the current edit value by 1000
+  const multiplyEditBy1000 = (
+    key: string,
+    displayVal: string,
+    setEdits: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  ) => {
+    const next = parseTargetValue(displayVal) * 1000;
+    setEdits(prev => ({ ...prev, [key]: new Intl.NumberFormat('id-ID').format(next) }));
   };
 
   if (loading) return <BvlgariLoader message="Loading Setup & Targets..." />;
@@ -492,7 +508,7 @@ export default function AdvisorSetupPage() {
                     const isSaved = saved.has(editKey);
                     
                     // Consider it changed if edited exists and parsing it differs from existing target
-                    const parsedEdited = edited !== undefined ? parseFloat(edited.replace(/[^0-9.-]/g, '')) || 0 : existingTarget;
+                    const parsedEdited = edited !== undefined ? parseTargetValue(edited) : existingTarget;
                     const hasChange = edited !== undefined && parsedEdited !== existingTarget;
 
                     return (
@@ -504,7 +520,7 @@ export default function AdvisorSetupPage() {
                           </span>
                         </td>
                         <td className="py-3 px-5">
-                          <div className="relative w-44">
+                          <div className="flex items-center gap-1.5 w-56">
                             <input
                               type="text"
                               value={displayVal}
@@ -519,6 +535,14 @@ export default function AdvisorSetupPage() {
                               )}
                               placeholder="0"
                             />
+                            <button
+                              type="button"
+                              title="Kalikan 1000 (tambah .000)"
+                              onClick={() => multiplyEditBy1000(editKey, displayVal, setTargetEdits)}
+                              className="shrink-0 px-2 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 hover:bg-indigo-100 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
+                            >
+                              000
+                            </button>
                           </div>
                         </td>
                         <td className="py-3 px-5">
@@ -592,14 +616,14 @@ export default function AdvisorSetupPage() {
                     const isSaved = saved.has(editKey);
                     
                     // Consider it changed if edited exists and parsing it differs from existing target
-                    const parsedEdited = edited !== undefined ? parseFloat(edited.replace(/[^0-9.-]/g, '')) || 0 : existingTarget;
+                    const parsedEdited = edited !== undefined ? parseTargetValue(edited) : existingTarget;
                     const hasChange = edited !== undefined && parsedEdited !== existingTarget;
 
                     return (
                       <tr key={storeName} className="hover:bg-slate-50 transition-colors text-sm">
                         <td className="py-3 px-5 font-bold text-slate-800">{storeName}</td>
                         <td className="py-3 px-5">
-                          <div className="relative w-64">
+                          <div className="flex items-center gap-1.5 w-72">
                             <input
                               type="text"
                               value={displayVal}
@@ -614,6 +638,14 @@ export default function AdvisorSetupPage() {
                               )}
                               placeholder="0"
                             />
+                            <button
+                              type="button"
+                              title="Kalikan 1000 (tambah .000)"
+                              onClick={() => multiplyEditBy1000(editKey, displayVal, setStoreTargetEdits)}
+                              className="shrink-0 px-2 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 hover:bg-indigo-100 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
+                            >
+                              000
+                            </button>
                           </div>
                         </td>
                         <td className="py-3 px-5">

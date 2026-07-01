@@ -837,7 +837,10 @@ export const dashboardService = {
     const lmStart = `${lmYear}-${String(lmMonthIdx + 1).padStart(2, '0')}-01T00:00:00`;
     const lmEnd   = new Date(lmYear, lmMonthIdx + 1, 0, 23, 59, 59).toISOString();
 
-    const [{ data: rows, error }, { data: lmRows }, { data: targetRows }, { data: stockRows }] = await Promise.all([
+    const mStartStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
+    const mEndStr   = new Date(year, monthIdx + 1, 0).toISOString().split('T')[0];
+
+    const [{ data: rows, error }, { data: lmRows }, { data: targetRows }, { data: stockRows }, { data: valuationRows }] = await Promise.all([
       supabase
         .from('clean_master')
         .select('transaction_date, location, main_category, net_sales, qty, cost, gross_sales, type, comm, val_disc')
@@ -856,13 +859,72 @@ export const dashboardService = {
       supabase
         .from('stock_store')
         .select('*')
-        .eq('year', year)
+        .eq('year', year),
+      supabase
+        .from('inventory_valuation')
+        .select('snapshot_date, location_name, location_code, main_category, collection_code, qoh')
+        .gte('snapshot_date', mStartStr)
+        .lte('snapshot_date', mEndStr)
     ]);
 
     const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
     const currentMonthKey = monthKeys[monthIdx];
 
     if (error) throw error;
+
+    const normalizeCat = (c: string) => {
+      const cu = c.toUpperCase();
+      if (cu === 'JWL' || cu === 'JEWELRY') return 'Jewelry';
+      if (cu === 'WTH' || cu === 'WATCHES') return 'Watches';
+      if (cu === 'ACCS' || cu === 'ACCESSORIES') return 'Accessories';
+      if (cu === 'PFM' || cu === 'PERFUME') return 'Perfume';
+      return 'Other';
+    };
+
+    const normalizeStoreName = (nameOrCode: string) => {
+      const trimmed = (nameOrCode || '').trim();
+      if (trimmed === 'PI' || trimmed.toLowerCase() === 'plaza indonesia') return 'Plaza Indonesia';
+      if (trimmed === 'PS' || trimmed.toLowerCase() === 'plaza senayan') return 'Plaza Senayan';
+      if (trimmed === 'BL' || trimmed.toLowerCase() === 'bali') return 'Bali';
+      if (trimmed === 'HO' || trimmed.toLowerCase() === 'head office') return 'Head Office';
+      return trimmed;
+    };
+
+    const snapshotDates = Array.from(new Set((valuationRows || []).map(r => r.snapshot_date))).sort();
+    const earliestSnapshotDate = snapshotDates[0];
+
+    const valStockMap: Record<string, Record<string, number>> = {};
+    if (earliestSnapshotDate) {
+      const earliestRows = (valuationRows || []).filter(r => r.snapshot_date === earliestSnapshotDate);
+      earliestRows.forEach(r => {
+        const loc = normalizeStoreName(r.location_name || r.location_code || '');
+        const collCode = (r.collection_code || '').split(',')[0].trim().toUpperCase();
+        const mainCat = (r.main_category || '').toUpperCase();
+        
+        if (collCode === 'PACK' || mainCat === 'PACK' || mainCat === 'PACKAGING') return;
+        
+        const cat = normalizeCat(r.main_category || '');
+        if (cat === 'Perfume') return;
+        if (cat === 'Other') return;
+        
+        if (!valStockMap[loc]) {
+          valStockMap[loc] = { 'Jewelry': 0, 'Watches': 0, 'Accessories': 0, 'Perfume': 0 };
+        }
+        valStockMap[loc][cat] = (valStockMap[loc][cat] || 0) + (r.qoh || 0);
+      });
+    }
+
+    const getOpeningStock = (storeName: string, category: string) => {
+      const stdStore = normalizeStoreName(storeName);
+      if (earliestSnapshotDate && valStockMap[stdStore] && valStockMap[stdStore][category] !== undefined) {
+        return valStockMap[stdStore][category];
+      }
+      const stockRow = stockRows?.find(sr => 
+        normalizeStoreName(sr.location) === stdStore && 
+        normalizeCat(sr.category) === category
+      );
+      return stockRow ? (stockRow[currentMonthKey as keyof typeof stockRow] as number) : 0;
+    };
 
     let globalTarget = 0;
     // Target map from Supabase
@@ -898,14 +960,7 @@ export const dashboardService = {
     };
     const storeMap: Record<string, StoreAccum> = {};
 
-    const normalizeCat = (c: string) => {
-      const cu = c.toUpperCase();
-      if (cu === 'JWL' || cu === 'JEWELRY') return 'Jewelry';
-      if (cu === 'WTH' || cu === 'WATCHES') return 'Watches';
-      if (cu === 'ACCS' || cu === 'ACCESSORIES') return 'Accessories';
-      if (cu === 'PFM' || cu === 'PERFUME') return 'Perfume';
-      return 'Other';
-    };
+    // normalizeCat moved to top
 
     (rows || []).forEach(row => {
       const loc = (row.location || '').trim();
@@ -948,8 +1003,7 @@ export const dashboardService = {
         // Pre-populate core categories
         const coreCats = ['Jewelry', 'Watches', 'Accessories', 'Perfume'];
         coreCats.forEach(c => {
-          const stockRow = stockRows?.find(sr => sr.location.toLowerCase() === loc.toLowerCase() && normalizeCat(sr.category) === c);
-          const openingStock = stockRow ? (stockRow[currentMonthKey as keyof typeof stockRow] as number) : 0;
+          const openingStock = getOpeningStock(loc, c);
           storeMap[loc].categories[c] = { qty: 0, netNonSMI: 0, netSMI: 0, stock: openingStock, valDisc: 0, gross: 0 };
         });
       }
@@ -964,8 +1018,7 @@ export const dashboardService = {
       const normCat = normalizeCat(cat);
       if (!s.categories[normCat]) {
         // Find opening stock for this store/category
-        const stockRow = stockRows?.find(sr => sr.location.toLowerCase() === loc.toLowerCase() && normalizeCat(sr.category) === normCat);
-        const openingStock = stockRow ? (stockRow[currentMonthKey as keyof typeof stockRow] as number) : 0;
+        const openingStock = getOpeningStock(loc, normCat);
         s.categories[normCat] = { qty: 0, netNonSMI: 0, netSMI: 0, stock: openingStock, valDisc: 0, gross: 0 };
       }
 
@@ -1020,8 +1073,7 @@ export const dashboardService = {
       if (Object.keys(s.categories).length === 0) {
         const coreCats = ['Jewelry', 'Watches', 'Accessories', 'Perfume'];
         coreCats.forEach(c => {
-          const stockRow = stockRows?.find(sr => sr.location.toLowerCase() === storeName.toLowerCase() && normalizeCat(sr.category) === c);
-          const openingStock = stockRow ? (stockRow[currentMonthKey as keyof typeof stockRow] as number) : 0;
+          const openingStock = getOpeningStock(storeName, c);
           s.categories[c] = { qty: 0, netNonSMI: 0, netSMI: 0, stock: openingStock, valDisc: 0, gross: 0 };
         });
       }
