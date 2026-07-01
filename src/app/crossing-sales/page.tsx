@@ -534,10 +534,18 @@ export default function CrossingSalesPage() {
 
   const storeCards = useMemo(() => {
     if (!data) return [];
+    const incomingMap: Record<string, number> = {};
+    const outgoingMap: Record<string, number> = {};
+    data.records.forEach(r => {
+      incomingMap[r.crossingLoc] = (incomingMap[r.crossingLoc] || 0) + r.net;
+      outgoingMap[r.baseLoc]     = (outgoingMap[r.baseLoc]     || 0) + r.net;
+    });
     return Object.entries(data.storeStats).map(([store, stats]) => {
-      const impact = stats.adjusted - stats.physical;
-      const varPct = stats.physical > 0 ? (impact / stats.physical) * 100 : 0;
-      return { store, ...stats, impact, varPct };
+      const incomingNet = incomingMap[store] || 0;
+      const outgoingNet = outgoingMap[store] || 0;
+      const impact  = stats.adjusted - stats.physical; // = outgoing - incoming
+      const varPct  = stats.physical > 0 ? (impact / stats.physical) * 100 : 0;
+      return { store, ...stats, impact, varPct, incomingNet, outgoingNet };
     });
   }, [data]);
 
@@ -625,16 +633,16 @@ export default function CrossingSalesPage() {
         </div>
       </div>
 
-      {/* Store Adjustment Cards */}
+      {/* Store Performance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {storeCards.map(({ store, physical, adjusted, impact, varPct }) => {
-          const cfg = STORE_CONFIG[store];
+        {storeCards.map(({ store, physical, adjusted, impact, varPct, incomingNet, outgoingNet }) => {
+          const cfg    = STORE_CONFIG[store];
           const isGain = impact >= 0;
           return (
-            <div key={store} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-              {/* Decorative circle */}
-              <div className={cn("absolute top-0 right-0 w-24 h-24 rounded-bl-full -mr-10 -mt-10 pointer-events-none transition-colors duration-300", cfg.bg)} />
+            <div key={store} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+              <div className={cn("absolute top-0 right-0 w-24 h-24 rounded-bl-full -mr-10 -mt-10 pointer-events-none", cfg.bg)} />
 
+              {/* Store header + variance badge */}
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
                   <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px] tracking-wider", cfg.bg, cfg.text)}>
@@ -651,22 +659,94 @@ export default function CrossingSalesPage() {
                 </span>
               </div>
 
+              {/* Net Team Performance (adjusted) */}
               <div className="mb-4">
-                <p className="text-[11px] font-medium text-slate-400 mb-1">Adjusted Performance</p>
+                <p className="text-[11px] font-medium text-slate-400 mb-1">Net Team Performance</p>
                 <h4 className="text-2xl font-bold text-slate-900 font-mono tracking-tight"><Amt value={adjusted} /></h4>
-                <p className={cn("text-[11px] font-bold mt-1", isGain ? "text-emerald-600" : "text-rose-500")}>
-                  {isGain ? '▲' : '▼'} <Amt value={Math.abs(impact)} /> vs Physical
-                </p>
               </div>
 
-              <div className="flex justify-between items-center text-[10px] pt-3 border-t border-slate-100">
-                <span className="text-slate-400 font-medium tracking-wide">Physical Sales</span>
-                <span className="font-bold text-slate-600 font-mono"><Amt value={physical} /></span>
+              {/* Breakdown: Physical → ± Crossing → Adjusted */}
+              <div className="space-y-1.5 pt-3 border-t border-slate-100">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-slate-400 font-medium">Physical (at store)</span>
+                  <span className="font-mono font-bold text-slate-600"><Amt value={physical} /></span>
+                </div>
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-emerald-600 font-semibold">↑ Outgoing (team away)</span>
+                  <span className="font-mono font-bold text-emerald-600">+<Amt value={outgoingNet} /></span>
+                </div>
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-rose-500 font-semibold">↓ Incoming (others here)</span>
+                  <span className="font-mono font-bold text-rose-500">−<Amt value={incomingNet} /></span>
+                </div>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Store Performance Summary Table */}
+      {storeCards.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+            <span className="w-2 h-2 bg-blue-600 rounded-full" />
+            <h3 className="text-sm font-bold text-slate-900">Store Performance Summary</h3>
+            <span className="ml-auto text-[10px] text-slate-400 font-medium">Physical ± Crossing = Net Team Performance</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100">
+                <tr>
+                  <th className="py-3 px-5">Store</th>
+                  <th className="py-3 px-5 text-right">Physical Sales</th>
+                  <th className="py-3 px-5 text-right text-emerald-600">+ Outgoing</th>
+                  <th className="py-3 px-5 text-right text-rose-500">− Incoming</th>
+                  <th className="py-3 px-5 text-right text-blue-700">Net Team Performance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {storeCards.map(({ store, physical, adjusted, outgoingNet, incomingNet }) => {
+                  const cfg = STORE_CONFIG[store];
+                  return (
+                    <tr key={store} className="text-xs hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-5">
+                        <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold", cfg.bg, cfg.text)}>
+                          {cfg.abbr} {store}
+                        </span>
+                      </td>
+                      <td className="py-3 px-5 text-right font-mono text-slate-600"><Amt value={physical} /></td>
+                      <td className="py-3 px-5 text-right font-mono font-bold text-emerald-600">
+                        {outgoingNet > 0 ? <><span className="text-emerald-400 mr-0.5">+</span><Amt value={outgoingNet} /></> : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="py-3 px-5 text-right font-mono font-bold text-rose-500">
+                        {incomingNet > 0 ? <><span className="mr-0.5">−</span><Amt value={incomingNet} /></> : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="py-3 px-5 text-right font-mono font-black text-blue-700 text-sm"><Amt value={adjusted} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-slate-50 border-t border-slate-200">
+                <tr className="text-xs font-bold text-slate-700">
+                  <td className="py-3 px-5">Total All Stores</td>
+                  <td className="py-3 px-5 text-right font-mono">
+                    <Amt value={storeCards.reduce((s, c) => s + c.physical, 0)} />
+                  </td>
+                  <td className="py-3 px-5 text-right font-mono text-emerald-600">
+                    +<Amt value={storeCards.reduce((s, c) => s + c.outgoingNet, 0)} />
+                  </td>
+                  <td className="py-3 px-5 text-right font-mono text-rose-500">
+                    −<Amt value={storeCards.reduce((s, c) => s + c.incomingNet, 0)} />
+                  </td>
+                  <td className="py-3 px-5 text-right font-mono font-black text-blue-700">
+                    <Amt value={storeCards.reduce((s, c) => s + c.adjusted, 0)} />
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Crossing Activity Table */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
