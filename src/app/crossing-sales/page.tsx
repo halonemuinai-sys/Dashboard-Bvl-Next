@@ -24,6 +24,7 @@ export default function CrossingSalesPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData]   = useState<CrossingSalesData | null>(null);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingAnnual, setExportingAnnual] = useState(false);
 
   const handleDownloadExcel = async () => {
     if (!data) return;
@@ -312,6 +313,211 @@ export default function CrossingSalesPage() {
     }
   };
 
+  const handleDownloadAnnualExcel = async () => {
+    setExportingAnnual(true);
+    try {
+      const yr = parseInt(year);
+      const allMonthData = await Promise.all(MONTHS.map(m => dashboardService.getCrossingSalesData(m, yr)));
+
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'MRA Retail BI Dashboard';
+      wb.created = new Date();
+
+      const C = {
+        navyBg:  '1E3A5F', navyText: 'FFFFFF',
+        slateBg: '475569', lightBg: 'F8FAFC',
+        accentBg:'EFF6FF', border:  'E2E8F0',
+      };
+      const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
+      const borderAll  = (color = C.border) => ({ top: thinBorder(color), bottom: thinBorder(color), left: thinBorder(color), right: thinBorder(color) });
+      const numFmt     = '#,##0;[Red](#,##0);"-"';
+      const STORES     = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+
+      // ── Sheet 1: Annual Summary ──────────────────────────────────────────
+      const ws = wb.addWorksheet('Annual Summary', { views: [{ showGridLines: true }] });
+      ws.columns = [{ width: 16 }, { width: 24 }, { width: 24 }, { width: 24 }, { width: 22 }];
+
+      ws.mergeCells('A1:E1');
+      Object.assign(ws.getCell('A1'), {
+        value: `BVLGARI — CROSSING SALES ANNUAL SUMMARY ${year}`,
+        font: { name: 'Georgia', bold: true, size: 14, color: { argb: 'FF' + C.navyBg } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+      });
+      ws.getRow(1).height = 34;
+
+      ws.mergeCells('A2:E2');
+      Object.assign(ws.getCell('A2'), {
+        value: 'Crossing Net Sales by Location — Full Year View (Rp)',
+        font: { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+      });
+      ws.getRow(2).height = 18;
+      ws.addRow([]);
+
+      const addSectionHeader = (ws: any, text: string, rowIdx: number, cols: string) => {
+        ws.mergeCells(`A${rowIdx}:${cols}${rowIdx}`);
+        const cell = ws.getCell(`A${rowIdx}`);
+        cell.value = text;
+        cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: 'FF' + C.navyBg } };
+        cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        ws.getRow(rowIdx).height = 22;
+      };
+
+      const addMatrixSection = (
+        ws: any,
+        sectionLabel: string,
+        hdrColor: string,
+        extractFn: (md: typeof allMonthData[0]) => Record<string, number>
+      ) => {
+        const secRow = ws.rowCount + 1;
+        addSectionHeader(ws, sectionLabel, secRow, 'E');
+
+        const hdr = ws.addRow(['Month', ...STORES, 'Total Crossing']);
+        hdr.height = 20;
+        hdr.eachCell((cell: any) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + hdrColor } };
+          cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
+          cell.border = borderAll(hdrColor);
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+        });
+        hdr.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+
+        const grandTotals: Record<string, number> = { 'Plaza Indonesia': 0, 'Plaza Senayan': 0, 'Bali': 0, total: 0 };
+
+        allMonthData.forEach((md, idx) => {
+          const byLoc = extractFn(md);
+          const rowTotal = Object.values(byLoc).reduce((s, v) => s + v, 0);
+          const row = ws.addRow([MONTHS[idx].substring(0, 3), byLoc['Plaza Indonesia'] || 0, byLoc['Plaza Senayan'] || 0, byLoc['Bali'] || 0, rowTotal]);
+          row.height = 18;
+          row.eachCell((cell: any, col: number) => {
+            cell.border = borderAll();
+            cell.font = { name: 'Arial', size: 9 };
+            if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+            if (col === 1) { cell.font = { name: 'Arial', bold: true, size: 9 }; cell.alignment = { vertical: 'middle', horizontal: 'left' }; }
+            else { cell.alignment = { vertical: 'middle', horizontal: 'right' }; cell.numFmt = numFmt; }
+          });
+          STORES.forEach(s => { grandTotals[s] = (grandTotals[s] || 0) + (byLoc[s] || 0); });
+          grandTotals.total += rowTotal;
+        });
+
+        const totRow = ws.addRow(['TOTAL', grandTotals['Plaza Indonesia'], grandTotals['Plaza Senayan'], grandTotals['Bali'], grandTotals.total]);
+        totRow.height = 22;
+        totRow.eachCell((cell: any, col: number) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.accentBg } };
+          cell.border = borderAll(C.slateBg);
+          cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + C.navyBg } };
+          if (col === 1) cell.alignment = { vertical: 'middle', horizontal: 'left' };
+          else { cell.alignment = { vertical: 'middle', horizontal: 'right' }; cell.numFmt = numFmt; }
+        });
+
+        ws.addRow([]);
+        ws.addRow([]);
+      };
+
+      addMatrixSection(ws, 'A. CROSSING INCOMING — BY DESTINATION LOCATION', C.navyBg, (md) => {
+        const byDest: Record<string, number> = {};
+        md.records.forEach(r => { byDest[r.crossingLoc] = (byDest[r.crossingLoc] || 0) + r.net; });
+        return byDest;
+      });
+
+      addMatrixSection(ws, 'B. CROSSING OUTGOING — BY BASE (HOME) LOCATION', C.slateBg, (md) => {
+        const byBase: Record<string, number> = {};
+        md.records.forEach(r => { byBase[r.baseLoc] = (byBase[r.baseLoc] || 0) + r.net; });
+        return byBase;
+      });
+
+      addMatrixSection(ws, 'C. STORE ADJUSTED PERFORMANCE (Physical + Incoming − Outgoing)', C.slateBg, (md) => {
+        const byAdj: Record<string, number> = {};
+        Object.entries(md.storeStats).forEach(([store, stats]) => { byAdj[store] = stats.adjusted; });
+        return byAdj;
+      });
+
+      // ── Sheet 2: Flow Matrix ────────────────────────────────────────────
+      const ws2 = wb.addWorksheet('Flow Matrix', { views: [{ showGridLines: true }] });
+      ws2.columns = [{ width: 24 }, { width: 6 }, { width: 24 }, { width: 24 }, { width: 14 }];
+
+      ws2.mergeCells('A1:E1');
+      Object.assign(ws2.getCell('A1'), {
+        value: `BVLGARI — CROSSING FLOW MATRIX ${year}`,
+        font: { name: 'Georgia', bold: true, size: 14, color: { argb: 'FF' + C.navyBg } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+      });
+      ws2.getRow(1).height = 34;
+
+      ws2.mergeCells('A2:E2');
+      Object.assign(ws2.getCell('A2'), {
+        value: 'Annual aggregate crossing net sales by Base → Destination flow',
+        font: { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+      });
+      ws2.getRow(2).height = 18;
+      ws2.addRow([]);
+
+      const hdr3 = ws2.addRow(['Base Location', '', 'Destination', 'Net Sales (Rp)', 'Qty (pcs)']);
+      hdr3.height = 22;
+      hdr3.eachCell((cell: any, col: number) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.navyBg } };
+        cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
+        cell.border = borderAll(C.navyBg);
+        cell.alignment = { vertical: 'middle', horizontal: col <= 3 ? 'left' : 'right' };
+      });
+      hdr3.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      const flowMap = new Map<string, { baseLoc: string; crossingLoc: string; net: number; qty: number }>();
+      allMonthData.forEach(md => {
+        md.records.forEach(r => {
+          const k = `${r.baseLoc}||${r.crossingLoc}`;
+          if (flowMap.has(k)) { flowMap.get(k)!.net += r.net; flowMap.get(k)!.qty += r.qty; }
+          else flowMap.set(k, { baseLoc: r.baseLoc, crossingLoc: r.crossingLoc, net: r.net, qty: r.qty });
+        });
+      });
+
+      let grandNet = 0, grandQty = 0;
+      Array.from(flowMap.values()).sort((a, b) => b.net - a.net).forEach((f, idx) => {
+        const row = ws2.addRow([f.baseLoc, '→', f.crossingLoc, f.net, f.qty]);
+        row.height = 20;
+        row.eachCell((cell: any, col: number) => {
+          cell.border = borderAll();
+          cell.font = { name: 'Arial', size: 9.5 };
+          if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+          if (col === 1) { cell.font = { name: 'Arial', bold: true, size: 9.5 }; cell.alignment = { vertical: 'middle', horizontal: 'left' }; }
+          else if (col === 2) { cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.font = { name: 'Arial', size: 9.5, color: { argb: 'FF94A3B8' } }; }
+          else if (col === 3) { cell.alignment = { vertical: 'middle', horizontal: 'left' }; }
+          else if (col === 4) { cell.alignment = { vertical: 'middle', horizontal: 'right' }; cell.numFmt = numFmt; }
+          else { cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.numFmt = '#,##0'; }
+        });
+        grandNet += f.net; grandQty += f.qty;
+      });
+
+      const gRow = ws2.addRow(['TOTAL', '', '', grandNet, grandQty]);
+      gRow.height = 22;
+      ws2.mergeCells(`A${ws2.rowCount}:C${ws2.rowCount}`);
+      gRow.eachCell({ includeEmpty: true }, (cell: any, col: number) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.accentBg } };
+        cell.border = borderAll(C.slateBg);
+        cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + C.navyBg } };
+        if (col === 1) cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        else if (col === 4) { cell.alignment = { vertical: 'middle', horizontal: 'right' }; cell.numFmt = numFmt; }
+        else if (col === 5) { cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.numFmt = '#,##0'; }
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Crossing_Sales_Annual_Summary_${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert('Error exporting Annual Excel: ' + err.message);
+    } finally {
+      setExportingAnnual(false);
+    }
+  };
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -374,6 +580,14 @@ export default function CrossingSalesPage() {
           >
             {exportingExcel ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Excel
+          </button>
+          <button
+            onClick={handleDownloadAnnualExcel}
+            disabled={exportingAnnual}
+            className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10"
+          >
+            {exportingAnnual ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            Annual Summary
           </button>
         </div>
       </div>
