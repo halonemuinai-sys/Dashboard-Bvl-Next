@@ -49,6 +49,41 @@ const formatYAxis = (val: number) => {
   return `Rp ${val.toLocaleString('id-ID')}`;
 };
 
+interface SandboxInputProps {
+  value: number;
+  onChange: (val: number) => void;
+}
+
+function SandboxInput({ value, onChange }: SandboxInputProps) {
+  const [displayVal, setDisplayVal] = useState('');
+
+  useEffect(() => {
+    setDisplayVal(Math.round(value).toLocaleString('id-ID'));
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digitsOnly = e.target.value.replace(/\D/g, '');
+    const num = parseInt(digitsOnly, 10) || 0;
+    setDisplayVal(num.toLocaleString('id-ID'));
+    onChange(num);
+  };
+
+  const handleBlur = () => {
+    setDisplayVal(Math.round(value).toLocaleString('id-ID'));
+  };
+
+  return (
+    <input
+      type="text"
+      value={displayVal}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      className="w-full bg-slate-50 border border-slate-200 focus:border-violet-500 focus:bg-white text-right font-mono text-xs p-1.5 rounded-lg outline-none transition-all"
+      placeholder="0"
+    />
+  );
+}
+
 export default function ComparisonSandboxPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<SandboxDataMap>({});
@@ -593,13 +628,9 @@ export default function ComparisonSandboxPage() {
                                     const val = data[yr]?.[store]?.[mIdx] || 0;
                                     return (
                                       <td key={yr} className="p-1">
-                                        <input
-                                          type="number"
-                                          aria-label={`Sales for ${store} in ${m} ${yr}`}
-                                          value={val || ""}
-                                          onChange={e => handleValueChange(yr, store, mIdx, e.target.value)}
-                                          className="w-full bg-slate-50 border border-slate-200 focus:border-violet-500 focus:bg-white text-right font-mono text-xs p-1.5 rounded-lg outline-none transition-all"
-                                          placeholder="0"
+                                        <SandboxInput
+                                          value={val}
+                                          onChange={newVal => handleValueChange(yr, store, mIdx, String(newVal))}
                                         />
                                       </td>
                                     );
