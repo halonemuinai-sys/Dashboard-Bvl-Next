@@ -59,6 +59,7 @@ const menuGroups = [
       { name: 'Store Performance',   icon: Store,           href: '/store-performance' },
       { name: 'Forecasting',         icon: LineChart,       href: '/forecasting', badge: 'AI', badgeColor: 'bg-indigo-500' },
       { name: 'Sales Simulator',     icon: Sliders,         href: '/sales-simulator', badge: 'NEW', badgeColor: 'bg-indigo-500' },
+      { name: 'Comparison Sandbox',  icon: Sliders,         href: '/comparison-sandbox', badge: 'NEW', badgeColor: 'bg-violet-500' },
     ]
   },
   {
