@@ -175,7 +175,199 @@ const generateLineGraphCanvas = (allMonthData: any[], year: number): HTMLCanvasE
   ctx.font = 'bold 14px Arial';
   ctx.fillStyle = '#0F172A';
   ctx.textAlign = 'right';
-  ctx.fillText(`Crossing Adjusted Performance — Year ${year}`, canvas.width - right, 25);
+  ctx.fillText(`Store Performance — Year ${year}`, canvas.width - right, 25);
+
+  return canvas;
+};
+
+const generateComparisonGraphCanvas = (data2025: any[], data2026: any[]): HTMLCanvasElement => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1000;
+  canvas.height = 500;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const STORES = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+  const STORE_COLORS: Record<string, string> = {
+    'Plaza Indonesia': '#8B5CF6',
+    'Plaza Senayan':   '#D97706',
+    'Bali':            '#2563EB',
+  };
+
+  const data2025Points: Record<string, number[]> = { 'Plaza Indonesia': [], 'Plaza Senayan': [], 'Bali': [] };
+  const data2026Points: Record<string, number[]> = { 'Plaza Indonesia': [], 'Plaza Senayan': [], 'Bali': [] };
+
+  STORES.forEach(store => {
+    data2025.forEach(md => {
+      data2025Points[store].push(md.storeStats[store]?.adjusted || 0);
+    });
+    data2026.forEach(md => {
+      data2026Points[store].push(md.storeStats[store]?.adjusted || 0);
+    });
+  });
+
+  const top = 70;
+  const bottom = 60;
+  const left = 120;
+  const right = 50;
+  const graphWidth = canvas.width - left - right;
+  const graphHeight = canvas.height - top - bottom;
+
+  let maxVal = 0;
+  STORES.forEach(store => {
+    data2025Points[store].forEach(val => { if (val > maxVal) maxVal = val; });
+    data2026Points[store].forEach(val => { if (val > maxVal) maxVal = val; });
+  });
+
+  const roundToNiceNumber = (val: number): number => {
+    if (val <= 0) return 1000000;
+    const exponent = Math.floor(Math.log10(val));
+    const fraction = val / Math.pow(10, exponent);
+    let niceFraction = 10;
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 2) niceFraction = 2;
+    else if (fraction <= 5) niceFraction = 5;
+    return niceFraction * Math.pow(10, exponent);
+  };
+  const yAxisMax = roundToNiceNumber(maxVal * 1.15);
+
+  ctx.strokeStyle = '#F1F5F9';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#64748B';
+  ctx.font = '12px Arial';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+
+  const yTicks = 5;
+  for (let i = 0; i <= yTicks; i++) {
+    const ratio = i / yTicks;
+    const yVal = yAxisMax * ratio;
+    const yPos = canvas.height - bottom - ratio * graphHeight;
+
+    ctx.beginPath();
+    ctx.moveTo(left, yPos);
+    ctx.lineTo(canvas.width - right, yPos);
+    ctx.stroke();
+
+    let label = '';
+    if (yVal >= 1000000000) {
+      label = `Rp ${(yVal / 1000000000).toFixed(1)} M`;
+    } else if (yVal >= 1000000) {
+      label = `Rp ${(yVal / 1000000).toFixed(0)} jt`;
+    } else {
+      label = `Rp ${yVal.toLocaleString('id-ID')}`;
+    }
+    ctx.fillText(label, left - 15, yPos);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#64748B';
+  const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+  const xSpacing = graphWidth / 5;
+  
+  monthLabels.forEach((label, idx) => {
+    const xPos = left + idx * xSpacing;
+    ctx.fillText(label, xPos, canvas.height - bottom + 15);
+    
+    ctx.strokeStyle = '#CBD5E1';
+    ctx.beginPath();
+    ctx.moveTo(xPos, canvas.height - bottom);
+    ctx.lineTo(xPos, canvas.height - bottom + 5);
+    ctx.stroke();
+  });
+
+  STORES.forEach(store => {
+    const color = STORE_COLORS[store];
+    
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    data2025Points[store].forEach((val, idx) => {
+      const xPos = left + idx * xSpacing;
+      const ratio = val / yAxisMax;
+      const yPos = canvas.height - bottom - ratio * graphHeight;
+      if (idx === 0) ctx.moveTo(xPos, yPos);
+      else ctx.lineTo(xPos, yPos);
+    });
+    ctx.stroke();
+
+    ctx.lineWidth = 3.5;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    data2026Points[store].forEach((val, idx) => {
+      const xPos = left + idx * xSpacing;
+      const ratio = val / yAxisMax;
+      const yPos = canvas.height - bottom - ratio * graphHeight;
+      if (idx === 0) ctx.moveTo(xPos, yPos);
+      else ctx.lineTo(xPos, yPos);
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    data2025Points[store].forEach((val, idx) => {
+      const xPos = left + idx * xSpacing;
+      const ratio = val / yAxisMax;
+      const yPos = canvas.height - bottom - ratio * graphHeight;
+      ctx.beginPath();
+      ctx.arc(xPos, yPos, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    data2026Points[store].forEach((val, idx) => {
+      const xPos = left + idx * xSpacing;
+      const ratio = val / yAxisMax;
+      const yPos = canvas.height - bottom - ratio * graphHeight;
+      ctx.beginPath();
+      ctx.arc(xPos, yPos, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+  });
+
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  let legendX = left;
+  STORES.forEach(store => {
+    const color = STORE_COLORS[store];
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(legendX, 20);
+    ctx.lineTo(legendX + 25, 20);
+    ctx.stroke();
+    ctx.fillStyle = '#475569';
+    ctx.fillText(`${store} (2025)`, legendX + 30, 20);
+
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(legendX, 40);
+    ctx.lineTo(legendX + 25, 40);
+    ctx.stroke();
+    ctx.fillStyle = '#0F172A';
+    ctx.fillText(`${store} (2026)`, legendX + 30, 40);
+
+    legendX += ctx.measureText(`${store} (2026)`).width + 80;
+  });
+
+  ctx.font = 'bold 14px Arial';
+  ctx.fillStyle = '#0F172A';
+  ctx.textAlign = 'right';
+  ctx.fillText('Comparison Jan-Jun (2025 vs 2026)', canvas.width - right, 30);
 
   return canvas;
 };
@@ -189,6 +381,7 @@ export default function CrossingSalesPage() {
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingAnnual, setExportingAnnual] = useState(false);
   const [exportingAdjusted, setExportingAdjusted] = useState(false);
+  const [exportingCompare, setExportingCompare] = useState(false);
 
   const handleDownloadExcel = async () => {
     if (!data) return;
@@ -498,12 +691,12 @@ export default function CrossingSalesPage() {
       const numFmt     = '#,##0;[Red](#,##0);"-"';
       const STORES     = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
 
-      const ws = wb.addWorksheet('Adjusted Performance', { views: [{ showGridLines: true }] });
+      const ws = wb.addWorksheet('Store Performance', { views: [{ showGridLines: true }] });
       ws.columns = [{ width: 16 }, { width: 24 }, { width: 24 }, { width: 24 }, { width: 22 }];
 
       ws.mergeCells('A1:E1');
       Object.assign(ws.getCell('A1'), {
-        value: `BVLGARI — STORE ADJUSTED PERFORMANCE ${year}`,
+        value: `BVLGARI — STORE PERFORMANCE ${year}`,
         font: { name: 'Georgia', bold: true, size: 14, color: { argb: 'FF' + C.navyBg } },
         alignment: { horizontal: 'center', vertical: 'middle' },
       });
@@ -511,7 +704,7 @@ export default function CrossingSalesPage() {
 
       ws.mergeCells('A2:E2');
       Object.assign(ws.getCell('A2'), {
-        value: 'Store Adjusted Performance (Physical Sales + Incoming − Outgoing) (Rp)',
+        value: 'Store Performance (Physical Sales + Incoming − Outgoing) (Rp)',
         font: { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } },
         alignment: { horizontal: 'center', vertical: 'middle' },
       });
@@ -593,7 +786,7 @@ export default function CrossingSalesPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Store_Adjusted_Performance_${year}.xlsx`;
+      a.download = `Store_Performance_${year}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
@@ -601,6 +794,232 @@ export default function CrossingSalesPage() {
       alert('Error exporting Adjusted Excel: ' + err.message);
     } finally {
       setExportingAdjusted(false);
+    }
+  };
+
+  const handleDownloadComparisonExcel = async () => {
+    setExportingCompare(true);
+    try {
+      const res2025 = await Promise.all(MONTHS.slice(0, 6).map(m => dashboardService.getCrossingSalesData(m, 2025)));
+      const res2026 = await Promise.all(MONTHS.slice(0, 6).map(m => dashboardService.getCrossingSalesData(m, 2026)));
+
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'MRA Retail BI Dashboard';
+      wb.created = new Date();
+
+      const C = {
+        navyBg:  '1E3A5F', navyText: 'FFFFFF',
+        slateBg: '475569', lightBg: 'F8FAFC',
+        accentBg:'EFF6FF', border:  'E2E8F0',
+        greenText: '059669', redText: 'DC2626'
+      };
+      const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
+      const borderAll  = (color = C.border) => ({ top: thinBorder(color), bottom: thinBorder(color), left: thinBorder(color), right: thinBorder(color) });
+      const numFmt     = 'Rp #,##0;[Red](Rp #,##0);"-"';
+      const pctFmt     = '+0.0%;[Red]-0.0%;"0.0%"';
+      const STORES     = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+
+      const ws = wb.addWorksheet('Jan-Jun Comparison', { views: [{ showGridLines: true }] });
+      ws.columns = [
+        { width: 14 }, // A: Month
+        { width: 16 }, // B: PI 2025
+        { width: 16 }, // C: PI 2026
+        { width: 10 }, // D: PI Var
+        { width: 16 }, // E: PS 2025
+        { width: 16 }, // F: PS 2026
+        { width: 10 }, // G: PS Var
+        { width: 16 }, // H: Bali 2025
+        { width: 16 }, // I: Bali 2026
+        { width: 10 }, // J: Bali Var
+        { width: 18 }, // K: Total 2025
+        { width: 18 }, // L: Total 2026
+        { width: 12 }  // M: Total Var
+      ];
+
+      ws.mergeCells('A1:M1');
+      Object.assign(ws.getCell('A1'), {
+        value: 'BVLGARI — SALES PERFORMANCE COMPARISON (JAN-JUN)',
+        font: { name: 'Georgia', bold: true, size: 14, color: { argb: 'FF' + C.navyBg } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+      });
+      ws.getRow(1).height = 34;
+
+      ws.mergeCells('A2:M2');
+      Object.assign(ws.getCell('A2'), {
+        value: 'Comparison of Store Adjusted Net Sales (Physical + Incoming − Outgoing) — Year 2025 vs 2026',
+        font: { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+      });
+      ws.getRow(2).height = 18;
+      ws.addRow([]);
+
+      const r4 = ws.getRow(4);
+      r4.height = 24;
+      
+      ws.mergeCells('A4:A5');
+      r4.getCell(1).value = 'MONTH';
+
+      ws.mergeCells('B4:D4'); r4.getCell(2).value = 'PLAZA INDONESIA';
+      ws.mergeCells('E4:G4'); r4.getCell(5).value = 'PLAZA SENAYAN';
+      ws.mergeCells('H4:J4'); r4.getCell(8).value = 'BALI';
+      ws.mergeCells('K4:M4'); r4.getCell(11).value = 'TOTAL';
+
+      const r5 = ws.getRow(5);
+      r5.height = 20;
+      [2, 5, 8, 11].forEach(colIdx => {
+        r5.getCell(colIdx).value = '2025';
+        r5.getCell(colIdx + 1).value = '2026';
+        r5.getCell(colIdx + 2).value = 'VAR %';
+      });
+
+      [4, 5].forEach(rowNum => {
+        const row = ws.getRow(rowNum);
+        row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + (colIdx <= 1 || colIdx > 10 ? C.navyBg : C.slateBg) } };
+          cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          cell.border = borderAll(C.border);
+        });
+      });
+
+      const storeTotals: Record<string, { s2025: number; s2026: number }> = {
+        'Plaza Indonesia': { s2025: 0, s2026: 0 },
+        'Plaza Senayan':   { s2025: 0, s2026: 0 },
+        'Bali':            { s2025: 0, s2026: 0 }
+      };
+
+      for (let idx = 0; idx < 6; idx++) {
+        const md2025 = res2025[idx];
+        const md2026 = res2026[idx];
+
+        const pi25 = md2025.storeStats['Plaza Indonesia']?.adjusted || 0;
+        const pi26 = md2026.storeStats['Plaza Indonesia']?.adjusted || 0;
+        const piVar = pi25 > 0 ? (pi26 - pi25) / pi25 : 0;
+
+        const ps25 = md2025.storeStats['Plaza Senayan']?.adjusted || 0;
+        const ps26 = md2026.storeStats['Plaza Senayan']?.adjusted || 0;
+        const psVar = ps25 > 0 ? (ps26 - ps25) / ps25 : 0;
+
+        const bl25 = md2025.storeStats['Bali']?.adjusted || 0;
+        const bl26 = md2026.storeStats['Bali']?.adjusted || 0;
+        const blVar = bl25 > 0 ? (bl26 - bl25) / bl25 : 0;
+
+        const tot25 = pi25 + ps25 + bl25;
+        const tot26 = pi26 + ps26 + bl26;
+        const totVar = tot25 > 0 ? (tot26 - tot25) / tot25 : 0;
+
+        const row = ws.addRow([
+          MONTHS[idx].toUpperCase(),
+          pi25, pi26, piVar,
+          ps25, ps26, psVar,
+          bl25, bl26, blVar,
+          tot25, tot26, totVar
+        ]);
+        row.height = 20;
+
+        row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+          cell.border = borderAll();
+          cell.font = { name: 'Arial', size: 9 };
+          if (idx % 2 === 1) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+          }
+
+          if (colIdx === 1) {
+            cell.font = { name: 'Arial', bold: true, size: 9 };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          } else if (colIdx === 4 || colIdx === 7 || colIdx === 10 || colIdx === 13) {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.numFmt = pctFmt;
+            if (typeof cell.value === 'number') {
+              if (cell.value > 0) cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF' + C.greenText } };
+              else if (cell.value < 0) cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF' + C.redText } };
+            }
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            cell.numFmt = numFmt;
+          }
+        });
+
+        storeTotals['Plaza Indonesia'].s2025 += pi25;
+        storeTotals['Plaza Indonesia'].s2026 += pi26;
+        storeTotals['Plaza Senayan'].s2025 += ps25;
+        storeTotals['Plaza Senayan'].s2026 += ps26;
+        storeTotals['Bali'].s2025 += bl25;
+        storeTotals['Bali'].s2026 += bl26;
+      }
+
+      const gpi25 = storeTotals['Plaza Indonesia'].s2025;
+      const gpi26 = storeTotals['Plaza Indonesia'].s2026;
+      const gpiVar = gpi25 > 0 ? (gpi26 - gpi25) / gpi25 : 0;
+
+      const gps25 = storeTotals['Plaza Senayan'].s2025;
+      const gps26 = storeTotals['Plaza Senayan'].s2026;
+      const gpsVar = gps25 > 0 ? (gps26 - gps25) / gps25 : 0;
+
+      const gbl25 = storeTotals['Bali'].s2025;
+      const gbl26 = storeTotals['Bali'].s2026;
+      const gblVar = gbl25 > 0 ? (gbl26 - gbl25) / gbl25 : 0;
+
+      const gtot25 = gpi25 + gps25 + gbl25;
+      const gtot26 = gpi26 + gps26 + gbl26;
+      const gtotVar = gtot25 > 0 ? (gtot26 - gtot25) / gtot25 : 0;
+
+      const totRow = ws.addRow([
+        'TOTAL',
+        gpi25, gpi26, gpiVar,
+        gps25, gps26, gpsVar,
+        gbl25, gbl26, gblVar,
+        gtot25, gtot26, gtotVar
+      ]);
+      totRow.height = 24;
+
+      totRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.accentBg } };
+        cell.border = borderAll(C.slateBg);
+        cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + C.navyBg } };
+
+        if (colIdx === 1) {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        } else if (colIdx === 4 || colIdx === 7 || colIdx === 10 || colIdx === 13) {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.numFmt = pctFmt;
+          if (typeof cell.value === 'number') {
+            if (cell.value > 0) cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + C.greenText } };
+            else if (cell.value < 0) cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + C.redText } };
+          }
+        } else {
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+          cell.numFmt = numFmt;
+        }
+      });
+
+      const canvas = generateComparisonGraphCanvas(res2025, res2026);
+      const imgBase64 = canvas.toDataURL('image/png');
+
+      const imageId = wb.addImage({
+        base64: imgBase64,
+        extension: 'png',
+      });
+
+      ws.addImage(imageId, {
+        tl: { col: 0, row: 13 },
+        ext: { width: 780, height: 390 }
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Sales_Comparison_Jan_Jun_2025_2026.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert('Error exporting Comparison Excel: ' + err.message);
+    } finally {
+      setExportingCompare(false);
     }
   };
 
@@ -894,7 +1313,15 @@ export default function CrossingSalesPage() {
             className="flex items-center gap-2 bg-violet-700 hover:bg-violet-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10 cursor-pointer"
           >
             {exportingAdjusted ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            Adjusted Perf.
+            Store Performance
+          </button>
+          <button
+            onClick={handleDownloadComparisonExcel}
+            disabled={exportingCompare}
+            className="flex items-center gap-2 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10 cursor-pointer"
+          >
+            {exportingCompare ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            Compare Jan-Jun
           </button>
         </div>
       </div>
