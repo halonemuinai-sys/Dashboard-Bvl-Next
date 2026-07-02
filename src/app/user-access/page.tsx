@@ -71,6 +71,7 @@ const MENU_GROUPS = [
       { path: '/store-performance',   label: 'Store Performance' },
       { path: '/forecasting',         label: 'Forecasting (AI)' },
       { path: '/sales-simulator',     label: 'Sales Simulator' },
+      { path: '/comparison-sandbox',  label: 'Comparison Sandbox' },
     ],
   },
   {
