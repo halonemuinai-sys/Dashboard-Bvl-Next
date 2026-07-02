@@ -116,8 +116,19 @@ export default function ComparisonSandboxPage() {
           });
         }));
 
-        setData(fetched);
-        setDbData(JSON.parse(JSON.stringify(fetched))); // clone
+        setDbData(JSON.parse(JSON.stringify(fetched))); // Baseline copy
+
+        // Load custom edits if they exist in localStorage
+        const stored = localStorage.getItem('bvl_sales_comparison_sandbox_data');
+        if (stored) {
+          try {
+            setData(JSON.parse(stored));
+          } catch (e) {
+            setData(fetched);
+          }
+        } else {
+          setData(fetched);
+        }
       } catch (e) {
         console.error('Error loading sandbox baseline data:', e);
       } finally {
@@ -126,7 +137,7 @@ export default function ComparisonSandboxPage() {
     })();
   }, []);
 
-  // Update specific store value in sandbox state
+  // Update specific store value in sandbox state & persist to LocalStorage
   const handleValueChange = (year: string, store: string, monthIdx: number, rawVal: string) => {
     const val = parseFloat(rawVal) || 0;
     setData(prev => {
@@ -134,6 +145,7 @@ export default function ComparisonSandboxPage() {
       if (!copy[year]) copy[year] = {};
       if (!copy[year][store]) copy[year][store] = [0,0,0,0,0,0];
       copy[year][store][monthIdx] = val;
+      localStorage.setItem('bvl_sales_comparison_sandbox_data', JSON.stringify(copy));
       return copy;
     });
   };
@@ -142,6 +154,7 @@ export default function ComparisonSandboxPage() {
   const handleReset = () => {
     if (confirm('Revert all values back to database originals? Any unsaved edits will be lost.')) {
       setData(JSON.parse(JSON.stringify(dbData)));
+      localStorage.setItem('bvl_sales_comparison_sandbox_data', JSON.stringify(dbData));
     }
   };
 
@@ -556,6 +569,10 @@ export default function ComparisonSandboxPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Auto-saved locally
+          </span>
           <button
             onClick={handleReset}
             className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-4 py-2 rounded-xl shadow-sm text-sm font-bold h-10 transition-colors cursor-pointer"
