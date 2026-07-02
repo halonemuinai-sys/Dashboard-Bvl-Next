@@ -17,6 +17,169 @@ const STORE_CONFIG: Record<string, { abbr: string; color: string; bg: string; te
 
 const fmtPct = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(1) + '%';
 
+const generateLineGraphCanvas = (allMonthData: any[], year: number): HTMLCanvasElement => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1000;
+  canvas.height = 500;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const STORES = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+  const STORE_COLORS: Record<string, string> = {
+    'Plaza Indonesia': '#8B5CF6',
+    'Plaza Senayan':   '#D97706',
+    'Bali':            '#2563EB',
+  };
+
+  const dataPoints: Record<string, number[]> = {
+    'Plaza Indonesia': [],
+    'Plaza Senayan':   [],
+    'Bali':            [],
+  };
+
+  allMonthData.forEach(md => {
+    STORES.forEach(store => {
+      const val = md.storeStats[store]?.adjusted || 0;
+      dataPoints[store].push(val);
+    });
+  });
+
+  const top = 60;
+  const bottom = 60;
+  const left = 120;
+  const right = 50;
+  const graphWidth = canvas.width - left - right;
+  const graphHeight = canvas.height - top - bottom;
+
+  let maxVal = 0;
+  STORES.forEach(store => {
+    dataPoints[store].forEach(val => {
+      if (val > maxVal) maxVal = val;
+    });
+  });
+
+  const roundToNiceNumber = (val: number): number => {
+    if (val <= 0) return 1000000;
+    const exponent = Math.floor(Math.log10(val));
+    const fraction = val / Math.pow(10, exponent);
+    let niceFraction = 10;
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 2) niceFraction = 2;
+    else if (fraction <= 5) niceFraction = 5;
+    return niceFraction * Math.pow(10, exponent);
+  };
+  const yAxisMax = roundToNiceNumber(maxVal * 1.15);
+
+  ctx.strokeStyle = '#F1F5F9';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#64748B';
+  ctx.font = '12px Arial';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+
+  const yTicks = 5;
+  for (let i = 0; i <= yTicks; i++) {
+    const ratio = i / yTicks;
+    const yVal = yAxisMax * ratio;
+    const yPos = canvas.height - bottom - ratio * graphHeight;
+
+    ctx.beginPath();
+    ctx.moveTo(left, yPos);
+    ctx.lineTo(canvas.width - right, yPos);
+    ctx.stroke();
+
+    let label = '';
+    if (yVal >= 1000000000) {
+      label = `Rp ${(yVal / 1000000000).toFixed(1)} M`;
+    } else if (yVal >= 1000000) {
+      label = `Rp ${(yVal / 1000000).toFixed(0)} jt`;
+    } else {
+      label = `Rp ${yVal.toLocaleString('id-ID')}`;
+    }
+    ctx.fillText(label, left - 15, yPos);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#64748B';
+  const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const xSpacing = graphWidth / 11;
+  
+  monthLabels.forEach((label, idx) => {
+    const xPos = left + idx * xSpacing;
+    ctx.fillText(label, xPos, canvas.height - bottom + 15);
+    
+    ctx.strokeStyle = '#CBD5E1';
+    ctx.beginPath();
+    ctx.moveTo(xPos, canvas.height - bottom);
+    ctx.lineTo(xPos, canvas.height - bottom + 5);
+    ctx.stroke();
+  });
+
+  STORES.forEach(store => {
+    const color = STORE_COLORS[store];
+    const points = dataPoints[store];
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    points.forEach((val, idx) => {
+      const xPos = left + idx * xSpacing;
+      const ratio = val / yAxisMax;
+      const yPos = canvas.height - bottom - ratio * graphHeight;
+
+      if (idx === 0) {
+        ctx.moveTo(xPos, yPos);
+      } else {
+        ctx.lineTo(xPos, yPos);
+      }
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    points.forEach((val, idx) => {
+      const xPos = left + idx * xSpacing;
+      const ratio = val / yAxisMax;
+      const yPos = canvas.height - bottom - ratio * graphHeight;
+
+      ctx.beginPath();
+      ctx.arc(xPos, yPos, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+  });
+
+  ctx.font = 'bold 13px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  let legendX = left;
+  STORES.forEach(store => {
+    const color = STORE_COLORS[store];
+    ctx.fillStyle = color;
+    ctx.fillRect(legendX, 20, 20, 10);
+    
+    ctx.fillStyle = '#1E293B';
+    ctx.fillText(store, legendX + 28, 25);
+    
+    legendX += ctx.measureText(store).width + 70;
+  });
+
+  ctx.font = 'bold 14px Arial';
+  ctx.fillStyle = '#0F172A';
+  ctx.textAlign = 'right';
+  ctx.fillText(`Crossing Adjusted Performance — Year ${year}`, canvas.width - right, 25);
+
+  return canvas;
+};
+
 export default function CrossingSalesPage() {
   const today = new Date();
   const [month, setMonth] = useState(MONTHS[today.getMonth()]);
@@ -25,6 +188,7 @@ export default function CrossingSalesPage() {
   const [data, setData]   = useState<CrossingSalesData | null>(null);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingAnnual, setExportingAnnual] = useState(false);
+  const [exportingAdjusted, setExportingAdjusted] = useState(false);
 
   const handleDownloadExcel = async () => {
     if (!data) return;
@@ -313,6 +477,133 @@ export default function CrossingSalesPage() {
     }
   };
 
+  const handleDownloadAdjustedExcel = async () => {
+    setExportingAdjusted(true);
+    try {
+      const yr = parseInt(year);
+      const allMonthData = await Promise.all(MONTHS.map(m => dashboardService.getCrossingSalesData(m, yr)));
+
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'MRA Retail BI Dashboard';
+      wb.created = new Date();
+
+      const C = {
+        navyBg:  '1E3A5F', navyText: 'FFFFFF',
+        slateBg: '475569', lightBg: 'F8FAFC',
+        accentBg:'EFF6FF', border:  'E2E8F0',
+      };
+      const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
+      const borderAll  = (color = C.border) => ({ top: thinBorder(color), bottom: thinBorder(color), left: thinBorder(color), right: thinBorder(color) });
+      const numFmt     = '#,##0;[Red](#,##0);"-"';
+      const STORES     = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+
+      const ws = wb.addWorksheet('Adjusted Performance', { views: [{ showGridLines: true }] });
+      ws.columns = [{ width: 16 }, { width: 24 }, { width: 24 }, { width: 24 }, { width: 22 }];
+
+      ws.mergeCells('A1:E1');
+      Object.assign(ws.getCell('A1'), {
+        value: `BVLGARI — STORE ADJUSTED PERFORMANCE ${year}`,
+        font: { name: 'Georgia', bold: true, size: 14, color: { argb: 'FF' + C.navyBg } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+      });
+      ws.getRow(1).height = 34;
+
+      ws.mergeCells('A2:E2');
+      Object.assign(ws.getCell('A2'), {
+        value: 'Store Adjusted Performance (Physical Sales + Incoming − Outgoing) (Rp)',
+        font: { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+      });
+      ws.getRow(2).height = 18;
+      ws.addRow([]);
+
+      const hdr = ws.addRow(['Month', ...STORES, 'Total Adjusted']);
+      hdr.height = 22;
+      hdr.eachCell((cell: any) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.navyBg } };
+        cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 9.5 };
+        cell.border = borderAll(C.navyBg);
+        cell.alignment = { vertical: 'middle', horizontal: 'right' };
+      });
+      hdr.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+
+      const grandTotals: Record<string, number> = { 'Plaza Indonesia': 0, 'Plaza Senayan': 0, 'Bali': 0, total: 0 };
+
+      allMonthData.forEach((md, idx) => {
+        const byAdj: Record<string, number> = {};
+        Object.entries(md.storeStats).forEach(([store, stats]) => { byAdj[store] = stats.adjusted; });
+        const rowTotal = Object.values(byAdj).reduce((s, v) => s + v, 0);
+        
+        const row = ws.addRow([
+          MONTHS[idx].substring(0, 3), 
+          byAdj['Plaza Indonesia'] || 0, 
+          byAdj['Plaza Senayan'] || 0, 
+          byAdj['Bali'] || 0, 
+          rowTotal
+        ]);
+        row.height = 19;
+        row.eachCell((cell: any, col: number) => {
+          cell.border = borderAll();
+          cell.font = { name: 'Arial', size: 9.5 };
+          if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.lightBg } };
+          if (col === 1) { 
+            cell.font = { name: 'Arial', bold: true, size: 9.5 }; 
+            cell.alignment = { vertical: 'middle', horizontal: 'left' }; 
+          } else { 
+            cell.alignment = { vertical: 'middle', horizontal: 'right' }; 
+            cell.numFmt = numFmt; 
+          }
+        });
+        STORES.forEach(s => { grandTotals[s] = (grandTotals[s] || 0) + (byAdj[s] || 0); });
+        grandTotals.total += rowTotal;
+      });
+
+      const totRow = ws.addRow([
+        'TOTAL', 
+        grandTotals['Plaza Indonesia'], 
+        grandTotals['Plaza Senayan'], 
+        grandTotals['Bali'], 
+        grandTotals.total
+      ]);
+      totRow.height = 22;
+      totRow.eachCell((cell: any, col: number) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.accentBg } };
+        cell.border = borderAll(C.slateBg);
+        cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: 'FF' + C.navyBg } };
+        if (col === 1) cell.alignment = { vertical: 'middle', horizontal: 'left' };
+        else { cell.alignment = { vertical: 'middle', horizontal: 'right' }; cell.numFmt = numFmt; }
+      });
+
+      const canvas = generateLineGraphCanvas(allMonthData, yr);
+      const imgBase64 = canvas.toDataURL('image/png');
+
+      const imageId = wb.addImage({
+        base64: imgBase64,
+        extension: 'png',
+      });
+
+      ws.addImage(imageId, {
+        tl: { col: 0, row: 19 },
+        ext: { width: 680, height: 340 }
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Store_Adjusted_Performance_${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert('Error exporting Adjusted Excel: ' + err.message);
+    } finally {
+      setExportingAdjusted(false);
+    }
+  };
+
   const handleDownloadAnnualExcel = async () => {
     setExportingAnnual(true);
     try {
@@ -584,7 +875,7 @@ export default function CrossingSalesPage() {
           <button
             onClick={handleDownloadExcel}
             disabled={exportingExcel}
-            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10"
+            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10 cursor-pointer"
           >
             {exportingExcel ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Excel
@@ -592,10 +883,18 @@ export default function CrossingSalesPage() {
           <button
             onClick={handleDownloadAnnualExcel}
             disabled={exportingAnnual}
-            className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10"
+            className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10 cursor-pointer"
           >
             {exportingAnnual ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Annual Summary
+          </button>
+          <button
+            onClick={handleDownloadAdjustedExcel}
+            disabled={exportingAdjusted}
+            className="flex items-center gap-2 bg-violet-700 hover:bg-violet-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10 cursor-pointer"
+          >
+            {exportingAdjusted ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            Adjusted Perf.
           </button>
         </div>
       </div>
