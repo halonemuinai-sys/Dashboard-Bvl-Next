@@ -195,7 +195,7 @@ export default function FootfallCrmPage() {
             </select>
             <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
               className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer border-l border-slate-200 pl-2 ml-2">
-              {['2026','2025','2024'].map(y => <option key={y} value={y}>{y}</option>)}
+              {['2026','2025','2024','2023'].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
           <button type="button" onClick={exportCSV}

@@ -143,6 +143,7 @@ export default function FootfallStorePage() {
               <option value="2026">2026</option>
               <option value="2025">2025</option>
               <option value="2024">2024</option>
+              <option value="2023">2023</option>
             </select>
           </div>
           <button onClick={load} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold shadow-sm hover:bg-slate-50 transition-all">

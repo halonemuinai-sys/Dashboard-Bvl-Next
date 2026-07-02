@@ -82,7 +82,7 @@ export default function ForecastingPage() {
           </select>
           <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
             className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-sm font-bold text-slate-700 shadow-sm outline-none cursor-pointer">
-            {['2026','2025','2024'].map(y => <option key={y} value={y}>{y}</option>)}
+            {['2026','2025','2024','2023'].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           {loading && <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />}
         </div>

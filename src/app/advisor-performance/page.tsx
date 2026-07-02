@@ -812,7 +812,10 @@ export default function AdvisorPerformancePage() {
             </select>
             <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
               className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer border-l border-slate-200 pl-2 ml-2">
-              <option value="2026">2026</option><option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
             </select>
           </div>
           <button type="button" onClick={exportExcel} disabled={exporting}
