@@ -246,7 +246,7 @@ export default function HeatmapCalendarPage() {
           </select>
           <select aria-label="year" value={year} onChange={e => setYear(e.target.value)}
             className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-sm font-bold text-slate-700 shadow-sm outline-none cursor-pointer">
-            {['2026','2025','2024'].map(y => <option key={y}>{y}</option>)}
+            {['2026','2025','2024','2023'].map(y => <option key={y}>{y}</option>)}
           </select>
           <select aria-label="store" value={store} onChange={e => setStore(e.target.value)}
             className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-sm font-bold text-slate-700 shadow-sm outline-none cursor-pointer">
