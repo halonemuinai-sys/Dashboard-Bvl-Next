@@ -180,7 +180,12 @@ const generateLineGraphCanvas = (allMonthData: any[], year: number): HTMLCanvasE
   return canvas;
 };
 
-const generateComparisonGraphCanvas = (data2025: any[], data2026: any[]): HTMLCanvasElement => {
+const generateComparisonGraphCanvas = (
+  data2023: any[],
+  data2024: any[],
+  data2025: any[],
+  data2026: any[]
+): HTMLCanvasElement => {
   const canvas = document.createElement('canvas');
   canvas.width = 1000;
   canvas.height = 500;
@@ -191,23 +196,23 @@ const generateComparisonGraphCanvas = (data2025: any[], data2026: any[]): HTMLCa
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const STORES = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
-  const STORE_COLORS: Record<string, string> = {
-    'Plaza Indonesia': '#8B5CF6',
-    'Plaza Senayan':   '#D97706',
-    'Bali':            '#2563EB',
+
+  const getMonthlyTotals = (dataset: any[]) => {
+    const list: number[] = [];
+    dataset.forEach(md => {
+      let mTotal = 0;
+      STORES.forEach(store => {
+        mTotal += md.storeStats[store]?.adjusted || 0;
+      });
+      list.push(mTotal);
+    });
+    return list;
   };
 
-  const data2025Points: Record<string, number[]> = { 'Plaza Indonesia': [], 'Plaza Senayan': [], 'Bali': [] };
-  const data2026Points: Record<string, number[]> = { 'Plaza Indonesia': [], 'Plaza Senayan': [], 'Bali': [] };
-
-  STORES.forEach(store => {
-    data2025.forEach(md => {
-      data2025Points[store].push(md.storeStats[store]?.adjusted || 0);
-    });
-    data2026.forEach(md => {
-      data2026Points[store].push(md.storeStats[store]?.adjusted || 0);
-    });
-  });
+  const totals2023 = getMonthlyTotals(data2023);
+  const totals2024 = getMonthlyTotals(data2024);
+  const totals2025 = getMonthlyTotals(data2025);
+  const totals2026 = getMonthlyTotals(data2026);
 
   const top = 70;
   const bottom = 60;
@@ -217,9 +222,8 @@ const generateComparisonGraphCanvas = (data2025: any[], data2026: any[]): HTMLCa
   const graphHeight = canvas.height - top - bottom;
 
   let maxVal = 0;
-  STORES.forEach(store => {
-    data2025Points[store].forEach(val => { if (val > maxVal) maxVal = val; });
-    data2026Points[store].forEach(val => { if (val > maxVal) maxVal = val; });
+  [totals2023, totals2024, totals2025, totals2026].forEach(arr => {
+    arr.forEach(val => { if (val > maxVal) maxVal = val; });
   });
 
   const roundToNiceNumber = (val: number): number => {
@@ -268,7 +272,7 @@ const generateComparisonGraphCanvas = (data2025: any[], data2026: any[]): HTMLCa
   ctx.fillStyle = '#64748B';
   const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
   const xSpacing = graphWidth / 5;
-  
+
   monthLabels.forEach((label, idx) => {
     const xPos = left + idx * xSpacing;
     ctx.fillText(label, xPos, canvas.height - bottom + 15);
@@ -280,14 +284,17 @@ const generateComparisonGraphCanvas = (data2025: any[], data2026: any[]): HTMLCa
     ctx.stroke();
   });
 
-  STORES.forEach(store => {
-    const color = STORE_COLORS[store];
+  const plotYearLine = (points: number[], color: string, isDashed: boolean, thickness: number) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = thickness;
+    if (isDashed) {
+      ctx.setLineDash([6, 6]);
+    } else {
+      ctx.setLineDash([]);
+    }
     
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([6, 6]);
     ctx.beginPath();
-    data2025Points[store].forEach((val, idx) => {
+    points.forEach((val, idx) => {
       const xPos = left + idx * xSpacing;
       const ratio = val / yAxisMax;
       const yPos = canvas.height - bottom - ratio * graphHeight;
@@ -296,35 +303,11 @@ const generateComparisonGraphCanvas = (data2025: any[], data2026: any[]): HTMLCa
     });
     ctx.stroke();
 
-    ctx.lineWidth = 3.5;
+    ctx.fillStyle = isDashed ? '#FFFFFF' : color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
     ctx.setLineDash([]);
-    ctx.beginPath();
-    data2026Points[store].forEach((val, idx) => {
-      const xPos = left + idx * xSpacing;
-      const ratio = val / yAxisMax;
-      const yPos = canvas.height - bottom - ratio * graphHeight;
-      if (idx === 0) ctx.moveTo(xPos, yPos);
-      else ctx.lineTo(xPos, yPos);
-    });
-    ctx.stroke();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    data2025Points[store].forEach((val, idx) => {
-      const xPos = left + idx * xSpacing;
-      const ratio = val / yAxisMax;
-      const yPos = canvas.height - bottom - ratio * graphHeight;
-      ctx.beginPath();
-      ctx.arc(xPos, yPos, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    });
-
-    ctx.fillStyle = color;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    data2026Points[store].forEach((val, idx) => {
+    points.forEach((val, idx) => {
       const xPos = left + idx * xSpacing;
       const ratio = val / yAxisMax;
       const yPos = canvas.height - bottom - ratio * graphHeight;
@@ -333,41 +316,46 @@ const generateComparisonGraphCanvas = (data2025: any[], data2026: any[]): HTMLCa
       ctx.fill();
       ctx.stroke();
     });
-  });
+  };
+
+  plotYearLine(totals2023, '#94A3B8', true, 2.5);
+  plotYearLine(totals2024, '#F59E0B', true, 2.5);
+  plotYearLine(totals2025, '#3B82F6', false, 3.5);
+  plotYearLine(totals2026, '#8B5CF6', false, 4.5);
 
   ctx.font = 'bold 12px Arial';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   let legendX = left;
-  STORES.forEach(store => {
-    const color = STORE_COLORS[store];
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(legendX, 20);
-    ctx.lineTo(legendX + 25, 20);
-    ctx.stroke();
-    ctx.fillStyle = '#475569';
-    ctx.fillText(`${store} (2025)`, legendX + 30, 20);
+  const yearsConfig = [
+    { label: '2023 Total', color: '#94A3B8', isDashed: true },
+    { label: '2024 Total', color: '#F59E0B', isDashed: true },
+    { label: '2025 Total', color: '#3B82F6', isDashed: false },
+    { label: '2026 Total', color: '#8B5CF6', isDashed: false },
+  ];
 
-    ctx.setLineDash([]);
-    ctx.lineWidth = 3.5;
+  yearsConfig.forEach(cfg => {
+    ctx.strokeStyle = cfg.color;
+    ctx.lineWidth = cfg.isDashed ? 2.5 : 3.5;
+    if (cfg.isDashed) ctx.setLineDash([4, 4]);
+    else ctx.setLineDash([]);
+    
     ctx.beginPath();
-    ctx.moveTo(legendX, 40);
-    ctx.lineTo(legendX + 25, 40);
+    ctx.moveTo(legendX, 30);
+    ctx.lineTo(legendX + 25, 30);
     ctx.stroke();
+
     ctx.fillStyle = '#0F172A';
-    ctx.fillText(`${store} (2026)`, legendX + 30, 40);
+    ctx.fillText(cfg.label, legendX + 30, 30);
 
-    legendX += ctx.measureText(`${store} (2026)`).width + 80;
+    legendX += ctx.measureText(cfg.label).width + 75;
   });
 
   ctx.font = 'bold 14px Arial';
   ctx.fillStyle = '#0F172A';
   ctx.textAlign = 'right';
-  ctx.fillText('Comparison Jan-Jun (2025 vs 2026)', canvas.width - right, 30);
+  ctx.fillText('Jan-Jun Store Performance Comparison (2023 - 2026)', canvas.width - right, 30);
 
   return canvas;
 };
@@ -800,6 +788,8 @@ export default function CrossingSalesPage() {
   const handleDownloadComparisonExcel = async () => {
     setExportingCompare(true);
     try {
+      const res2023 = await Promise.all(MONTHS.slice(0, 6).map(m => dashboardService.getCrossingSalesData(m, 2023)));
+      const res2024 = await Promise.all(MONTHS.slice(0, 6).map(m => dashboardService.getCrossingSalesData(m, 2024)));
       const res2025 = await Promise.all(MONTHS.slice(0, 6).map(m => dashboardService.getCrossingSalesData(m, 2025)));
       const res2026 = await Promise.all(MONTHS.slice(0, 6).map(m => dashboardService.getCrossingSalesData(m, 2026)));
 
@@ -812,32 +802,34 @@ export default function CrossingSalesPage() {
         navyBg:  '1E3A5F', navyText: 'FFFFFF',
         slateBg: '475569', lightBg: 'F8FAFC',
         accentBg:'EFF6FF', border:  'E2E8F0',
-        greenText: '059669', redText: 'DC2626'
       };
       const thinBorder = (color: string) => ({ style: 'thin' as const, color: { argb: 'FF' + color } });
       const borderAll  = (color = C.border) => ({ top: thinBorder(color), bottom: thinBorder(color), left: thinBorder(color), right: thinBorder(color) });
       const numFmt     = 'Rp #,##0;[Red](Rp #,##0);"-"';
-      const pctFmt     = '+0.0%;[Red]-0.0%;"0.0%"';
       const STORES     = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
 
       const ws = wb.addWorksheet('Jan-Jun Comparison', { views: [{ showGridLines: true }] });
       ws.columns = [
         { width: 14 }, // A: Month
-        { width: 16 }, // B: PI 2025
-        { width: 16 }, // C: PI 2026
-        { width: 10 }, // D: PI Var
-        { width: 16 }, // E: PS 2025
-        { width: 16 }, // F: PS 2026
-        { width: 10 }, // G: PS Var
-        { width: 16 }, // H: Bali 2025
-        { width: 16 }, // I: Bali 2026
-        { width: 10 }, // J: Bali Var
-        { width: 18 }, // K: Total 2025
-        { width: 18 }, // L: Total 2026
-        { width: 12 }  // M: Total Var
+        { width: 15 }, // B: PI 2023
+        { width: 15 }, // C: PI 2024
+        { width: 15 }, // D: PI 2025
+        { width: 15 }, // E: PI 2026
+        { width: 15 }, // F: PS 2023
+        { width: 15 }, // G: PS 2024
+        { width: 15 }, // H: PS 2025
+        { width: 15 }, // I: PS 2026
+        { width: 15 }, // J: Bali 2023
+        { width: 15 }, // K: Bali 2024
+        { width: 15 }, // L: Bali 2025
+        { width: 15 }, // M: Bali 2026
+        { width: 17 }, // N: Total 2023
+        { width: 17 }, // O: Total 2024
+        { width: 17 }, // P: Total 2025
+        { width: 17 }  // Q: Total 2026
       ];
 
-      ws.mergeCells('A1:M1');
+      ws.mergeCells('A1:Q1');
       Object.assign(ws.getCell('A1'), {
         value: 'BVLGARI — SALES PERFORMANCE COMPARISON (JAN-JUN)',
         font: { name: 'Georgia', bold: true, size: 14, color: { argb: 'FF' + C.navyBg } },
@@ -845,9 +837,9 @@ export default function CrossingSalesPage() {
       });
       ws.getRow(1).height = 34;
 
-      ws.mergeCells('A2:M2');
+      ws.mergeCells('A2:Q2');
       Object.assign(ws.getCell('A2'), {
-        value: 'Comparison of Store Adjusted Net Sales (Physical + Incoming − Outgoing) — Year 2025 vs 2026',
+        value: 'Comparison of Store Adjusted Net Sales (Physical + Incoming − Outgoing) — Years 2023 - 2026',
         font: { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } },
         alignment: { horizontal: 'center', vertical: 'middle' },
       });
@@ -860,61 +852,68 @@ export default function CrossingSalesPage() {
       ws.mergeCells('A4:A5');
       r4.getCell(1).value = 'MONTH';
 
-      ws.mergeCells('B4:D4'); r4.getCell(2).value = 'PLAZA INDONESIA';
-      ws.mergeCells('E4:G4'); r4.getCell(5).value = 'PLAZA SENAYAN';
-      ws.mergeCells('H4:J4'); r4.getCell(8).value = 'BALI';
-      ws.mergeCells('K4:M4'); r4.getCell(11).value = 'TOTAL';
+      ws.mergeCells('B4:E4'); r4.getCell(2).value = 'PLAZA INDONESIA';
+      ws.mergeCells('F4:I4'); r4.getCell(6).value = 'PLAZA SENAYAN';
+      ws.mergeCells('J4:M4'); r4.getCell(10).value = 'BALI';
+      ws.mergeCells('N4:Q4'); r4.getCell(14).value = 'TOTAL';
 
       const r5 = ws.getRow(5);
       r5.height = 20;
-      [2, 5, 8, 11].forEach(colIdx => {
-        r5.getCell(colIdx).value = '2025';
-        r5.getCell(colIdx + 1).value = '2026';
-        r5.getCell(colIdx + 2).value = 'VAR %';
+      [2, 6, 10, 14].forEach(colIdx => {
+        r5.getCell(colIdx).value = '2023';
+        r5.getCell(colIdx + 1).value = '2024';
+        r5.getCell(colIdx + 2).value = '2025';
+        r5.getCell(colIdx + 3).value = '2026';
       });
 
       [4, 5].forEach(rowNum => {
         const row = ws.getRow(rowNum);
         row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + (colIdx <= 1 || colIdx > 10 ? C.navyBg : C.slateBg) } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + (colIdx <= 1 || colIdx > 13 ? C.navyBg : C.slateBg) } };
           cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
           cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           cell.border = borderAll(C.border);
         });
       });
 
-      const storeTotals: Record<string, { s2025: number; s2026: number }> = {
-        'Plaza Indonesia': { s2025: 0, s2026: 0 },
-        'Plaza Senayan':   { s2025: 0, s2026: 0 },
-        'Bali':            { s2025: 0, s2026: 0 }
+      const storeTotals: Record<string, { s2023: number; s2024: number; s2025: number; s2026: number }> = {
+        'Plaza Indonesia': { s2023: 0, s2024: 0, s2025: 0, s2026: 0 },
+        'Plaza Senayan':   { s2023: 0, s2024: 0, s2025: 0, s2026: 0 },
+        'Bali':            { s2023: 0, s2024: 0, s2025: 0, s2026: 0 }
       };
 
       for (let idx = 0; idx < 6; idx++) {
+        const md2023 = res2023[idx];
+        const md2024 = res2024[idx];
         const md2025 = res2025[idx];
         const md2026 = res2026[idx];
 
+        const pi23 = md2023.storeStats['Plaza Indonesia']?.adjusted || 0;
+        const pi24 = md2024.storeStats['Plaza Indonesia']?.adjusted || 0;
         const pi25 = md2025.storeStats['Plaza Indonesia']?.adjusted || 0;
         const pi26 = md2026.storeStats['Plaza Indonesia']?.adjusted || 0;
-        const piVar = pi25 > 0 ? (pi26 - pi25) / pi25 : 0;
 
+        const ps23 = md2023.storeStats['Plaza Senayan']?.adjusted || 0;
+        const ps24 = md2024.storeStats['Plaza Senayan']?.adjusted || 0;
         const ps25 = md2025.storeStats['Plaza Senayan']?.adjusted || 0;
         const ps26 = md2026.storeStats['Plaza Senayan']?.adjusted || 0;
-        const psVar = ps25 > 0 ? (ps26 - ps25) / ps25 : 0;
 
+        const bl23 = md2023.storeStats['Bali']?.adjusted || 0;
+        const bl24 = md2024.storeStats['Bali']?.adjusted || 0;
         const bl25 = md2025.storeStats['Bali']?.adjusted || 0;
         const bl26 = md2026.storeStats['Bali']?.adjusted || 0;
-        const blVar = bl25 > 0 ? (bl26 - bl25) / bl25 : 0;
 
+        const tot23 = pi23 + ps23 + bl23;
+        const tot24 = pi24 + ps24 + bl24;
         const tot25 = pi25 + ps25 + bl25;
         const tot26 = pi26 + ps26 + bl26;
-        const totVar = tot25 > 0 ? (tot26 - tot25) / tot25 : 0;
 
         const row = ws.addRow([
           MONTHS[idx].toUpperCase(),
-          pi25, pi26, piVar,
-          ps25, ps26, psVar,
-          bl25, bl26, blVar,
-          tot25, tot26, totVar
+          pi23, pi24, pi25, pi26,
+          ps23, ps24, ps25, ps26,
+          bl23, bl24, bl25, bl26,
+          tot23, tot24, tot25, tot26
         ]);
         row.height = 20;
 
@@ -928,49 +927,54 @@ export default function CrossingSalesPage() {
           if (colIdx === 1) {
             cell.font = { name: 'Arial', bold: true, size: 9 };
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
-          } else if (colIdx === 4 || colIdx === 7 || colIdx === 10 || colIdx === 13) {
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
-            cell.numFmt = pctFmt;
-            if (typeof cell.value === 'number') {
-              if (cell.value > 0) cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF' + C.greenText } };
-              else if (cell.value < 0) cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF' + C.redText } };
-            }
           } else {
             cell.alignment = { vertical: 'middle', horizontal: 'right' };
             cell.numFmt = numFmt;
           }
         });
 
+        storeTotals['Plaza Indonesia'].s2023 += pi23;
+        storeTotals['Plaza Indonesia'].s2024 += pi24;
         storeTotals['Plaza Indonesia'].s2025 += pi25;
         storeTotals['Plaza Indonesia'].s2026 += pi26;
+
+        storeTotals['Plaza Senayan'].s2023 += ps23;
+        storeTotals['Plaza Senayan'].s2024 += ps24;
         storeTotals['Plaza Senayan'].s2025 += ps25;
         storeTotals['Plaza Senayan'].s2026 += ps26;
+
+        storeTotals['Bali'].s2023 += bl23;
+        storeTotals['Bali'].s2024 += bl24;
         storeTotals['Bali'].s2025 += bl25;
         storeTotals['Bali'].s2026 += bl26;
       }
 
+      const gpi23 = storeTotals['Plaza Indonesia'].s2023;
+      const gpi24 = storeTotals['Plaza Indonesia'].s2024;
       const gpi25 = storeTotals['Plaza Indonesia'].s2025;
       const gpi26 = storeTotals['Plaza Indonesia'].s2026;
-      const gpiVar = gpi25 > 0 ? (gpi26 - gpi25) / gpi25 : 0;
 
+      const gps23 = storeTotals['Plaza Senayan'].s2023;
+      const gps24 = storeTotals['Plaza Senayan'].s2024;
       const gps25 = storeTotals['Plaza Senayan'].s2025;
       const gps26 = storeTotals['Plaza Senayan'].s2026;
-      const gpsVar = gps25 > 0 ? (gps26 - gps25) / gps25 : 0;
 
+      const gbl23 = storeTotals['Bali'].s2025;
+      const gbl24 = storeTotals['Bali'].s2024;
       const gbl25 = storeTotals['Bali'].s2025;
       const gbl26 = storeTotals['Bali'].s2026;
-      const gblVar = gbl25 > 0 ? (gbl26 - gbl25) / gbl25 : 0;
 
+      const gtot23 = gpi23 + gps23 + gbl23;
+      const gtot24 = gpi24 + gps24 + gbl24;
       const gtot25 = gpi25 + gps25 + gbl25;
       const gtot26 = gpi26 + gps26 + gbl26;
-      const gtotVar = gtot25 > 0 ? (gtot26 - gtot25) / gtot25 : 0;
 
       const totRow = ws.addRow([
         'TOTAL',
-        gpi25, gpi26, gpiVar,
-        gps25, gps26, gpsVar,
-        gbl25, gbl26, gblVar,
-        gtot25, gtot26, gtotVar
+        gpi23, gpi24, gpi25, gpi26,
+        gps23, gps24, gps25, gps26,
+        gbl23, gbl24, gbl25, gbl26,
+        gtot23, gtot24, gtot25, gtot26
       ]);
       totRow.height = 24;
 
@@ -981,20 +985,13 @@ export default function CrossingSalesPage() {
 
         if (colIdx === 1) {
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        } else if (colIdx === 4 || colIdx === 7 || colIdx === 10 || colIdx === 13) {
-          cell.alignment = { vertical: 'middle', horizontal: 'center' };
-          cell.numFmt = pctFmt;
-          if (typeof cell.value === 'number') {
-            if (cell.value > 0) cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + C.greenText } };
-            else if (cell.value < 0) cell.font = { name: 'Arial', bold: true, size: 9.5, color: { argb: 'FF' + C.redText } };
-          }
         } else {
           cell.alignment = { vertical: 'middle', horizontal: 'right' };
           cell.numFmt = numFmt;
         }
       });
 
-      const canvas = generateComparisonGraphCanvas(res2025, res2026);
+      const canvas = generateComparisonGraphCanvas(res2023, res2024, res2025, res2026);
       const imgBase64 = canvas.toDataURL('image/png');
 
       const imageId = wb.addImage({
@@ -1003,7 +1000,7 @@ export default function CrossingSalesPage() {
       });
 
       ws.addImage(imageId, {
-        tl: { col: 0, row: 13 },
+        tl: { col: 0, row: 15 },
         ext: { width: 780, height: 390 }
       });
 
@@ -1012,7 +1009,7 @@ export default function CrossingSalesPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'Sales_Comparison_Jan_Jun_2025_2026.xlsx';
+      a.download = 'Sales_Comparison_Jan_Jun_2023_2026.xlsx';
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
@@ -1322,7 +1319,7 @@ export default function CrossingSalesPage() {
             className="flex items-center gap-2 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10 cursor-pointer"
           >
             {exportingCompare ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            Compare Jan-Jun
+            Compare 2023-2026
           </button>
         </div>
       </div>
