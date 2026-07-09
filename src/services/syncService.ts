@@ -78,7 +78,19 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
     const response = await fetch(proxyUrl);
 
     if (!response.ok) {
-      return { success: false, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: 0, error: `API Error: HTTP ${response.status}` };
+      let errMsg = `API Error: HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson.error) {
+          errMsg = `${errJson.error} (Detail: ${errJson.detail || 'None'})`;
+        }
+      } catch (_) {
+        try {
+          const errText = await response.text();
+          if (errText) errMsg += ` - ${errText}`;
+        } catch (_) {}
+      }
+      return { success: false, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: 0, error: errMsg };
     }
 
     const apiData: ApiSalesItem[] = await response.json();
