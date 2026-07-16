@@ -72,6 +72,7 @@ const menuGroups = [
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
       { name: 'Crossing Sales',      icon: Repeat,          href: '/crossing-sales' },
       { name: 'Sales Data',          icon: Database,        href: '/sales', badge: 'SYNC', badgeColor: 'bg-emerald-500' },
+      { name: 'Sales Data (DP/SVC)', icon: Database,        href: '/sales-dps-svc', badge: 'SYNC', badgeColor: 'bg-violet-500' },
       { name: 'Inventory Val.',      icon: Boxes,           href: '/inventory', badge: 'NEW', badgeColor: 'bg-blue-500' },
     ]
   },

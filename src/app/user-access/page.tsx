@@ -84,6 +84,7 @@ const MENU_GROUPS = [
       { path: '/heatmap-calendar',     label: 'Heatmap Calendar' },
       { path: '/crossing-sales',       label: 'Crossing Sales' },
       { path: '/sales',                label: 'Sales Data' },
+      { path: '/sales-dps-svc',        label: 'Sales Data (DP/SVC)' },
     ],
   },
   {
