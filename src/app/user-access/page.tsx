@@ -80,6 +80,7 @@ const MENU_GROUPS = [
       { path: '/daily-report',         label: 'Daily Report' },
       { path: '/daily-breakdown',      label: 'Daily Breakdown' },
       { path: '/monthly-transactions', label: 'Monthly Transactions' },
+      { path: '/monthly-dps-svc',      label: 'DP & SVC Transactions' },
       { path: '/heatmap-calendar',     label: 'Heatmap Calendar' },
       { path: '/crossing-sales',       label: 'Crossing Sales' },
       { path: '/sales',                label: 'Sales Data' },
