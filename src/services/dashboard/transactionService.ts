@@ -60,8 +60,9 @@ export async function deleteTransaction(id: number) {
 
 export async function getDpsSvcTransactions(month: string, year: number) {
   const monthIndex = ['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(month);
-  const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01T00:00:00`;
-  const mEnd   = new Date(year, monthIndex + 1, 0, 23, 59, 59).toISOString();
+  const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const mEnd   = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
   const { data, error } = await supabase
     .from('bvlgari_sales')
