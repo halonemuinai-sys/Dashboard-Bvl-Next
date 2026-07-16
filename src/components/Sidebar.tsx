@@ -68,6 +68,7 @@ const menuGroups = [
       { name: 'Daily Report',        icon: Calendar,        href: '/daily-report' },
       { name: 'Daily Breakdown',     icon: Table,           href: '/daily-breakdown' },
       { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions' },
+      { name: 'DP & SVC Trans.',     icon: ClipboardList,   href: '/monthly-dps-svc', badge: 'NEW', badgeColor: 'bg-violet-500' },
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
       { name: 'Crossing Sales',      icon: Repeat,          href: '/crossing-sales' },
       { name: 'Sales Data',          icon: Database,        href: '/sales', badge: 'SYNC', badgeColor: 'bg-emerald-500' },
