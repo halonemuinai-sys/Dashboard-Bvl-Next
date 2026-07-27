@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { dashboardService } from './dashboardService';
 import nodemailer from 'nodemailer';
+import ExcelJS from 'exceljs';
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const ID_MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -441,5 +442,478 @@ export const reportService = {
     });
 
     return { success: true, messageId: info.messageId };
+  },
+
+  /**
+   * Generates formatted Excel file for selected month, year, and location filter, and sends via email.
+   */
+  async sendMonthlyExcelReport(month: string, year: number, location: string = 'ALL', emailTo?: string, ccEmail?: string) {
+    const isLocMatch = (rowLoc: string, targetLoc: string) => {
+      if (!targetLoc || targetLoc.toUpperCase() === 'ALL' || targetLoc.toUpperCase() === 'ALL STORES' || targetLoc.toUpperCase() === 'SEMUA LOKASI') {
+        return true;
+      }
+      const r = (rowLoc || '').toUpperCase();
+      const t = targetLoc.toUpperCase();
+      if (t.includes('INDONESIA') || t.includes('PI')) {
+        return r.includes('INDONESIA') || r.includes('PI');
+      }
+      if (t.includes('SENAYAN') || t.includes('PS')) {
+        return r.includes('SENAYAN') || r.includes('PS');
+      }
+      if (t.includes('BALI')) {
+        return r.includes('BALI');
+      }
+      return r.includes(t);
+    };
+
+    const getEmailConfig = (targetLoc: string) => {
+      const defaultCc = 'aris@mraretail.co.id, jessica@mogems.co.id';
+      const t = (targetLoc || '').toUpperCase();
+      if (t.includes('INDONESIA') || t.includes('PI')) {
+        return { to: 'pi@mogems.co.id', cc: defaultCc, storeTitle: 'Plaza Indonesia' };
+      }
+      if (t.includes('SENAYAN') || t.includes('PS')) {
+        return { to: 'ps@mogems.co.id', cc: defaultCc, storeTitle: 'Plaza Senayan' };
+      }
+      if (t.includes('BALI')) {
+        return { to: 'bali@mogems.co.id', cc: defaultCc, storeTitle: 'Bali' };
+      }
+      return { to: 'aris@mraretail.co.id', cc: defaultCc, storeTitle: 'Semua Lokasi' };
+    };
+
+    const defaultConfig = getEmailConfig(location);
+    const targetEmail = emailTo || defaultConfig.to;
+    let targetCc = ccEmail !== undefined ? ccEmail : defaultConfig.cc;
+    if (targetCc && !targetCc.includes('jessica@mogems.co.id')) {
+      targetCc = `${targetCc}, jessica@mogems.co.id`;
+    }
+    const storeTitle = defaultConfig.storeTitle;
+
+    // 1. Fetch raw data
+    const [allSalesRows, allDpsSvcRows] = await Promise.all([
+      dashboardService.getTransactions(month, year),
+      dashboardService.getDpsSvcTransactions(month, year),
+    ]);
+
+    // 2. Filter data by store location
+    const salesRows = (allSalesRows || []).filter(r => isLocMatch(r.location, location));
+    const dpsSvcRows = (allDpsSvcRows || []).filter(r => isLocMatch(r.location, location));
+
+    // 3. Create ExcelJS Workbook
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Bvlgari Intelligence System';
+    workbook.created = new Date();
+
+    const fmtNum = (v: number) => Math.round(v || 0);
+
+    // --- SHEET 1: Monthly Sales Transactions (Regular) ---
+    const sheet1 = workbook.addWorksheet(`Sales ${month} ${year}`);
+    sheet1.columns = [
+      { header: 'No', key: 'no', width: 6 },
+      { header: 'Tanggal', key: 'transaction_date', width: 14 },
+      { header: 'No. Invoice', key: 'trans_no', width: 24 },
+      { header: 'Salesman (CA)', key: 'salesman', width: 22 },
+      { header: 'Customer', key: 'customer', width: 24 },
+      { header: 'Lokasi Butik', key: 'location', width: 18 },
+      { header: 'Kategori Utama', key: 'main_category', width: 18 },
+      { header: 'Koleksi', key: 'collection', width: 18 },
+      { header: 'Kode SAP', key: 'sap_code', width: 14 },
+      { header: 'Kode Katalog', key: 'catalogue_code', width: 16 },
+      { header: 'Qty (Pcs)', key: 'qty', width: 10 },
+      { header: 'Gross Sales (IDR)', key: 'gross_sales', width: 20 },
+      { header: 'Diskon (IDR)', key: 'val_disc', width: 18 },
+      { header: 'Net Sales (IDR)', key: 'net_sales', width: 20 },
+      { header: 'Card Comm / MDR (IDR)', key: 'comm', width: 22 },
+      { header: 'Tipe Transaksi', key: 'type', width: 14 },
+    ];
+
+    const headerRow1 = sheet1.getRow(1);
+    headerRow1.height = 26;
+    headerRow1.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '0F172A' } };
+      cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFF' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    (salesRows || []).forEach((r: any, idx: number) => {
+      const row = sheet1.addRow({
+        no: idx + 1,
+        transaction_date: r.transaction_date ? String(r.transaction_date).substring(0, 10) : '',
+        trans_no: r.trans_no || '',
+        salesman: r.salesman || '',
+        customer: r.customer || '',
+        location: r.location || '',
+        main_category: r.main_category || '',
+        collection: r.collection || '',
+        sap_code: r.sap_code || '',
+        catalogue_code: r.catalogue_code || '',
+        qty: r.qty || 1,
+        gross_sales: fmtNum(r.gross_sales),
+        val_disc: fmtNum(r.val_disc),
+        net_sales: fmtNum(r.net_sales),
+        comm: fmtNum(r.comm),
+        type: r.type || 'Regular',
+      });
+
+      row.getCell('gross_sales').numFmt = '#,##0';
+      row.getCell('val_disc').numFmt = '#,##0';
+      row.getCell('net_sales').numFmt = '#,##0';
+      row.getCell('comm').numFmt = '#,##0';
+    });
+
+    const lastRowIdx1 = salesRows.length + 1;
+    if (salesRows.length > 0) {
+      const sumRow1 = sheet1.addRow({
+        no: 'TOTAL',
+        qty: { formula: `SUM(K2:K${lastRowIdx1})` },
+        gross_sales: { formula: `SUM(L2:L${lastRowIdx1})` },
+        val_disc: { formula: `SUM(M2:M${lastRowIdx1})` },
+        net_sales: { formula: `SUM(N2:N${lastRowIdx1})` },
+        comm: { formula: `SUM(O2:O${lastRowIdx1})` },
+      });
+      sumRow1.height = 24;
+      sumRow1.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEF3C7' } };
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '78350F' } };
+      });
+    }
+
+    // --- SHEET 2: DP & SVC Transactions ---
+    const sheet2 = workbook.addWorksheet(`DP & SVC ${month} ${year}`);
+    sheet2.columns = sheet1.columns;
+
+    const headerRow2 = sheet2.getRow(1);
+    headerRow2.height = 26;
+    headerRow2.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1E293B' } };
+      cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFF' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    (dpsSvcRows || []).forEach((r: any, idx: number) => {
+      const row = sheet2.addRow({
+        no: idx + 1,
+        transaction_date: r.transaction_date ? String(r.transaction_date).substring(0, 10) : '',
+        trans_no: r.trans_no || '',
+        salesman: r.salesman || '',
+        customer: r.customer || '',
+        location: r.location || '',
+        main_category: r.collection || '',
+        collection: r.collection || '',
+        sap_code: r.sap_code || '',
+        catalogue_code: r.catalogue_code || '',
+        qty: r.qty || 1,
+        gross_sales: fmtNum(r.gross_sales),
+        val_disc: fmtNum(r.val_disc),
+        net_sales: fmtNum(r.net_sales),
+        comm: fmtNum(r.comm),
+        type: r.collection || 'DPS',
+      });
+
+      row.getCell('gross_sales').numFmt = '#,##0';
+      row.getCell('val_disc').numFmt = '#,##0';
+      row.getCell('net_sales').numFmt = '#,##0';
+      row.getCell('comm').numFmt = '#,##0';
+    });
+
+    const lastRowIdx2 = dpsSvcRows.length + 1;
+    if (dpsSvcRows.length > 0) {
+      const sumRow2 = sheet2.addRow({
+        no: 'TOTAL',
+        qty: { formula: `SUM(K2:K${lastRowIdx2})` },
+        gross_sales: { formula: `SUM(L2:L${lastRowIdx2})` },
+        val_disc: { formula: `SUM(M2:M${lastRowIdx2})` },
+        net_sales: { formula: `SUM(N2:N${lastRowIdx2})` },
+        comm: { formula: `SUM(O2:O${lastRowIdx2})` },
+      });
+      sumRow2.height = 24;
+      sumRow2.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEF3C7' } };
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '78350F' } };
+      });
+    }
+
+    // 4. Calculate Summary Metrics & Breakdown Tables for HTML Email Body
+    const fmtIDR = (v: number) => 'Rp ' + Math.round(v || 0).toLocaleString('id-ID');
+
+    // Group by Daily Date (Daily Sales Breakdown - EXCLUDES DP & SVC)
+    const dailyMap: Record<string, { dateStr: string; txCount: number; qty: number; net: number; comm: number }> = {};
+    salesRows.forEach(r => {
+      const rawDate = r.transaction_date || r.trans_date || r.date || '';
+      const dateKey = String(rawDate).substring(0, 10);
+      if (!dateKey) return;
+
+      if (!dailyMap[dateKey]) {
+        dailyMap[dateKey] = { dateStr: dateKey, txCount: 0, qty: 0, net: 0, comm: 0 };
+      }
+      dailyMap[dateKey].txCount += 1;
+      dailyMap[dateKey].qty += (r.qty || 1);
+      dailyMap[dateKey].net += (r.net_sales || 0);
+      dailyMap[dateKey].comm += (r.comm || 0);
+    });
+
+    const dailyList = Object.entries(dailyMap).sort((a, b) => a[0].localeCompare(b[0]));
+    const dailyRowsHtml = dailyList.map(([dKey, stats]) => {
+      let formattedDate = dKey;
+      try {
+        const dObj = new Date(dKey);
+        if (!isNaN(dObj.getTime())) {
+          formattedDate = dObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+      } catch (e) {}
+
+      return `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-weight: 600; color: #1E293B;">${formattedDate}</td>
+          <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0;">${stats.txCount} Trx</td>
+          <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0;">${stats.qty} Pcs</td>
+          <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-weight: bold; color: #0F172A;">${fmtIDR(stats.net)}</td>
+          <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0; color: #15803D;">${fmtIDR(stats.comm)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Group by Category (Product Sales)
+    const catMap: Record<string, { qty: number; net: number; comm: number }> = {};
+    salesRows.forEach(r => {
+      const cat = r.main_category || 'Others';
+      if (!catMap[cat]) catMap[cat] = { qty: 0, net: 0, comm: 0 };
+      catMap[cat].qty += (r.qty || 1);
+      catMap[cat].net += (r.net_sales || 0);
+      catMap[cat].comm += (r.comm || 0);
+    });
+
+    const regularNetSales = salesRows.reduce((s, r) => s + (r.net_sales || 0), 0);
+    const dpsSvcNetSales = dpsSvcRows.reduce((s, r) => s + (r.net_sales || 0), 0);
+    
+    const totalGrossSales = salesRows.reduce((s, r) => s + (r.gross_sales || 0), 0) + dpsSvcRows.reduce((s, r) => s + (r.gross_sales || 0), 0);
+    const totalComm = salesRows.reduce((s, r) => s + (r.comm || 0), 0) + dpsSvcRows.reduce((s, r) => s + (r.comm || 0), 0);
+    const mdrPct = totalGrossSales > 0 ? (totalComm / totalGrossSales) * 100 : 0;
+
+    const catList = Object.entries(catMap).sort((a, b) => b[1].net - a[1].net);
+    const catRowsHtml = catList.map(([catName, stats]) => {
+      const pct = regularNetSales > 0 ? (stats.net / regularNetSales) * 100 : 0;
+      return `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-weight: 600; color: #1E293B;">${catName}</td>
+          <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0;">${stats.qty} Pcs</td>
+          <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-weight: bold; color: #0F172A;">${fmtIDR(stats.net)}</td>
+          <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0; color: #15803D;">${fmtIDR(stats.comm)}</td>
+          <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-weight: 600; color: #2563EB;">${pct.toFixed(1)}%</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Group by Advisor (EXCLUDES DP & SVC)
+    const advMap: Record<string, { tx: number; net: number; comm: number }> = {};
+    salesRows.forEach(r => {
+      const advName = r.salesman || 'Unknown';
+      if (!advMap[advName]) advMap[advName] = { tx: 0, net: 0, comm: 0 };
+      advMap[advName].tx += 1;
+      advMap[advName].net += (r.net_sales || 0);
+      advMap[advName].comm += (r.comm || 0);
+    });
+
+    const advList = Object.entries(advMap).sort((a, b) => b[1].net - a[1].net);
+    const advRowsHtml = advList.map(([advName, stats]) => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-weight: 600; color: #1E293B;">${advName}</td>
+        <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0;">${stats.tx} Trx</td>
+        <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-weight: bold; color: #0F172A;">${fmtIDR(stats.net)}</td>
+        <td align="right" style="padding: 10px; border-bottom: 1px solid #E2E8F0; color: #15803D;">${fmtIDR(stats.comm)}</td>
+      </tr>
+    `).join('');
+
+    // Convert workbook to Buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    // Send Email via Nodemailer
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT),
+      secure: true,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+
+    const mailOptions: any = {
+      from: `"Bvlgari Intelligence" <${process.env.SMTP_USER}>`,
+      to: targetEmail,
+      subject: `Laporan Penjualan Bulanan Bvlgari - ${storeTitle} (${month} ${year})`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 20px 0; }
+            .table-custom { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+            .table-custom th { background-color: #0F172A; color: #FFFFFF; font-weight: 600; padding: 10px; text-align: left; }
+            .table-custom td { padding: 10px; border-bottom: 1px solid #E2E8F0; }
+            .table-custom tr:nth-child(even) { background-color: #F8FAFC; }
+          </style>
+        </head>
+        <body>
+          <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #F8FAFC;">
+            <tr>
+              <td align="center">
+                <table width="680" border="0" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; margin: 20px auto; text-align: left;">
+                  <!-- Header Banner -->
+                  <tr>
+                    <td style="background: #0F172A; padding: 24px 30px; border-radius: 12px 12px 0 0; color: #FFFFFF;">
+                      <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td>
+                            <p style="color: #94A3B8; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; margin: 0;">BVLGARI INDONESIA • EXECUTIVE SALES REPORT</p>
+                            <h1 style="color: #FFFFFF; font-size: 22px; margin: 4px 0 0 0; font-weight: bold;">Laporan Penjualan Bulanan</h1>
+                          </td>
+                          <td align="right">
+                            <span style="background: #FEF3C7; color: #B45309; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 12px;">${storeTitle}</span>
+                          </td>
+                        </tr>
+                      </table>
+                      <p style="color: #CBD5E1; font-size: 13px; margin: 12px 0 0 0;">Periode Laporan: <b>${month} ${year}</b></p>
+                    </td>
+                  </tr>
+
+                  <!-- Content Body -->
+                  <tr>
+                    <td style="padding: 24px 30px;">
+                      <p style="font-size: 14px; color: #334155; margin-top: 0;">Dear Team <b>${storeTitle}</b>,</p>
+                      <p style="font-size: 14px; color: #334155; line-height: 1.6;">Berikut adalah rangkuman eksekutif performa penjualan dan biaya komisi kartu kredit (MDR Fee) untuk <b>${storeTitle}</b> periode <b>${month} ${year}</b>. Berkas rekapitulasi data lengkap dalam format <b>Microsoft Excel (.xlsx)</b> telah dilampirkan pada email ini.</p>
+
+                      <!-- KPI Cards Grid (3 Cards) -->
+                      <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                        <tr>
+                          <td width="31%" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px;" valign="top">
+                            <p style="font-size: 9px; font-weight: 800; color: #64748B; margin: 0; letter-spacing: 0.5px;">NET SALES (PRODUK)</p>
+                            <p style="font-size: 16px; font-weight: bold; color: #0F172A; margin: 4px 0 0 0;">${fmtIDR(regularNetSales)}</p>
+                            <p style="font-size: 10px; color: #64748B; margin: 4px 0 0 0;"><b>${salesRows.length}</b> Trx Sales</p>
+                          </td>
+                          <td width="3.5%"></td>
+                          <td width="31%" style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 12px; padding: 14px;" valign="top">
+                            <p style="font-size: 9px; font-weight: 800; color: #1E40AF; margin: 0; letter-spacing: 0.5px;">DOWN PAYMENT & SVC</p>
+                            <p style="font-size: 16px; font-weight: bold; color: #1D4ED8; margin: 4px 0 0 0;">${fmtIDR(dpsSvcNetSales)}</p>
+                            <p style="font-size: 10px; color: #1E40AF; margin: 4px 0 0 0;"><b>${dpsSvcRows.length}</b> Trx DP/SVC</p>
+                          </td>
+                          <td width="3.5%"></td>
+                          <td width="31%" style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 12px; padding: 14px;" valign="top">
+                            <p style="font-size: 9px; font-weight: 800; color: #166534; margin: 0; letter-spacing: 0.5px;">CARD COMM (MDR FEE)</p>
+                            <p style="font-size: 16px; font-weight: bold; color: #15803D; margin: 4px 0 0 0;">${fmtIDR(totalComm)}</p>
+                            <p style="font-size: 10px; color: #166534; margin: 4px 0 0 0;">MDR Ratio: <b>${mdrPct.toFixed(2)}%</b></p>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <!-- Daily Sales Breakdown Table -->
+                      ${dailyRowsHtml ? `
+                      <h3 style="font-size: 15px; color: #0F172A; margin: 24px 0 10px 0; border-bottom: 2px solid #E2E8F0; padding-bottom: 6px;">
+                        Rincian Penjualan Harian (Daily Sales)
+                      </h3>
+                      <table width="100%" border="0" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-size: 13px; margin-bottom: 24px;">
+                        <thead>
+                          <tr style="background-color: #0F172A; color: #FFFFFF;">
+                            <th align="left" style="padding: 10px; border-radius: 6px 0 0 0;">Tanggal Transaksi</th>
+                            <th align="right" style="padding: 10px;">Trx</th>
+                            <th align="right" style="padding: 10px;">Qty</th>
+                            <th align="right" style="padding: 10px;">Net Sales (IDR)</th>
+                            <th align="right" style="padding: 10px; border-radius: 0 6px 0 0;">Card Comm (IDR)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${dailyRowsHtml}
+                        </tbody>
+                      </table>
+                      ` : ''}
+
+                      <!-- Category Breakdown Table -->
+                      <h3 style="font-size: 15px; color: #0F172A; margin: 24px 0 10px 0; border-bottom: 2px solid #E2E8F0; padding-bottom: 6px;">
+                        Perincian Penjualan Per Kategori
+                      </h3>
+                      <table width="100%" border="0" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-size: 13px; margin-bottom: 24px;">
+                        <thead>
+                          <tr style="background-color: #0F172A; color: #FFFFFF;">
+                            <th align="left" style="padding: 10px; border-radius: 6px 0 0 0;">Kategori / Tipe</th>
+                            <th align="right" style="padding: 10px;">Qty</th>
+                            <th align="right" style="padding: 10px;">Net Sales (IDR)</th>
+                            <th align="right" style="padding: 10px;">Card Comm (IDR)</th>
+                            <th align="right" style="padding: 10px; border-radius: 0 6px 0 0;">Kontribusi</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${catRowsHtml}
+                        </tbody>
+                      </table>
+
+                      <!-- Advisor Breakdown Table -->
+                      ${advRowsHtml ? `
+                      <h3 style="font-size: 15px; color: #0F172A; margin: 24px 0 10px 0; border-bottom: 2px solid #E2E8F0; padding-bottom: 6px;">
+                        Performa Customer Advisor (${storeTitle})
+                      </h3>
+                      <table width="100%" border="0" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-size: 13px;">
+                        <thead>
+                          <tr style="background-color: #0F172A; color: #FFFFFF;">
+                            <th align="left" style="padding: 10px; border-radius: 6px 0 0 0;">Salesman / Advisor</th>
+                            <th align="right" style="padding: 10px;">Trx</th>
+                            <th align="right" style="padding: 10px;">Net Sales (IDR)</th>
+                            <th align="right" style="padding: 10px; border-radius: 0 6px 0 0;">Komisi Kartu (IDR)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${advRowsHtml}
+                        </tbody>
+                      </table>
+                      ` : ''}
+
+                      <!-- Excel Attachment Notice -->
+                      <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px; margin-top: 24px;">
+                        <p style="margin: 0; font-size: 13px; font-weight: bold; color: #0F172A;">Lampiran Berkas Excel (.xlsx):</p>
+                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #64748B; line-height: 1.5;">
+                          <b>Laporan_Transaksi_Bvlgari_${storeTitle.replace(/\s+/g, '_')}_${month}_${year}.xlsx</b><br>
+                          • <b>Sheet 1 (Sales ${month} ${year})</b>: Detail ${salesRows.length} baris transaksi Sales.<br>
+                          • <b>Sheet 2 (DP & SVC ${month} ${year})</b>: Detail ${dpsSvcRows.length} baris transaksi Down Payment & Service.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- Footer -->
+                  <tr>
+                    <td style="padding: 20px 30px; background: #F8FAFC; border-top: 1px solid #E2E8F0; border-radius: 0 0 12px 12px; font-size: 12px; color: #64748B;">
+                      <p style="margin: 0;">Salam hangat,</p>
+                      <p style="margin: 4px 0 0 0; font-size: 13px; font-weight: bold; color: #0F172A;">Bvlgari Intelligence System</p>
+                      <p style="margin: 2px 0 0 0; color: #94A3B8;">MRA Retail Indonesia</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `,
+      attachments: [
+        {
+          filename: `Laporan_Transaksi_Bvlgari_${storeTitle.replace(/\s+/g, '_')}_${month}_${year}.xlsx`,
+          content: Buffer.from(buffer),
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      ],
+    };
+
+    if (targetCc) {
+      mailOptions.cc = targetCc;
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    return {
+      success: true,
+      messageId: info.messageId,
+      emailTo: targetEmail,
+      emailCc: targetCc,
+      location: storeTitle,
+      salesCount: salesRows.length,
+      dpsSvcCount: dpsSvcRows.length,
+    };
   },
 };

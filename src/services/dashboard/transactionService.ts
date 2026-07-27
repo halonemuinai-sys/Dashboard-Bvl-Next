@@ -102,7 +102,7 @@ export async function getDpsSvcTransactions(month: string, year: number) {
   });
 }
 
-export async function updateDpsSvcTransaction(id: number, patch: { card_comm?: number; type?: string }) {
+export async function updateDpsSvcTransaction(id: number | string, patch: { card_comm?: number; type?: string }) {
   const { error } = await supabase
     .from('bvlgari_sales')
     .update(patch)
@@ -110,7 +110,7 @@ export async function updateDpsSvcTransaction(id: number, patch: { card_comm?: n
   if (error) throw error;
 }
 
-export async function deleteDpsSvcTransaction(id: number) {
+export async function deleteDpsSvcTransaction(id: number | string) {
   const { error } = await supabase
     .from('bvlgari_sales')
     .delete()
