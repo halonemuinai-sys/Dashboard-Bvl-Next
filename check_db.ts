@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -7,16 +6,30 @@ const supabase = createClient(
 );
 
 async function checkData() {
-  const { data, count } = await supabase
-    .from('clean_master')
-    .select('transaction_date, trans_no', { count: 'exact' })
-    .gte('transaction_date', '2026-05-01')
-    .lte('transaction_date', '2026-05-31');
+  console.log('--- TEST RUNNING getDpsSvcTransactions BEHAVIOR ---');
+  const month = 'July';
+  const year = 2026;
 
-  console.log('--- CLEAN_MASTER MAY 2026 ---');
-  console.log('Total Rows:', count);
-  if (data && data.length > 0) {
-    console.log('Sample Data:', data.slice(0, 5));
+  const monthIndex = ['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(month);
+  const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const mEnd   = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+  console.log(`mStart: ${mStart}, mEnd: ${mEnd}`);
+
+  const { data, error } = await supabase
+    .from('bvlgari_sales')
+    .select('id, transaction_no, transaction_date, collection, price, qty, net_sales')
+    .gte('transaction_date', mStart)
+    .lte('transaction_date', mEnd)
+    .in('collection', ['DPS', 'SVC'])
+    .order('transaction_date', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching:', error);
+  } else {
+    console.log(`Successfully fetched ${data?.length || 0} rows.`);
+    console.log('Sample rows:', data?.slice(0, 5));
   }
 }
 
