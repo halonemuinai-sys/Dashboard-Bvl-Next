@@ -639,7 +639,7 @@ export const reportService = {
     // Group by Daily Date (Daily Sales Breakdown - EXCLUDES DP & SVC)
     const dailyMap: Record<string, { dateStr: string; txCount: number; qty: number; net: number; comm: number }> = {};
     salesRows.forEach(r => {
-      const rawDate = r.transaction_date || r.trans_date || r.date || '';
+      const rawDate = r.transaction_date || (r as any).trans_date || (r as any).date || '';
       const dateKey = String(rawDate).substring(0, 10);
       if (!dateKey) return;
 
