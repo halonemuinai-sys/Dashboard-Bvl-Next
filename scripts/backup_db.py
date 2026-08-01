@@ -47,8 +47,8 @@ def run_backup(db_password=None, output_dir=None, schema="public"):
             print("Error: Password database wajib diisi.", file=sys.stderr)
             sys.exit(1)
 
-    # Reconstruct Supabase connection string
-    db_uri = f"postgresql://postgres:{password}@db.{project_ref}.supabase.co:5432/postgres"
+    # Reconstruct Supabase connection string using IPv4 pooler to avoid Docker IPv6 resolution issues
+    db_uri = f"postgresql://postgres.{project_ref}:{password}@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres"
 
     # Default output directory to "backups" in project root
     if not output_dir:
