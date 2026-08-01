@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, Users, Plus, Trash2, Save, RefreshCw, Check, Lock, Unlock, X, Crown, ClipboardList, Search, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShieldCheck, Users, Plus, Trash2, Save, RefreshCw, Check, Lock, Unlock, X, Crown, ClipboardList, Search, Eye, ChevronLeft, ChevronRight, Key } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import BvlgariLoader from '@/components/BvlgariLoader';
 import { useUserAccess } from '@/lib/user-access-context';
+import { createUserAction, resetUserPasswordAction } from './actions';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm';
@@ -133,7 +134,13 @@ export default function UserAccessPage() {
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<Role>('operations_sales');
+  const [newPassword, setNewPassword] = useState('');
   const [addingUser, setAddingUser] = useState(false);
+
+  // Reset Password State
+  const [resetUser, setResetUser] = useState<DashboardUser | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   // Audit Logs State
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -221,14 +228,39 @@ export default function UserAccessPage() {
   const addUser = async () => {
     if (!newEmail.trim() || !newName.trim()) return;
     setAddingUser(true);
-    const { error } = await supabase.from('dashboard_users').insert({
-      email: newEmail.trim().toLowerCase(),
-      full_name: newName.trim(),
-      role: newRole,
-      is_active: true,
-    });
-    setAddingUser(false);
-    if (!error) { setNewEmail(''); setNewName(''); setShowForm(false); load(); }
+    try {
+      await createUserAction({
+        email: newEmail.trim().toLowerCase(),
+        fullName: newName.trim(),
+        role: newRole,
+        password: newPassword.trim() || undefined,
+      });
+      setNewEmail('');
+      setNewName('');
+      setNewPassword('');
+      setShowForm(false);
+      load();
+    } catch (err: any) {
+      alert('Gagal menambahkan user: ' + err.message);
+    } finally {
+      setAddingUser(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetUser || !resetPassword.trim()) return;
+    setResetting(true);
+    try {
+      await resetUserPasswordAction(resetUser.id, resetPassword.trim());
+      alert('Password berhasil diubah!');
+      setResetUser(null);
+      setResetPassword('');
+      load();
+    } catch (err: any) {
+      alert('Gagal mengubah password: ' + err.message);
+    } finally {
+      setResetting(false);
+    }
   };
 
   const toggleUserActive = async (user: DashboardUser) => {
@@ -323,12 +355,15 @@ export default function UserAccessPage() {
                   <X className="w-4 h-4 text-slate-400 hover:text-slate-700" />
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <input value={newName} onChange={e => setNewName(e.target.value)}
                   placeholder="Full Name"
                   className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
                 <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
                   placeholder="Email address" type="email"
+                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+                <input value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Password" type="password"
                   className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
                 <select value={newRole} onChange={e => setNewRole(e.target.value as Role)} aria-label="Select role"
                   className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white">
@@ -389,7 +424,11 @@ export default function UserAccessPage() {
                           {user.is_active ? <><Unlock className="w-3 h-3" />Active</> : <><Lock className="w-3 h-3" />Inactive</>}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center flex justify-center gap-1">
+                        <button type="button" title="Reset password" onClick={() => setResetUser(user)}
+                          className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-500 transition-colors">
+                          <Key className="w-4 h-4" />
+                        </button>
                         {/* Protect super_admin from deletion unless current user is super_admin */}
                         {(!isSA || isSuperAdmin) && (
                           <button type="button" title="Hapus user" onClick={() => deleteUser(user.id)}
@@ -700,6 +739,45 @@ export default function UserAccessPage() {
                 className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold rounded-xl transition-all"
               >
                 Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {resetUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Key className="w-5 h-5 text-amber-500" />
+                <h3 className="font-bold text-slate-900 text-lg">Reset Password</h3>
+              </div>
+              <button type="button" aria-label="Close" onClick={() => setResetUser(null)}>
+                <X className="w-5 h-5 text-slate-400 hover:text-slate-600" />
+              </button>
+            </div>
+            <div>
+              <p className="text-slate-500 text-sm">
+                Masukkan password baru untuk user: <b>{resetUser.full_name}</b> ({resetUser.email})
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-500">Password Baru</label>
+              <input value={resetPassword} onChange={e => setResetPassword(e.target.value)}
+                type="password" placeholder="Min. 6 karakter"
+                className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-indigo-400" />
+            </div>
+            <div className="flex justify-end gap-2 mt-2">
+              <button type="button" onClick={() => setResetUser(null)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-bold rounded-xl transition-all">
+                Batal
+              </button>
+              <button type="button" onClick={handleResetPassword} disabled={resetting || !resetPassword.trim()}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-all flex items-center gap-1.5">
+                {resetting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Simpan Password
               </button>
             </div>
           </div>
