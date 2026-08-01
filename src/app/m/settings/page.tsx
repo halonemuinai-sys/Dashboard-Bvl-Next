@@ -36,7 +36,7 @@ export default function MobileSettingsPage() {
       }
     } catch (e) {
       setSyncMsg('Gagal terhubung ke Proxmox server');
-    } finally {
+    } fontally {
       setSyncing(false);
     }
   };
@@ -53,31 +53,31 @@ export default function MobileSettingsPage() {
     <div className="space-y-4">
       
       {/* Account Info Tile */}
-      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
-        <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg">
-            {advisorName.slice(0, 2).toUpperCase()}
+      <div className="bg-white border border-slate-200 p-5 rounded-3xl space-y-3 shadow-sm">
+        <div className="flex items-center space-x-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-extrabold text-base shadow-sm">
+            {advisorName.slice(0, 2).toUpperCase() || 'AD'}
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-100">{advisorName}</h3>
-            <p className="text-xs text-amber-400 font-semibold uppercase">{advisorRole}</p>
-            <p className="text-[10px] text-slate-400 flex items-center mt-0.5">
-              <Building2 className="w-3 h-3 mr-1" /> {advisorStore}
+            <h3 className="text-sm font-bold text-slate-800">{advisorName}</h3>
+            <p className="text-xs text-indigo-600 font-semibold uppercase">{advisorRole}</p>
+            <p className="text-[11px] text-slate-500 font-medium flex items-center mt-0.5">
+              <Building2 className="w-3.5 h-3.5 mr-1" /> {advisorStore}
             </p>
           </div>
         </div>
       </div>
 
       {/* Sync Engine Tile */}
-      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
-        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center">
-          <RefreshCcw className="w-3.5 h-3.5 mr-1 text-amber-400" /> Proxmox Server Sync
+      <div className="bg-white border border-slate-200 p-5 rounded-3xl space-y-3 shadow-sm">
+        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center">
+          <RefreshCcw className="w-4 h-4 mr-1.5 text-indigo-600" /> Proxmox Server Sync
         </h4>
-        <p className="text-xs text-slate-400">Tarik dan sinkronkan data penjualan terbaru dari Bvlgari API.</p>
+        <p className="text-xs text-slate-500">Tarik dan sinkronkan data penjualan terbaru dari Bvlgari API.</p>
 
         {syncMsg && (
-          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs rounded-xl p-2.5 flex items-center">
-            <CheckCircle2 className="w-4 h-4 mr-1.5 flex-shrink-0" />
+          <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs rounded-xl p-3 flex items-center font-medium">
+            <CheckCircle2 className="w-4 h-4 mr-2 flex-shrink-0 text-indigo-600" />
             <span>{syncMsg}</span>
           </div>
         )}
@@ -85,9 +85,9 @@ export default function MobileSettingsPage() {
         <button
           onClick={handleSync}
           disabled={syncing}
-          className="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-bold py-2.5 rounded-xl border border-slate-700 flex items-center justify-center space-x-2 transition-all"
+          className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold py-3 rounded-xl border border-slate-200 flex items-center justify-center space-x-2 transition-all"
         >
-          <RefreshCcw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+          <RefreshCcw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
           <span>{syncing ? 'Memproses Sync...' : 'Jalankan Server Sync'}</span>
         </button>
       </div>
@@ -95,7 +95,7 @@ export default function MobileSettingsPage() {
       {/* Logout Button */}
       <button
         onClick={handleLogout}
-        className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold py-3 rounded-2xl flex items-center justify-center space-x-2 transition-all mt-6"
+        className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold py-3.5 rounded-2xl flex items-center justify-center space-x-2 transition-all mt-6 shadow-sm"
       >
         <LogOut className="w-4 h-4" />
         <span>Keluar dari Mobile Portal</span>

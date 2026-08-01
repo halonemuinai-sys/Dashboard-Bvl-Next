@@ -7,8 +7,8 @@ export default function MobileCrmPage() {
   const [search, setSearch] = useState('');
 
   const clients = [
-    { name: 'Ibu Ratna S.', phone: '+62 812-9876-5432', segment: 'Elite', ltv: 'Rp 450.000.000', location: 'Jakarta' },
-    { name: 'Pak Hendra K.', phone: '+62 811-2345-6789', segment: 'Top', ltv: 'Rp 1.850.000.000', location: 'Jakarta' },
+    { name: 'Ibu Ratna S.', phone: '+62 812-9876-5432', segment: 'Elite VVIP', ltv: 'Rp 450.000.000', location: 'Jakarta' },
+    { name: 'Pak Hendra K.', phone: '+62 811-2345-6789', segment: 'Top VIP', ltv: 'Rp 1.850.000.000', location: 'Jakarta' },
     { name: 'Ibu Maya L.', phone: '+62 818-0987-6543', segment: 'High Potential', ltv: 'Rp 85.000.000', location: 'Surabaya' },
   ];
 
@@ -20,44 +20,44 @@ export default function MobileCrmPage() {
       {/* Search Bar */}
       <div className="flex items-center space-x-2">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
           <input
             type="text"
             placeholder="Cari nama client / nomor telp..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 text-slate-100 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-amber-500"
+            className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-xl pl-9 pr-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
           />
         </div>
-        <button className="bg-amber-500 hover:bg-amber-400 text-slate-950 p-2.5 rounded-xl font-bold flex items-center shadow-lg shadow-amber-500/20">
+        <button className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl font-bold flex items-center shadow-md shadow-indigo-500/20">
           <Plus className="w-4 h-4" />
         </button>
       </div>
 
-      {/* CRM Client Cards */}
+      {/* CRM Client Cards matching Flutter Light Theme */}
       <div className="space-y-3">
         {filtered.map((item, idx) => (
-          <div key={idx} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+          <div key={idx} className="bg-white border border-slate-200 p-4 rounded-2xl space-y-3 shadow-sm">
             
             <div className="flex justify-between items-start">
               <div>
-                <h4 className="text-sm font-bold text-slate-100">{item.name}</h4>
-                <p className="text-xs text-slate-400 flex items-center mt-0.5">
-                  <Phone className="w-3 h-3 mr-1 text-amber-400" /> {item.phone}
+                <h4 className="text-sm font-bold text-slate-800">{item.name}</h4>
+                <p className="text-xs text-slate-500 font-medium flex items-center mt-0.5">
+                  <Phone className="w-3.5 h-3.5 mr-1 text-indigo-600" /> {item.phone}
                 </p>
               </div>
-              <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
-                item.segment === 'Top' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
-                item.segment === 'Elite' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' :
-                'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+              <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
+                item.segment.includes('Top') ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                item.segment.includes('Elite') ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                'bg-blue-50 text-blue-700 border border-blue-200'
               }`}>
                 {item.segment}
               </span>
             </div>
 
-            <div className="flex justify-between items-center pt-2 border-t border-slate-800 text-xs">
-              <span className="text-slate-400">Total Spend (LTV)</span>
-              <span className="font-extrabold text-amber-400">{item.ltv}</span>
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100 text-xs font-semibold">
+              <span className="text-slate-500">Total Spend (LTV)</span>
+              <span className="font-extrabold text-indigo-600">{item.ltv}</span>
             </div>
 
           </div>

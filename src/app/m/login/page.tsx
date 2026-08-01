@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, User, Building, ArrowRight, KeyRound, Sparkles } from 'lucide-react';
+import { Lock, User, Building2, ArrowRight, KeyRound, ShieldCheck, Sparkles, RefreshCw } from 'lucide-react';
 
 export default function MobileLoginPage() {
   const router = useRouter();
@@ -11,18 +11,21 @@ export default function MobileLoginPage() {
   const [pin, setPin] = useState('');
   const [advisors, setAdvisors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingAdvisors, setLoadingAdvisors] = useState(false);
   const [error, setError] = useState('');
 
-  const stores = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+  const stores = ['Plaza Indonesia', 'Plaza Senayan', 'Bali', 'All Stores'];
 
   useEffect(() => {
     async function fetchAdvisors() {
+      setLoadingAdvisors(true);
       try {
         const res = await fetch(`/api/mobile/auth/advisors?store=${encodeURIComponent(store)}`);
         const data = await res.json();
         if (data.success && data.advisors && data.advisors.length > 0) {
           setAdvisors(data.advisors);
           setAdvisorName(data.advisors[0]);
+          setLoadingAdvisors(false);
           return;
         }
       } catch (err) {
@@ -30,16 +33,19 @@ export default function MobileLoginPage() {
       }
 
       // Fallback per store
-      let list = [];
+      let list: string[] = [];
       if (store === 'Plaza Indonesia') {
         list = ['Supervisor PI', 'Store Manager PI', 'Advisor 1', 'Advisor 2'];
       } else if (store === 'Plaza Senayan') {
         list = ['Store Manager PS', 'Advisor PS 1', 'Advisor PS 2'];
-      } else {
+      } else if (store === 'Bali') {
         list = ['Store Manager Bali', 'Advisor Bali 1', 'Advisor Bali 2'];
+      } else {
+        list = ['Ops Manager', 'Supervisor PI', 'Store Manager PS', 'Store Manager Bali'];
       }
       setAdvisors(list);
       setAdvisorName(list[0]);
+      setLoadingAdvisors(false);
     }
 
     fetchAdvisors();
@@ -81,36 +87,40 @@ export default function MobileLoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[85vh] px-4 text-slate-100">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-slate-800">
       
-      {/* Header Logo */}
-      <div className="flex flex-col items-center mb-8">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/20 mb-3">
-          <Sparkles className="w-8 h-8 text-slate-950" />
+      {/* Container matching Flutter Mobile 400px Max Width */}
+      <div className="w-full max-w-[400px] bg-white rounded-[32px] p-8 shadow-xl border border-slate-100 flex flex-col items-center">
+        
+        {/* Crest / Logo Section matching Flutter */}
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 mb-4">
+          <Sparkles className="w-10 h-10 text-white" />
         </div>
-        <h1 className="text-xl font-extrabold tracking-wider text-slate-100 uppercase">MPI ADVISOR BVL</h1>
-        <p className="text-xs text-slate-400 mt-1">Mobile Portal & Business Intelligence</p>
-      </div>
 
-      {/* Login Card */}
-      <div className="w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md">
+        <h1 className="text-2xl font-serif font-bold tracking-tight text-slate-900 text-center">
+          Elite Advisor Portal
+        </h1>
+        <p className="text-xs text-slate-500 mt-1 mb-6 text-center">
+          Masuk ke portal advisor Anda (MPI BVL)
+        </p>
+
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-xl p-3 mb-4 text-center font-medium">
+          <div className="w-full bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl p-3 mb-4 text-center font-medium">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="w-full space-y-4">
           
-          {/* Store Selection */}
+          {/* Store Location Selection */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center">
-              <Building className="w-3.5 h-3.5 mr-1 text-amber-400" /> Store Location
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center">
+              <Building2 className="w-4 h-4 mr-1.5 text-indigo-600" /> Store Location
             </label>
             <select
               value={store}
               onChange={(e) => setStore(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-amber-500"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-3.5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
             >
               {stores.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -118,28 +128,34 @@ export default function MobileLoginPage() {
             </select>
           </div>
 
-          {/* Advisor Name Selection */}
+          {/* Advisor Name Dropdown */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center">
-              <User className="w-3.5 h-3.5 mr-1 text-amber-400" /> Advisor Name
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center">
+              <User className="w-4 h-4 mr-1.5 text-indigo-600" /> Advisor Name
             </label>
-            <select
-              value={advisorName}
-              onChange={(e) => setAdvisorName(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-amber-500"
-              required
-            >
-              <option value="" disabled>-- Pilih Nama Advisor --</option>
-              {advisors.map((adv) => (
-                <option key={adv} value={adv}>{adv}</option>
-              ))}
-            </select>
+            {loadingAdvisors ? (
+              <div className="w-full bg-slate-100 animate-pulse h-11 rounded-xl flex items-center justify-center text-xs text-slate-400">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin mr-2" /> Memuat Advisor...
+              </div>
+            ) : (
+              <select
+                value={advisorName}
+                onChange={(e) => setAdvisorName(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-3.5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                required
+              >
+                <option value="" disabled>-- Pilih Nama Advisor --</option>
+                {advisors.map((adv) => (
+                  <option key={adv} value={adv}>{adv}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* PIN Input */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center">
-              <KeyRound className="w-3.5 h-3.5 mr-1 text-amber-400" /> Enter 4-Digit PIN
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center">
+              <KeyRound className="w-4 h-4 mr-1.5 text-indigo-600" /> Enter 4-Digit PIN
             </label>
             <input
               type="password"
@@ -147,7 +163,7 @@ export default function MobileLoginPage() {
               maxLength={6}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-center tracking-[0.5em] text-lg font-bold text-amber-400 rounded-xl py-2.5 focus:outline-none focus:border-amber-500"
+              className="w-full bg-slate-50 border border-slate-200 text-center tracking-[0.5em] text-xl font-bold text-indigo-600 rounded-xl py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
               required
             />
           </div>
@@ -156,10 +172,12 @@ export default function MobileLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold py-3 rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center transition-all disabled:opacity-50"
+            className="w-full mt-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/25 flex items-center justify-center transition-all disabled:opacity-50"
           >
             {loading ? (
-              <span className="text-sm font-semibold">Memverifikasi...</span>
+              <span className="text-sm font-semibold flex items-center">
+                <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Memverifikasi...
+              </span>
             ) : (
               <>
                 <span className="text-sm">Masuk Portal</span>
@@ -171,7 +189,7 @@ export default function MobileLoginPage() {
         </form>
       </div>
 
-      <p className="text-[10px] text-slate-500 mt-6">Powered by Proxmox & Next.js 15 BI Engine</p>
+      <p className="text-xs text-slate-400 mt-6 font-medium">Powered by Proxmox BI & Next.js Engine</p>
 
     </div>
   );
