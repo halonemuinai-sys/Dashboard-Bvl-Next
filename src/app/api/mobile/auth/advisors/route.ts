@@ -11,8 +11,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const store = searchParams.get('store');
 
-    let query = supabase.from('advisor_pins').select('advisor_name, role');
-    const { data: pinsData, error } = await query;
+    let query = supabase.from('advisor_pins').select('advisor_name, role, store');
+    if (store && store.toLowerCase() !== 'all stores' && store.toLowerCase() !== 'all') {
+      const locTerm = store.split(' ').pop() || store;
+      query = query.ilike('store', `%${locTerm}%`);
+    }
+    const { data: pinsData } = await query;
 
     let advisors: string[] = [];
 
