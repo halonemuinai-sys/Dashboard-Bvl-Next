@@ -36,7 +36,7 @@ export default function MobileSettingsPage() {
       }
     } catch (e) {
       setSyncMsg('Gagal terhubung ke Proxmox server');
-    } fontally {
+    } finally {
       setSyncing(false);
     }
   };
