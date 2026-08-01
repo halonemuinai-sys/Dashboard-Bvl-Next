@@ -16,14 +16,33 @@ export default function MobileLoginPage() {
   const stores = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
 
   useEffect(() => {
-    // Demo advisor lists per store
-    if (store === 'Plaza Indonesia') {
-      setAdvisors(['Advisor 1', 'Advisor 2', 'Supervisor PI', 'Store Manager PI']);
-    } else if (store === 'Plaza Senayan') {
-      setAdvisors(['Advisor PS 1', 'Advisor PS 2', 'Store Manager PS']);
-    } else {
-      setAdvisors(['Advisor Bali 1', 'Advisor Bali 2', 'Store Manager Bali']);
+    async function fetchAdvisors() {
+      try {
+        const res = await fetch(`/api/mobile/auth/advisors?store=${encodeURIComponent(store)}`);
+        const data = await res.json();
+        if (data.success && data.advisors && data.advisors.length > 0) {
+          setAdvisors(data.advisors);
+          setAdvisorName(data.advisors[0]);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to load advisors:', err);
+      }
+
+      // Fallback per store
+      let list = [];
+      if (store === 'Plaza Indonesia') {
+        list = ['Supervisor PI', 'Store Manager PI', 'Advisor 1', 'Advisor 2'];
+      } else if (store === 'Plaza Senayan') {
+        list = ['Store Manager PS', 'Advisor PS 1', 'Advisor PS 2'];
+      } else {
+        list = ['Store Manager Bali', 'Advisor Bali 1', 'Advisor Bali 2'];
+      }
+      setAdvisors(list);
+      setAdvisorName(list[0]);
     }
+
+    fetchAdvisors();
   }, [store]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -104,14 +123,17 @@ export default function MobileLoginPage() {
             <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center">
               <User className="w-3.5 h-3.5 mr-1 text-amber-400" /> Advisor Name
             </label>
-            <input
-              type="text"
-              placeholder="Masukkan / pilih nama advisor"
+            <select
               value={advisorName}
               onChange={(e) => setAdvisorName(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-amber-500"
               required
-            />
+            >
+              <option value="" disabled>-- Pilih Nama Advisor --</option>
+              {advisors.map((adv) => (
+                <option key={adv} value={adv}>{adv}</option>
+              ))}
+            </select>
           </div>
 
           {/* PIN Input */}
