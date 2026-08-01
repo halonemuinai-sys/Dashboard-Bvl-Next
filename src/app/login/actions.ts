@@ -45,11 +45,11 @@ export async function login(formData: FormData) {
   // Generate session token
   const token = await generateSessionToken(dbUser.email, dbUser.role)
 
-  // Simpan token ke HTTP-Only cookie
+  // Simpan token ke HTTP-Only cookie (secure: false agar berfungsi di HTTP biasa / tanpa SSL)
   const cookieStore = await cookies()
   cookieStore.set('session_token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60, // 7 hari
     path: '/',
@@ -65,7 +65,7 @@ export async function logout() {
   // Hapus cookie session
   cookieStore.set('session_token', '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     sameSite: 'lax',
     maxAge: 0,
     path: '/',
