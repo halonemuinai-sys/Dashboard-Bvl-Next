@@ -11,7 +11,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
-  const isAuthPage = pathname === '/login';
+  const isAuthPage = pathname === '/login' || pathname.startsWith('/m');
 
   useEffect(() => {
     const checkMobile = () => {
