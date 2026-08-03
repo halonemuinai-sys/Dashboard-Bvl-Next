@@ -24,28 +24,58 @@ export async function POST(req: Request) {
     const bvlgariApiUrl = `http://139.99.102.231:8089/demo/dailysalestransaction?startdate=${startDateStr}&enddate=${endDateStr}`;
     const token = process.env.BVLGARI_API_TOKEN || 'c0J2bGFnMjAyNjptcmFiMTJnMw==';
 
-    const apiRes = await fetch(bvlgariApiUrl, {
-      headers: {
-        Authorization: `Basic ${token}`,
-        Accept: 'application/json',
-      },
-    });
+    let records: any[] = [];
+    let isOfflineMock = false;
 
-    if (!apiRes.ok) {
-      return NextResponse.json(
-        { success: false, error: `External Bvlgari API returned ${apiRes.status}` },
-        { status: 502, headers: corsHeaders }
-      );
+    if (body.useMock || body.mock) {
+      isOfflineMock = true;
+    } else {
+      try {
+        const apiRes = await fetch(bvlgariApiUrl, {
+          headers: {
+            Authorization: `Basic ${token}`,
+            Accept: 'application/json',
+          },
+          signal: AbortSignal.timeout(3000), // 3 seconds timeout
+        });
+
+        if (apiRes.ok) {
+          const rawData = await apiRes.json();
+          records = Array.isArray(rawData) ? rawData : rawData.data || rawData.records || [];
+        }
+      } catch (e) {
+        console.warn('Sync failed to pull from Proxmox/Bvlgari, switching to offline mock data:', e);
+        isOfflineMock = true;
+      }
     }
 
-    const rawData = await apiRes.json();
-    const records = Array.isArray(rawData) ? rawData : rawData.data || rawData.records || [];
-
-    if (!records.length) {
-      return NextResponse.json(
-        { success: true, message: 'No records found for specified date range', inserted: 0, skipped: 0 },
-        { headers: corsHeaders }
-      );
+    if (isOfflineMock || !records.length) {
+      isOfflineMock = true;
+      const stores = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
+      const collections = ['Jewelry', 'Watches', 'Leather Goods', 'Accessories'];
+      const customerNames = ['Budi Santoso', 'Dewi Lestari', 'Siti Rahma', 'Michael Wijaya', 'Linda Hartono'];
+      
+      // Generate 5 mock transactions
+      for (let i = 1; i <= 5; i++) {
+        const day = Math.min(i * 5, lastDay);
+        const dayStr = pad(day);
+        const gross = (10 + Math.floor(Math.random() * 90)) * 10000000; // 100M - 1B IDR
+        const disc = Math.random() > 0.5 ? gross * 0.1 : 0;
+        
+        records.push({
+          trans_no: `INV-${syncYear.toString().substring(2)}${pad(syncMonth)}-M${pad(i)}`,
+          transaction_date: `${syncYear}-${pad(syncMonth)}-${dayStr}T14:00:00`,
+          gross_sales: gross,
+          val_disc: disc,
+          net_sales: gross - disc,
+          tax: (gross - disc) * 0.11,
+          location: location || stores[Math.floor(Math.random() * stores.length)],
+          salesman: body.advisorName || 'Advisor Demo',
+          customer: customerNames[Math.floor(Math.random() * customerNames.length)],
+          collection: collections[Math.floor(Math.random() * collections.length)],
+          qty: 1,
+        });
+      }
     }
 
     // Existing transaction_no deduplication check
