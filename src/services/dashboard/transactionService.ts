@@ -14,7 +14,8 @@ export async function getTransactions(month: string, year: number) {
       .select('id, trans_no, transaction_date, customer, salesman, location, main_category, collection, sap_code, catalogue_code, gross_sales, val_disc, disc_pct, net_sales, qty, cost, comm, type')
       .gte('transaction_date', mStart)
       .lte('transaction_date', mEnd)
-      .order('transaction_date', { ascending: true }),
+      .order('transaction_date', { ascending: true })
+      .order('trans_no', { ascending: true }),
     supabase
       .from('bvlgari_sales')
       .select('transaction_no, collection, phone_no')
@@ -70,7 +71,8 @@ export async function getDpsSvcTransactions(month: string, year: number) {
     .gte('transaction_date', mStart)
     .lte('transaction_date', mEnd)
     .in('collection', ['DPS', 'SVC'])
-    .order('transaction_date', { ascending: true });
+    .order('transaction_date', { ascending: true })
+    .order('transaction_no', { ascending: true });
 
   if (error) throw error;
   

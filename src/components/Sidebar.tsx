@@ -88,6 +88,8 @@ const menuGroups = [
   {
     title: "CRM & TRAFFIC",
     items: [
+      { name: 'Mobile Portal',        icon: Store,           href: '/m', badge: 'APP', badgeColor: 'bg-indigo-500' },
+      { name: 'Clienteling 360',      icon: Heart,           href: '/m/crm', badge: 'NEW', badgeColor: 'bg-rose-500' },
       { name: 'CRM Profiling',        icon: ContactRound,    href: '/crm-profiling', badge: 'NEW', badgeColor: 'bg-violet-500' },
       { name: 'Event Selling Plan',  icon: Diamond,         href: '/event-selling-plan', badge: 'NEW', badgeColor: 'bg-amber-500' },
       { name: 'App Sheet (CRM)',     icon: Database,        href: '/app-sheet-crm' },
@@ -180,7 +182,9 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
                     key={item.name}
                     href={item.href}
                     onClick={() => {
-                      if (isMobile) setIsOpen(false); // Close drawer on mobile click
+                      if (isMobile) {
+                        setIsOpen(false);
+                      }
                     }}
                     title={!isActuallyOpen ? item.name : undefined}
                     className={cn(

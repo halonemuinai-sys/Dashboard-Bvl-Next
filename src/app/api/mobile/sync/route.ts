@@ -48,42 +48,47 @@ export async function POST(req: Request) {
       );
     }
 
-    // Existing trans_no deduplication check
-    const { data: existingSales } = await supabase
+    // Existing transaction_no deduplication check
+    const { data: existingSales, error: fetchErr } = await supabase
       .from('bvlgari_sales')
-      .select('trans_no')
-      .gte('transaction_date', `${startDateStr}T00:00:00`)
-      .lte('transaction_date', `${endDateStr}T23:59:59`);
+      .select('transaction_no')
+      .gte('transaction_date', startDateStr)
+      .lte('transaction_date', endDateStr);
 
-    const existingTransSet = new Set((existingSales || []).map(s => s.trans_no));
+    if (fetchErr) {
+      console.error('Error checking existing sales:', fetchErr);
+    }
+
+    const existingTransSet = new Set((existingSales || []).map(s => s.transaction_no));
 
     const newSalesRows: any[] = [];
     const newCleanRows: any[] = [];
 
     records.forEach((r: any) => {
-      const transNo = r.trans_no || r.transNo || r.invoice_no || r.InvoiceNo;
+      const transNo = r.trans_no || r.transNo || r.transaction_no || r.invoice_no || r.InvoiceNo;
       if (!transNo || existingTransSet.has(transNo)) return;
 
       const gross = Number(r.gross_sales || r.grossAmount || 0);
       const disc = Number(r.val_disc || r.discount || 0);
       const tax = Number(r.tax || r.vat || 0);
-      const net = gross - disc;
+      const net = Number(r.net_sales || (gross - disc));
+      const commVal = Number(r.comm || r.card_comm || r.mdr || 0);
 
       const loc = r.location || location || 'Plaza Indonesia';
 
       newSalesRows.push({
-        trans_no: transNo,
-        transaction_date: r.transaction_date || r.transDate || `${startDateStr}T00:00:00`,
+        transaction_no: transNo,
+        transaction_date: r.transaction_date || r.transDate || startDateStr,
         gross_sales: gross,
-        val_disc: disc,
+        sub_total_discount: disc,
         net_sales: net,
         tax: tax,
         location: loc,
         salesman: r.salesman || r.salesPerson || '',
-        customer: r.customer || r.customerName || '',
-        main_category: r.main_category || r.category || '',
-        collection: r.collection || '',
+        customer_name: r.customer || r.customerName || '',
+        collection: r.collection || r.main_category || 'General',
         qty: Number(r.qty || 1),
+        card_comm: commVal,
         created_at: new Date().toISOString(),
       });
 
@@ -92,11 +97,12 @@ export async function POST(req: Request) {
       if (!locLower.includes('head office') && !locLower.includes('ho')) {
         newCleanRows.push({
           trans_no: transNo,
-          transaction_date: r.transaction_date || r.transDate || `${startDateStr}T00:00:00`,
+          transaction_date: r.transaction_date || r.transDate || startDateStr,
           gross_sales: gross,
           val_disc: disc,
           net_sales: net,
           cost: Number(r.cost || net * 0.4),
+          comm: commVal,
           location: loc,
           salesman: r.salesman || r.salesPerson || '',
           customer: r.customer || r.customerName || '',

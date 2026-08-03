@@ -8,19 +8,19 @@ import { Menu } from "lucide-react";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
-  const isAuthPage = pathname === '/login' || pathname.startsWith('/m');
+  const isAuthPage = pathname === '/login' || pathname === '/m/login';
 
   useEffect(() => {
     const checkMobile = () => {
-      const mobile = window.innerWidth < 1280;
+      const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      if (mobile) {
-        setIsOpen(false); // Default closed on mobile/tablet
+      if (!mobile) {
+        setIsOpen(true); // Always keep sidebar open on desktop/laptop
       } else {
-        setIsOpen(true);  // Default open on desktop
+        setIsOpen(false); // Mobile drawer starts closed
       }
     };
     checkMobile();
@@ -28,21 +28,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Auto-close mobile/tablet drawer whenever route/pathname changes
-  useEffect(() => {
-    if (isMobile) {
-      setIsOpen(false);
-    }
-  }, [pathname, isMobile]);
-
   if (isAuthPage) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen relative w-full">
-      {/* Dark overlay backdrop on mobile/tablet when sidebar is open */}
+      {/* Mobile backdrop overlay */}
       {isMobile && isOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[40] transition-opacity"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[40]"
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -56,7 +49,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       <main className={cn(
         "flex-1 min-h-screen transition-all duration-300 w-full max-w-full flex flex-col",
-        !isMobile ? (isOpen ? "xl:ml-64" : "xl:ml-20") : "ml-0"
+        !isMobile ? (isOpen ? "md:ml-64" : "md:ml-20") : "ml-0"
       )}>
         {isMobile && (
           <div className="mobile-header-bar bg-white border-b border-slate-200 h-16 px-4 flex items-center justify-between sticky top-0 z-30 shadow-xs">
