@@ -188,9 +188,6 @@ export default function MobileLoginPage() {
 
         </form>
       </div>
-
-      <p className="text-xs text-slate-400 mt-6 font-medium">Powered by Proxmox BI & Next.js Engine</p>
-
     </div>
   );
 }
