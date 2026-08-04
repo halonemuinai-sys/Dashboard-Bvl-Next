@@ -36,13 +36,27 @@ export async function GET(req: Request) {
 
     // Default fallbacks if database table is empty or loading
     if (advisors.length === 0) {
-      advisors = [
-        'Supervisor PI',
-        'Store Manager PI',
-        'Advisor Plaza Indonesia 1',
-        'Advisor Plaza Senayan 1',
-        'Advisor Bali 1'
+      const allFallbacks = [
+        { name: 'Supervisor PI', store: 'Plaza Indonesia' },
+        { name: 'Store Manager PI', store: 'Plaza Indonesia' },
+        { name: 'Advisor Plaza Indonesia 1', store: 'Plaza Indonesia' },
+        { name: 'Advisor Plaza Indonesia 2', store: 'Plaza Indonesia' },
+        { name: 'Store Manager PS', store: 'Plaza Senayan' },
+        { name: 'Advisor Plaza Senayan 1', store: 'Plaza Senayan' },
+        { name: 'Advisor Plaza Senayan 2', store: 'Plaza Senayan' },
+        { name: 'Store Manager Bali', store: 'Bali' },
+        { name: 'Advisor Bali 1', store: 'Bali' },
+        { name: 'Advisor Bali 2', store: 'Bali' },
       ];
+
+      if (store && store.toLowerCase() !== 'all stores' && store.toLowerCase() !== 'all') {
+        const locTerm = store.split(' ').pop()?.toLowerCase() || store.toLowerCase();
+        advisors = allFallbacks
+          .filter(f => f.store.toLowerCase().includes(locTerm))
+          .map(f => f.name);
+      } else {
+        advisors = allFallbacks.map(f => f.name);
+      }
     }
 
     return NextResponse.json(
