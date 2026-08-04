@@ -22,7 +22,8 @@ export async function POST(req: Request) {
 
     // Proxy request to Bvlgari External API
     const bvlgariApiUrl = `http://139.99.102.231:8089/demo/dailysalestransaction?startdate=${startDateStr}&enddate=${endDateStr}`;
-    const token = process.env.BVLGARI_API_TOKEN || 'c0J2bGFnMjAyNjptcmFiMTJnMw==';
+    // Token already contains scheme prefix (e.g. "Bearer ..."), use as-is
+    const token = process.env.BVLGARI_API_TOKEN || 'Basic c0J2bGFnMjAyNjptcmFiMTJnMw==';
 
     let records: any[] = [];
     let isOfflineMock = false;
@@ -33,10 +34,10 @@ export async function POST(req: Request) {
       try {
         const apiRes = await fetch(bvlgariApiUrl, {
           headers: {
-            Authorization: `Basic ${token}`,
+            Authorization: token,
             Accept: 'application/json',
           },
-          signal: AbortSignal.timeout(3000), // 3 seconds timeout
+          signal: AbortSignal.timeout(10000), // 10 seconds timeout
         });
 
         if (apiRes.ok) {
