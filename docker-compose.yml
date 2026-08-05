@@ -12,5 +12,8 @@ services:
     restart: unless-stopped
     ports:
       - "80:3000"
+    volumes:
+      - ./public/cdn:/app/public/cdn
+      - ./public/uploads:/app/public/uploads
     env_file:
       - .env.local
