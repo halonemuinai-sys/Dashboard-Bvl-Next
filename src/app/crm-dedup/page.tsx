@@ -17,14 +17,17 @@ import {
   Layers,
   Sparkles,
   Link as LinkIcon,
-  Globe,
-  Briefcase,
   Heart,
   UtensilsCrossed,
   AtSign,
   BadgeInfo,
-  Calendar,
   PlusCircle,
+  Upload,
+  Camera,
+  Trash2,
+  ShoppingBag,
+  Plus,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import BvlgariLoader from '@/components/BvlgariLoader';
@@ -38,13 +41,21 @@ const MASTER_DATA = {
   stores: ['Pacific Intermark', 'Pacific Superstore', 'Bali'],
   barangAntusias: ['Jewelry', 'Watches', 'Perfume', 'LLGA', 'Semi HJ'],
   statusPernikahan: ['Belum Kawin', 'Kawin', 'Cerai Hidup', 'Cerai Mati', 'Janda', 'Duda'],
-  statusPelanggan: ['New', 'Old', 'VIP'],
+  statusPelangganCRM: ['New', 'Old', 'VIP'],
+  statusPelangganTraffic: ['New Prospect', 'Existing Customer'],
   memilikiAnak: ['YA', 'TIDAK'],
   jumlahAnak: ['0', '1', '2', '3', '4', '5+'],
   fashionStyle: ['Casual', 'Stylish', 'Sporty', 'Konservatif', 'Hijab', 'Simple', 'Formal'],
   pemicuBeli: ['Promo / Discount', 'New Collection', 'Gift for Someone', 'Personal Reward', 'Investment', 'Limited Edition'],
   karakter: ['Pendiam', 'Ceriwis', 'To The Point', 'Supel', 'Humoris', 'Kritis', 'Antusias', 'Ramah', 'Sok Tahu', 'Suka Discount'],
-  prospekStatus: ['Walk-in', 'Follow-up', 'Delivery / Showing', 'Repair / Service', 'Online Inquiry'],
+  prospekStatus: ['Follow Up', 'Completed', 'Walk-in', 'Delivery / Showing', 'Repair / Service', 'Online Inquiry'],
+  prospekLevel: [
+    'Potensial Pelanggan Baru',
+    'Dalam Tahap Negosiasi',
+    'Menunggu Respon Pelanggan',
+    'Penjualan Berhasil',
+    'Penjualan Gagal',
+  ],
   minatBarang: [
     'Jewelry',
     'Watches',
@@ -58,6 +69,26 @@ const MASTER_DATA = {
     'Alta Gioielleria (Watches)',
     'High End Watches',
   ],
+  aksesMasuk: [
+    'Tamu dari hotel guest',
+    'Tamu dari hotel staff',
+    'Tamu butik Bulgari',
+    'Tamu fasilitas hotel (restaurant/bar)',
+    'Instagram',
+  ],
+  siapa: [
+    'Turis International',
+    'Turis Domestik',
+    'Penduduk Bali WNA',
+    'Penduduk Bali WNI',
+  ],
+  faktorPemicu: [
+    'Promo Bank',
+    'Promo Event/Marketing',
+    'Promo Mall',
+    'Masih Dalam Prospek',
+  ],
+  groupSize: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10+'],
   provinsi: [
     'Aceh', 'Bali', 'Bangka Belitung', 'Banten', 'Bengkulu', 'Daerah Istimewa Yogyakarta',
     'Dki Jakarta', 'Gorontalo', 'Jambi', 'Jawa Barat', 'Jawa Tengah', 'Jawa Timur',
@@ -112,6 +143,15 @@ interface DuplicateGroup {
   items: ProfileItem[];
 }
 
+interface TrafficItemRow {
+  item_code: string;
+  sap_code: string;
+  deskripsi: string;
+  harga: number;
+  kategori: string;
+  koleksi: string;
+}
+
 export default function CrmDedupPage() {
   const [activeTab, setActiveTab] = useState<'check' | 'traffic' | 'audit'>('check');
   const [loading, setLoading] = useState(true);
@@ -122,29 +162,38 @@ export default function CrmDedupPage() {
   const [duplicateEmails, setDuplicateEmails] = useState<DuplicateGroup[]>([]);
   const [trafficRows, setTrafficRows] = useState<any[]>([]);
 
-  // ── FORM STATES PROFILING ──────────────────────────────────────────────────
+  // ── FORM STATES PROFILING (`crm_profiling`) ────────────────────────────────
   const [statusPelanggan, setStatusPelanggan] = useState('New');
   const [title, setTitle] = useState('Mr');
   const [namaDepan, setNamaDepan] = useState('');
   const [namaBelakang, setNamaBelakang] = useState('');
   const [namaPanggilan, setNamaPanggilan] = useState('');
+  const [fotoCustomerUrl, setFotoCustomerUrl] = useState('');
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+
+  // Contact
   const [kewarganegaraan, setKewarganegaraan] = useState('Indonesia');
   const [noHp, setNoHp] = useState('');
   const [email, setEmail] = useState('');
+
+  // Identitas & Domisili (Conditional)
   const [ktpPassport, setKtpPassport] = useState('');
   const [tglLahir, setTglLahir] = useState('');
   const [umur, setUmur] = useState('');
   const [etnis, setEtnis] = useState('');
   const [agama, setAgama] = useState('');
-  const [pernikahan, setPernikahan] = useState('');
+  const [pernikahan, setPernikahan] = useState('Belum Kawin');
   const [tglPernikahan, setTglPernikahan] = useState('');
-  const [memilikiAnak, setMemilikiAnak] = useState('');
-  const [jumlahAnak, setJumlahAnak] = useState('');
-  const [domisiliType] = useState<'Dalam Negeri' | 'Luar Negeri'>('Dalam Negeri');
-  const [domisili, setDomisili] = useState('');
+  const [memilikiAnak, setMemilikiAnak] = useState('TIDAK');
+  const [jumlahAnak, setJumlahAnak] = useState('0');
+  const [domisiliType, setDomisiliType] = useState<'Dalam Negeri' | 'Luar Negeri'>('Dalam Negeri');
+  const [domisiliProvinsi, setDomisiliProvinsi] = useState('');
+  const [domisiliLuarNegeri, setDomisiliLuarNegeri] = useState('');
   const [pekerjaan, setPekerjaan] = useState('');
   const [tinggiBadan, setTinggiBadan] = useState('');
   const [bentukTubuh, setBentukTubuh] = useState('');
+
+  // Lifestyle & Minat (Conditional Hobby)
   const [fashionStyle, setFashionStyle] = useState('');
   const [hobbyKat, setHobbyKat] = useState('');
   const [hobbySub, setHobbySub] = useState('');
@@ -152,10 +201,14 @@ export default function CrmDedupPage() {
   const [warnaFavorit, setWarnaFavorit] = useState('');
   const [liburanFavorit, setLiburanFavorit] = useState('');
   const [topikPembicaraan, setTopikPembicaraan] = useState('');
+
+  // Kuliner
   const [makananFavorit, setMakananFavorit] = useState('');
   const [minumanFavorit, setMinumanFavorit] = useState('');
   const [cakeFavorit, setCakeFavorit] = useState('');
   const [alergiMakanan, setAlergiMakanan] = useState('');
+
+  // Sosmed & Insights
   const [instagram, setInstagram] = useState('');
   const [tiktok, setTiktok] = useState('');
   const [pemicu, setPemicu] = useState('');
@@ -165,15 +218,37 @@ export default function CrmDedupPage() {
   const [lokasiStore, setLokasiStore] = useState('Pacific Intermark');
   const [customerAdvisor, setCustomerAdvisor] = useState('');
 
-  // ── FORM STATES TRAFFIC ────────────────────────────────────────────────────
+  // ── FORM STATES TRAFFIC (`mirror_traffic` + `traffic_items`) ───────────────
   const [trTanggal, setTrTanggal] = useState(new Date().toISOString().split('T')[0]);
   const [trCustomerName, setTrCustomerName] = useState('');
+  const [trNamaPanggilan, setTrNamaPanggilan] = useState('');
   const [trNoHp, setTrNoHp] = useState('');
-  const [trStatus, setTrStatus] = useState('Walk-in');
-  const [trProspectItem, setTrProspectItem] = useState('Jewelry');
+  const [trEmail, setTrEmail] = useState('');
+  const [trStatusPelanggan, setTrStatusPelanggan] = useState('New Prospect');
+  const [trStatus, setTrStatus] = useState('Follow Up');
+  const [trProspectLevel, setTrProspectLevel] = useState('Potensial Pelanggan Baru');
+  const [trMinatBarang, setTrMinatBarang] = useState('Jewelry');
+  const [trAksesMasuk, setTrAksesMasuk] = useState('');
+  const [trSiapa, setTrSiapa] = useState('');
+  const [trFaktorPemicu, setTrFaktorPemicu] = useState('');
+  const [trGroupSize, setTrGroupSize] = useState('1');
   const [trServedBy, setTrServedBy] = useState('');
   const [trLocation, setTrLocation] = useState('Pacific Intermark');
+  const [trNotes, setTrNotes] = useState('');
+  const [trDiskonPct, setTrDiskonPct] = useState(0);
+  const [trBuktiChatUrl, setTrBuktiChatUrl] = useState('');
+  const [uploadingBukti, setUploadingBukti] = useState(false);
   const [trAutoProfile, setTrAutoProfile] = useState(true);
+
+  // Multi-row Barang Diminati (`traffic_items`)
+  const [trItems, setTrItems] = useState<TrafficItemRow[]>([]);
+  const [newItemCode, setNewItemCode] = useState('');
+  const [newSapCode, setNewSapCode] = useState('');
+  const [newDeskripsi, setNewDeskripsi] = useState('');
+  const [newHarga, setNewHarga] = useState(0);
+  const [newKategori, setNewKategori] = useState('Jewelry');
+  const [newKoleksi, setNewKoleksi] = useState('');
+
   const [trMessage, setTrMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Real-time deduplication check state
@@ -182,8 +257,6 @@ export default function CrmDedupPage() {
   const [exactEmailMatches, setExactEmailMatches] = useState<ProfileItem[]>([]);
   const [fuzzyMatches, setFuzzyMatches] = useState<ProfileItem[]>([]);
   const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  // Merge state
   const [mergingId, setMergingId] = useState<number | null>(null);
 
   const fetchAuditData = useCallback(async () => {
@@ -212,6 +285,16 @@ export default function CrmDedupPage() {
   const fullName = useMemo(() => {
     return `${namaDepan} ${namaBelakang}`.trim();
   }, [namaDepan, namaBelakang]);
+
+  // Subtotal & Net Sales Traffic calculations
+  const trSubtotal = useMemo(() => {
+    return trItems.reduce((acc, item) => acc + (item.harga || 0), 0);
+  }, [trItems]);
+
+  const trNetSales = useMemo(() => {
+    const discountAmount = (trSubtotal * (trDiskonPct || 0)) / 100;
+    return trSubtotal - discountAmount;
+  }, [trSubtotal, trDiskonPct]);
 
   // Handle Real-time Deduplication Check
   const runCheck = useCallback(async () => {
@@ -250,6 +333,64 @@ export default function CrmDedupPage() {
     return () => clearTimeout(timer);
   }, [noHp, email, fullName, runCheck]);
 
+  // Handle Image Upload for CDN (Foto Customer or Bukti Chat)
+  const handleUploadImage = async (file: File, folder: 'foto_customer' | 'bukti_chat') => {
+    if (folder === 'foto_customer') setUploadingFoto(true);
+    else setUploadingBukti(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', folder);
+
+      const res = await fetch('/api/cdn/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success && data.file?.url) {
+        if (folder === 'foto_customer') setFotoCustomerUrl(data.file.url);
+        else setTrBuktiChatUrl(data.file.url);
+      } else {
+        alert('Gagal upload gambar ke CDN: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e: any) {
+      alert('Error upload: ' + e.message);
+    } finally {
+      if (folder === 'foto_customer') setUploadingFoto(false);
+      else setUploadingBukti(false);
+    }
+  };
+
+  // Add Item to `traffic_items`
+  const handleAddTrafficItem = () => {
+    if (!newDeskripsi || newHarga <= 0) {
+      alert('Isi Deskripsi dan Harga barang!');
+      return;
+    }
+    setTrItems((prev) => [
+      ...prev,
+      {
+        item_code: newItemCode || `ITEM-${Date.now().toString().slice(-4)}`,
+        sap_code: newSapCode,
+        deskripsi: newDeskripsi,
+        harga: Number(newHarga),
+        kategori: newKategori,
+        koleksi: newKoleksi,
+      },
+    ]);
+    setNewItemCode('');
+    setNewSapCode('');
+    setNewDeskripsi('');
+    setNewHarga(0);
+    setNewKoleksi('');
+  };
+
+  // Remove Item from `traffic_items`
+  const handleRemoveTrafficItem = (index: number) => {
+    setTrItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
   // Execute Merge
   const handleMerge = async (primary: ProfileItem, secondaries: ProfileItem[]) => {
     if (!confirm(`Gabungkan data duplikat ini? Profil #${primary.id} (${primary.nama_lengkap}) akan disimpan sebagai data utama.`)) return;
@@ -279,7 +420,7 @@ export default function CrmDedupPage() {
     }
   };
 
-  // Submit Clean Profile
+  // Submit Clean Profile (`crm_profiling`)
   const handleCreateProfile = async () => {
     if (!namaDepan || !noHp) {
       setSubmitMessage({ type: 'error', text: 'Nama Depan dan Nomor HP wajib diisi!' });
@@ -288,9 +429,6 @@ export default function CrmDedupPage() {
     setCheckLoading(true);
     setSubmitMessage(null);
     try {
-      const phonePrefix = MASTER_DATA.phoneCodes[kewarganegaraan] ? `+${MASTER_DATA.phoneCodes[kewarganegaraan]} ` : '';
-      const fullNoHp = `${phonePrefix}${noHp}`.replace(/\s+/g, '');
-
       const profilePayload = {
         title,
         nama_lengkap: fullName,
@@ -299,7 +437,8 @@ export default function CrmDedupPage() {
         nama_belakang: namaBelakang,
         full_name_tittle: `${title} ${fullName}`.trim(),
         status_pelanggan: statusPelanggan,
-        no_hp: fullNoHp,
+        foto_customer: fotoCustomerUrl,
+        no_hp: noHp,
         email,
         kewarganegaraan,
         tanggal_lahir: tglLahir,
@@ -309,17 +448,17 @@ export default function CrmDedupPage() {
         etnis,
         agama,
         status_pernikahan: pernikahan,
-        tanggal_pernikahan: tglPernikahan,
+        tanggal_pernikahan: pernikahan === 'Kawin' ? tglPernikahan : '',
         memiliki_anak: memilikiAnak,
-        jumlah_anak: jumlahAnak,
+        jumlah_anak: memilikiAnak === 'YA' ? jumlahAnak : '0',
         pekerjaan,
         ktp_passport: ktpPassport,
-        domisili: domisiliType === 'Dalam Negeri' ? domisili : '',
-        domisili_luar_negeri: domisiliType === 'Luar Negeri' ? domisili : '',
+        domisili: domisiliType === 'Dalam Negeri' ? domisiliProvinsi : '',
+        domisili_luar_negeri: domisiliType === 'Luar Negeri' ? domisiliLuarNegeri : '',
         fashion_style: fashionStyle,
         hobby_kategori: hobbyKat,
         hobby_sub: hobbySub,
-        hobby_others: hobbyOthers,
+        hobby_others: (hobbyKat === 'Others' || hobbySub === 'Others') ? hobbyOthers : '',
         warna_favorit: warnaFavorit,
         tempat_liburan_favorit: liburanFavorit,
         topik_pembicaraan_favorit: topikPembicaraan,
@@ -354,6 +493,7 @@ export default function CrmDedupPage() {
         setNamaPanggilan('');
         setNoHp('');
         setEmail('');
+        setFotoCustomerUrl('');
         setNotes('');
         fetchAuditData();
       } else {
@@ -366,7 +506,7 @@ export default function CrmDedupPage() {
     }
   };
 
-  // Submit Traffic Entry
+  // Submit Traffic Entry (`mirror_traffic` + `traffic_items`)
   const handleCreateTraffic = async () => {
     if (!trCustomerName) {
       setTrMessage({ type: 'error', text: 'Nama Pengunjung / Pelanggan wajib diisi!' });
@@ -374,6 +514,10 @@ export default function CrmDedupPage() {
     }
     setTrMessage(null);
     try {
+      const barangDiminatiStr = trItems
+        .map((i) => `${i.item_code} - ${i.deskripsi} (Rp ${i.harga.toLocaleString('id-ID')})`)
+        .join('; ');
+
       const res = await fetch('/api/crm/dedup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -383,20 +527,39 @@ export default function CrmDedupPage() {
           trafficData: {
             tanggal_berkunjung: trTanggal,
             customer_name: trCustomerName,
+            nama_panggilan: trNamaPanggilan,
             no_hp: trNoHp,
+            email: trEmail,
+            status_pelanggan: trStatusPelanggan,
             status: trStatus,
-            prospect_item: trProspectItem,
+            prospect_item: trProspectLevel,
+            minat_barang: trMinatBarang,
+            akses_masuk: trAksesMasuk,
+            siapa: trSiapa,
+            faktor_pemicu: trFaktorPemicu,
+            group_size: trGroupSize,
             served_by: trServedBy || 'System SA',
+            customer_advisor: trServedBy || 'System SA',
             location: trLocation,
+            notes: trNotes,
+            barang_diminati: barangDiminatiStr,
+            net_sales: trNetSales,
+            diskon_pct: trDiskonPct,
+            bukti_chat: trBuktiChatUrl,
           },
+          trafficItems: trItems,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setTrMessage({ type: 'success', text: 'Data Kunjungan / Walk-in Traffic berhasil disimpan!' });
+        setTrMessage({ type: 'success', text: 'Data Kunjungan Traffic & Items berhasil disimpan!' });
         setTrCustomerName('');
+        setTrNamaPanggilan('');
         setTrNoHp('');
-        setTrServedBy('');
+        setTrEmail('');
+        setTrNotes('');
+        setTrBuktiChatUrl('');
+        setTrItems([]);
         fetchAuditData();
       } else {
         setTrMessage({ type: 'error', text: 'Gagal menyimpan traffic: ' + data.error });
@@ -428,7 +591,7 @@ export default function CrmDedupPage() {
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">CRM Profiling &amp; Traffic Entry Portal</h1>
           </div>
           <p className="text-xs text-slate-500">
-            Formulir Input Profil Pelanggan &amp; Catat Traffic Walk-In dengan sistem pencegahan duplikasi real-time.
+            Formulir Input Profil Pelanggan &amp; Catat Traffic Walk-In dengan fitur foto CDN, conditional fields, dan multi-row traffic items.
           </p>
         </div>
 
@@ -494,7 +657,7 @@ export default function CrmDedupPage() {
           )}
         >
           <UserPlus className="w-4 h-4" />
-          📝 Form Profiling Pelanggan Baru
+          📝 Form Profiling Pelanggan Baru (`crm_profiling`)
         </button>
 
         <button
@@ -508,7 +671,7 @@ export default function CrmDedupPage() {
           )}
         >
           <PlusCircle className="w-4 h-4 text-emerald-600" />
-          🚦 Form Catat Traffic / Kunjungan Walk-In
+          🚦 Form Traffic &amp; Items (`mirror_traffic` + `traffic_items`)
         </button>
 
         <button
@@ -526,7 +689,7 @@ export default function CrmDedupPage() {
         </button>
       </div>
 
-      {/* TAB 1: FORM PROFILING PELANGGAN BARU */}
+      {/* TAB 1: FORM PROFILING (`crm_profiling`) */}
       {activeTab === 'check' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Main 7-Section Form */}
@@ -545,13 +708,42 @@ export default function CrmDedupPage() {
               </div>
             )}
 
-            {/* 1. PRIMARY INFORMATION */}
+            {/* 1. PRIMARY INFORMATION & FOTO CDN */}
             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                   <User className="w-4 h-4" />
                 </div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">1. PRIMARY INFORMATION</h3>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">1. PRIMARY INFORMATION &amp; FOTO CDN</h3>
+              </div>
+
+              {/* Foto Customer CDN Section */}
+              <div className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div className="w-20 h-20 bg-slate-200 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-300 relative shrink-0">
+                  {fotoCustomerUrl ? (
+                    <img src={fotoCustomerUrl} alt="Foto Customer" className="w-full h-full object-cover" />
+                  ) : (
+                    <Camera className="w-8 h-8 text-slate-400" />
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Foto Customer (CDN Proxmox)</h4>
+                  <p className="text-[11px] text-slate-500 mb-2">Upload foto ke server CDN (`foto_customer`)</p>
+                  <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all">
+                    <Upload className="w-3.5 h-3.5" />
+                    {uploadingFoto ? 'Uploading...' : 'Pilih Foto'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleUploadImage(e.target.files[0], 'foto_customer');
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -562,7 +754,7 @@ export default function CrmDedupPage() {
                     onChange={(e) => setStatusPelanggan(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold"
                   >
-                    {MASTER_DATA.statusPelanggan.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {MASTER_DATA.statusPelangganCRM.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
 
@@ -641,18 +833,13 @@ export default function CrmDedupPage() {
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
                     Nomor HP <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2">
-                    <span className="text-xs font-bold text-blue-600 shrink-0">
-                      +{MASTER_DATA.phoneCodes[kewarganegaraan] || '62'}
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="81234567890"
-                      value={noHp}
-                      onChange={(e) => setNoHp(e.target.value)}
-                      className="w-full bg-transparent text-xs text-slate-800 outline-none font-medium"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    placeholder="081234567890"
+                    value={noHp}
+                    onChange={(e) => setNoHp(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
                 </div>
 
                 <div>
@@ -668,13 +855,13 @@ export default function CrmDedupPage() {
               </div>
             </div>
 
-            {/* 3. IDENTITAS & DOMISILI */}
+            {/* 3. IDENTITAS & DOMISILI (WITH CONDITIONAL FIELDS) */}
             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-violet-50 text-violet-600 rounded-xl">
                   <BadgeInfo className="w-4 h-4" />
                 </div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">3. IDENTITAS &amp; DOMISILI</h3>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">3. IDENTITAS &amp; DOMISILI (CONDITIONAL)</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -710,6 +897,106 @@ export default function CrmDedupPage() {
                     {MASTER_DATA.umurOptions.map((u) => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
+              </div>
+
+              {/* Conditional Pernikahan & Anak */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-violet-50/50 border border-violet-100 rounded-2xl">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Pernikahan</label>
+                  <select
+                    value={pernikahan}
+                    onChange={(e) => setPernikahan(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    {MASTER_DATA.statusPernikahan.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                {pernikahan === 'Kawin' && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-violet-700 uppercase mb-1">Tanggal Pernikahan</label>
+                    <input
+                      type="date"
+                      value={tglPernikahan}
+                      onChange={(e) => setTglPernikahan(e.target.value)}
+                      className="w-full bg-white border border-violet-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Memiliki Anak?</label>
+                  <select
+                    value={memilikiAnak}
+                    onChange={(e) => setMemilikiAnak(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    {MASTER_DATA.memilikiAnak.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+
+                {memilikiAnak === 'YA' && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-violet-700 uppercase mb-1">Jumlah Anak</label>
+                    <select
+                      value={jumlahAnak}
+                      onChange={(e) => setJumlahAnak(e.target.value)}
+                      className="w-full bg-white border border-violet-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                    >
+                      {MASTER_DATA.jumlahAnak.map((j) => <option key={j} value={j}>{j}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Conditional Domisili */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase">Tipe Domisili</label>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="domType"
+                      checked={domisiliType === 'Dalam Negeri'}
+                      onChange={() => setDomisiliType('Dalam Negeri')}
+                    />
+                    Dalam Negeri (Indonesia)
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="domType"
+                      checked={domisiliType === 'Luar Negeri'}
+                      onChange={() => setDomisiliType('Luar Negeri')}
+                    />
+                    Luar Negeri (International)
+                  </label>
+                </div>
+
+                {domisiliType === 'Dalam Negeri' ? (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Provinsi Domisili</label>
+                    <select
+                      value={domisiliProvinsi}
+                      onChange={(e) => setDomisiliProvinsi(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                    >
+                      <option value="">Pilih Provinsi...</option>
+                      {MASTER_DATA.provinsi.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Negara / Kota Domisili Luar Negeri</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Singapore, London, Tokyo..."
+                      value={domisiliLuarNegeri}
+                      onChange={(e) => setDomisiliLuarNegeri(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -748,64 +1035,15 @@ export default function CrmDedupPage() {
                   </select>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Pernikahan</label>
-                  <select
-                    value={pernikahan}
-                    onChange={(e) => setPernikahan(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                  >
-                    <option value="">Status...</option>
-                    {MASTER_DATA.statusPernikahan.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Memiliki Anak?</label>
-                  <select
-                    value={memilikiAnak}
-                    onChange={(e) => setMemilikiAnak(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                  >
-                    <option value="">Pilih...</option>
-                    {MASTER_DATA.memilikiAnak.map((a) => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Jumlah Anak</label>
-                  <select
-                    value={jumlahAnak}
-                    onChange={(e) => setJumlahAnak(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                  >
-                    <option value="">Jumlah...</option>
-                    {MASTER_DATA.jumlahAnak.map((j) => <option key={j} value={j}>{j}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Domisili</label>
-                  <input
-                    type="text"
-                    placeholder="Kota / Provinsi..."
-                    value={domisili}
-                    onChange={(e) => setDomisili(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                  />
-                </div>
-              </div>
             </div>
 
-            {/* 4. LIFESTYLE & MINAT */}
+            {/* 4. LIFESTYLE & MINAT (DYNAMIC CONDITIONAL HOBBY) */}
             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-pink-50 text-pink-600 rounded-xl">
                   <Heart className="w-4 h-4" />
                 </div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">4. LIFESTYLE &amp; MINAT</h3>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">4. LIFESTYLE &amp; HOBBY (CONDITIONAL)</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -849,6 +1087,19 @@ export default function CrmDedupPage() {
                   </select>
                 </div>
               </div>
+
+              {(hobbyKat === 'Others' || hobbySub === 'Others') && (
+                <div className="p-3 bg-pink-50 border border-pink-200 rounded-2xl">
+                  <label className="block text-[11px] font-bold text-pink-800 uppercase mb-1">Hobby Lainnya (Spesifik)</label>
+                  <input
+                    type="text"
+                    placeholder="Tuliskan hobi khusus..."
+                    value={hobbyOthers}
+                    onChange={(e) => setHobbyOthers(e.target.value)}
+                    className="w-full bg-white border border-pink-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -1085,7 +1336,7 @@ export default function CrmDedupPage() {
                   <span className="font-bold text-slate-700">Nama Input:</span> {fullName || '—'}
                 </p>
                 <p className="text-slate-500">
-                  <span className="font-bold text-slate-700">HP Input:</span> {noHp ? `+${MASTER_DATA.phoneCodes[kewarganegaraan] || '62'}${noHp}` : '—'}
+                  <span className="font-bold text-slate-700">HP Input:</span> {noHp || '—'}
                 </p>
               </div>
 
@@ -1155,17 +1406,17 @@ export default function CrmDedupPage() {
         </div>
       )}
 
-      {/* TAB 2: FORM CATAT TRAFFIC / WALK-IN KUNJUNGAN */}
+      {/* TAB 2: FORM TRAFFIC & MULTI-ROW ITEMS (`mirror_traffic` + `traffic_items`) */}
       {activeTab === 'traffic' && (
-        <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4 max-w-4xl mx-auto">
+        <div className="space-y-6 max-w-5xl mx-auto">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
             <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
               <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
                 <PlusCircle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase">Form Catat Traffic / Kunjungan Walk-In Toko</h3>
-                <p className="text-xs text-slate-500">Input kunjungan prospek toko &amp; hubungkan secara otomatis ke Profil CRM.</p>
+                <h3 className="text-sm font-black text-slate-900 uppercase">Form Catat Prospect Traffic &amp; Items (`mirror_traffic` + `traffic_items`)</h3>
+                <p className="text-xs text-slate-500">Formulir lengkap kunjungan toko dengan bukti CDN &amp; tabel barang diminati multi-row.</p>
               </div>
             </div>
 
@@ -1183,95 +1434,398 @@ export default function CrmDedupPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tanggal Kunjungan</label>
-                <input
-                  type="date"
-                  value={trTanggal}
-                  onChange={(e) => setTrTanggal(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                />
+            {/* Section A: Informasi Pelanggan & Kunjungan */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">A. INFORMASI PELANGGAN &amp; KUNJUNGAN</h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tanggal Kunjungan</label>
+                  <input
+                    type="date"
+                    value={trTanggal}
+                    onChange={(e) => setTrTanggal(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                    Nama Pengunjung <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Nama lengkap..."
+                    value={trCustomerName}
+                    onChange={(e) => setTrCustomerName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nama Panggilan</label>
+                  <input
+                    type="text"
+                    placeholder="Nama panggilan..."
+                    value={trNamaPanggilan}
+                    onChange={(e) => setTrNamaPanggilan(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                  Nama Pengunjung / Pelanggan <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nama pengunjung toko..."
-                  value={trCustomerName}
-                  onChange={(e) => setTrCustomerName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nomor HP</label>
+                  <input
+                    type="text"
+                    placeholder="081234567890"
+                    value={trNoHp}
+                    onChange={(e) => setTrNoHp(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Email</label>
+                  <input
+                    type="email"
+                    placeholder="email@example.com"
+                    value={trEmail}
+                    onChange={(e) => setTrEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Pelanggan</label>
+                  <select
+                    value={trStatusPelanggan}
+                    onChange={(e) => setTrStatusPelanggan(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    {MASTER_DATA.statusPelangganTraffic.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Visit / Kunjungan</label>
+                  <select
+                    value={trStatus}
+                    onChange={(e) => setTrStatus(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold"
+                  >
+                    {MASTER_DATA.prospekStatus.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Section B: Detail Segmentasi Prospek */}
+            <div className="space-y-4 pt-2 border-t border-slate-100">
+              <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">B. DETAIL SEGMENTASI PROSPEK</h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tahap Prospek</label>
+                  <select
+                    value={trProspectLevel}
+                    onChange={(e) => setTrProspectLevel(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    {MASTER_DATA.prospekLevel.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Minat Utama</label>
+                  <select
+                    value={trMinatBarang}
+                    onChange={(e) => setTrMinatBarang(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    {MASTER_DATA.minatBarang.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Akses Masuk (Source)</label>
+                  <select
+                    value={trAksesMasuk}
+                    onChange={(e) => setTrAksesMasuk(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    <option value="">Pilih Akses...</option>
+                    {MASTER_DATA.aksesMasuk.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nomor HP Pengunjung</label>
-                <input
-                  type="text"
-                  placeholder="081234567890"
-                  value={trNoHp}
-                  onChange={(e) => setTrNoHp(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Pengunjung (Siapa)</label>
+                  <select
+                    value={trSiapa}
+                    onChange={(e) => setTrSiapa(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    <option value="">Pilih Kategori...</option>
+                    {MASTER_DATA.siapa.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Faktor Pemicu</label>
+                  <select
+                    value={trFaktorPemicu}
+                    onChange={(e) => setTrFaktorPemicu(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    <option value="">Pilih Pemicu...</option>
+                    {MASTER_DATA.faktorPemicu.map((f) => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Group Size</label>
+                  <select
+                    value={trGroupSize}
+                    onChange={(e) => setTrGroupSize(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  >
+                    {MASTER_DATA.groupSize.map((g) => <option key={g} value={g}>{g} orang</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Served By (SA)</label>
+                  <input
+                    type="text"
+                    placeholder="Nama Advisor..."
+                    value={trServedBy}
+                    onChange={(e) => setTrServedBy(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section C: Multi-Row Barang Diminati (`traffic_items`) */}
+            <div className="space-y-4 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-emerald-600" />
+                  C. BARANG DIMINATI (`traffic_items` MULTI-ROW)
+                </h4>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                  Total: Rp {trNetSales.toLocaleString('id-ID')}
+                </span>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Visit / Kunjungan</label>
-                <select
-                  value={trStatus}
-                  onChange={(e) => setTrStatus(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold"
-                >
-                  {MASTER_DATA.prospekStatus.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+              {/* Form Tambah Item */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kode Item</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. AN855420"
+                      value={newItemCode}
+                      onChange={(e) => setNewItemCode(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">SAP Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 100234"
+                      value={newSapCode}
+                      onChange={(e) => setNewSapCode(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Deskripsi Barang</label>
+                    <input
+                      type="text"
+                      placeholder="B.zero1 4-Band Ring 18kt Rose Gold..."
+                      value={newDeskripsi}
+                      onChange={(e) => setNewDeskripsi(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kategori</label>
+                    <select
+                      value={newKategori}
+                      onChange={(e) => setNewKategori(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
+                    >
+                      {MASTER_DATA.minatBarang.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Koleksi</label>
+                    <input
+                      type="text"
+                      placeholder="B.zero1, Serpenti..."
+                      value={newKoleksi}
+                      onChange={(e) => setNewKoleksi(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Harga (Rp)</label>
+                    <input
+                      type="number"
+                      placeholder="45000000"
+                      value={newHarga || ''}
+                      onChange={(e) => setNewHarga(Number(e.target.value))}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none font-bold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={handleAddTrafficItem}
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Tambah Item
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Minat Barang</label>
-                <select
-                  value={trProspectItem}
-                  onChange={(e) => setTrProspectItem(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                >
-                  {MASTER_DATA.minatBarang.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
+              {/* Table List Items */}
+              {trItems.length > 0 && (
+                <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      <tr>
+                        <th className="p-3">Kode / SAP</th>
+                        <th className="p-3">Deskripsi Barang</th>
+                        <th className="p-3">Kategori</th>
+                        <th className="p-3 text-right">Harga</th>
+                        <th className="p-3 text-center">Hapus</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {trItems.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="p-3 font-mono font-bold text-slate-700">
+                            {item.item_code} {item.sap_code && `(${item.sap_code})`}
+                          </td>
+                          <td className="p-3 font-bold text-slate-900">{item.deskripsi}</td>
+                          <td className="p-3 text-slate-600">{item.kategori}</td>
+                          <td className="p-3 text-right font-bold text-emerald-600">
+                            Rp {item.harga.toLocaleString('id-ID')}
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTrafficItem(idx)}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded-lg"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Discount & Calculations */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Diskon (%)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={trDiskonPct || ''}
+                    onChange={(e) => setTrDiskonPct(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Subtotal Harga</label>
+                  <p className="text-sm font-bold text-slate-900 pt-2">Rp {trSubtotal.toLocaleString('id-ID')}</p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Net Sales (Setelah Diskon)</label>
+                  <p className="text-base font-black text-emerald-600 pt-1">Rp {trNetSales.toLocaleString('id-ID')}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section D: Bukti CDN & Notes */}
+            <div className="space-y-4 pt-2 border-t border-slate-100">
+              <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">D. BUKTI CHAT (CDN) &amp; CATATAN</h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center gap-4">
+                  <div className="w-16 h-16 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center border border-slate-300 relative shrink-0">
+                    {trBuktiChatUrl ? (
+                      <img src={trBuktiChatUrl} alt="Bukti Chat" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-slate-400" />
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Bukti Chat / Lampiran (CDN)</h5>
+                    <p className="text-[11px] text-slate-500 mb-2">Upload bukti ke folder `bukti_chat`</p>
+                    <label className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all">
+                      <Upload className="w-3 h-3" />
+                      {uploadingBukti ? 'Uploading...' : 'Upload Bukti'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleUploadImage(e.target.files[0], 'bukti_chat');
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Catatan Kunjungan (Notes)</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Keperluan pelanggan, request khusus..."
+                    value={trNotes}
+                    onChange={(e) => setTrNotes(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Served By (Sales Advisor)</label>
-                <input
-                  type="text"
-                  placeholder="Nama SA yang melayani..."
-                  value={trServedBy}
-                  onChange={(e) => setTrServedBy(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Lokasi Toko / Store</label>
-                <select
-                  value={trLocation}
-                  onChange={(e) => setTrLocation(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold"
-                >
-                  {MASTER_DATA.stores.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3 pt-6">
+              <div className="flex items-center gap-3 pt-2">
                 <input
                   type="checkbox"
-                  id="autoProfile"
+                  id="autoProfileCheck"
                   checked={trAutoProfile}
                   onChange={(e) => setTrAutoProfile(e.target.checked)}
                   className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
                 />
-                <label htmlFor="autoProfile" className="text-xs font-bold text-slate-700 cursor-pointer">
-                  Otomatis Buat Profil CRM Baru untuk Pelanggan Ini
+                <label htmlFor="autoProfileCheck" className="text-xs font-bold text-slate-700 cursor-pointer">
+                  Otomatis Buat &amp; Link Profil CRM Baru untuk Pelanggan Ini
                 </label>
               </div>
             </div>
@@ -1279,46 +1833,11 @@ export default function CrmDedupPage() {
             <button
               type="button"
               onClick={handleCreateTraffic}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md mt-4"
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-lg mt-4"
             >
-              <PlusCircle className="w-4 h-4" />
-              Simpan Data Kunjungan Traffic
+              <PlusCircle className="w-5 h-5" />
+              Simpan Data Kunjungan Traffic &amp; Items
             </button>
-          </div>
-
-          {/* History Kunjungan Table */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">History Kunjungan Toko (mirror_traffic)</h4>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50">
-                    <th className="p-3">Tanggal</th>
-                    <th className="p-3">Nama Pelanggan</th>
-                    <th className="p-3">Status Visit</th>
-                    <th className="p-3">Minat Barang</th>
-                    <th className="p-3">Served By</th>
-                    <th className="p-3">Location</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {trafficRows.map((r, idx) => (
-                    <tr key={r.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 font-medium text-slate-600">{r.tanggal_berkunjung || '—'}</td>
-                      <td className="p-3 font-bold text-slate-900">{r.customer_name || 'Walk-in Guest'}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold text-[10px] border border-blue-200">
-                          {r.status || 'Walk-in'}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-600">{r.prospect_item || '—'}</td>
-                      <td className="p-3 text-slate-600">{r.served_by || '—'}</td>
-                      <td className="p-3 text-slate-600">{r.location || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
         </div>
       )}

@@ -162,7 +162,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, primaryId, secondaryIds, profileData, trafficData, autoCreateProfile } = body;
+    const { action, primaryId, secondaryIds, profileData, trafficData, trafficItems, autoCreateProfile } = body;
 
     // Merge profiles action
     if (action === 'merge') {
@@ -184,7 +184,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // Create deduplicated profile action
+    // Create deduplicated CRM profile action
     if (action === 'create') {
       const { data: inserted, error: insError } = await supabase
         .from('crm_profiling')
@@ -201,7 +201,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // Create traffic entry action
+    // Create Traffic / Prospect entry action
     if (action === 'create_traffic') {
       let createdProfileId = trafficData.crm_profile_id || null;
 
@@ -212,9 +212,10 @@ export async function POST(req: Request) {
           .insert({
             nama_lengkap: trafficData.customer_name,
             no_hp: trafficData.no_hp || '',
+            email: trafficData.email || '',
             lokasi_store: trafficData.location || 'Pacific Intermark',
             customer_advisor: trafficData.served_by || 'System SA',
-            status_pelanggan: 'New',
+            status_pelanggan: trafficData.status_pelanggan || 'New Prospect',
             tanggal_input: new Date().toISOString().split('T')[0],
           })
           .select()
@@ -225,22 +226,52 @@ export async function POST(req: Request) {
         }
       }
 
+      // Insert into mirror_traffic
       const { data: insTraffic, error: trErr } = await supabase
         .from('mirror_traffic')
         .insert({
           tanggal_berkunjung: trafficData.tanggal_berkunjung || new Date().toISOString().split('T')[0],
           customer_name: trafficData.customer_name,
-          status: trafficData.status || 'Walk-in',
+          nama_panggilan: trafficData.nama_panggilan || '',
+          customer_advisor: trafficData.customer_advisor || trafficData.served_by,
           served_by: trafficData.served_by,
           location: trafficData.location,
-          prospect_item: trafficData.prospect_item,
-          no_hp: trafficData.no_hp,
+          status: trafficData.status || 'Follow Up',
+          prospect_item: trafficData.prospect_item || '',
+          minat_barang: trafficData.minat_barang || '',
+          akses_masuk: trafficData.akses_masuk || '',
+          siapa: trafficData.siapa || '',
+          faktor_pemicu: trafficData.faktor_pemicu || '',
+          group_size: trafficData.group_size || '',
+          no_hp: trafficData.no_hp || '',
+          email: trafficData.email || '',
+          status_pelanggan: trafficData.status_pelanggan || 'New Prospect',
+          notes: trafficData.notes || '',
+          barang_diminati: trafficData.barang_diminati || '',
+          net_sales: trafficData.net_sales || 0,
+          diskon_pct: trafficData.diskon_pct || 0,
+          bukti_chat: trafficData.bukti_chat || '',
           crm_profile_id: createdProfileId,
         })
         .select()
         .single();
 
       if (trErr) throw trErr;
+
+      // Insert multi-row items into traffic_items if provided
+      if (Array.isArray(trafficItems) && trafficItems.length > 0 && insTraffic) {
+        const rowsToInsert = trafficItems.map((item: any) => ({
+          traffic_id: insTraffic.id,
+          item_code: item.item_code || '',
+          sap_code: item.sap_code || '',
+          deskripsi: item.deskripsi || '',
+          harga: Number(item.harga) || 0,
+          kategori: item.kategori || '',
+          koleksi: item.koleksi || '',
+        }));
+
+        await supabase.from('traffic_items').insert(rowsToInsert);
+      }
 
       return NextResponse.json({
         success: true,
