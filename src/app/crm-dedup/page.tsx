@@ -22,9 +22,9 @@ import {
   Heart,
   UtensilsCrossed,
   AtSign,
-  FileText,
   BadgeInfo,
   Calendar,
+  PlusCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import BvlgariLoader from '@/components/BvlgariLoader';
@@ -44,6 +44,20 @@ const MASTER_DATA = {
   fashionStyle: ['Casual', 'Stylish', 'Sporty', 'Konservatif', 'Hijab', 'Simple', 'Formal'],
   pemicuBeli: ['Promo / Discount', 'New Collection', 'Gift for Someone', 'Personal Reward', 'Investment', 'Limited Edition'],
   karakter: ['Pendiam', 'Ceriwis', 'To The Point', 'Supel', 'Humoris', 'Kritis', 'Antusias', 'Ramah', 'Sok Tahu', 'Suka Discount'],
+  prospekStatus: ['Walk-in', 'Follow-up', 'Delivery / Showing', 'Repair / Service', 'Online Inquiry'],
+  minatBarang: [
+    'Jewelry',
+    'Watches',
+    'Perfume',
+    'LLGA',
+    'Semi HJ',
+    'Fine Jewel 0 - 200jt',
+    'Precious 201 - 600jt',
+    'Gioielleria 601 - 999jt',
+    'Alta Gamma 1M >',
+    'Alta Gioielleria (Watches)',
+    'High End Watches',
+  ],
   provinsi: [
     'Aceh', 'Bali', 'Bangka Belitung', 'Banten', 'Bengkulu', 'Daerah Istimewa Yogyakarta',
     'Dki Jakarta', 'Gorontalo', 'Jambi', 'Jawa Barat', 'Jawa Tengah', 'Jawa Timur',
@@ -99,7 +113,7 @@ interface DuplicateGroup {
 }
 
 export default function CrmDedupPage() {
-  const [activeTab, setActiveTab] = useState<'check' | 'audit' | 'traffic'>('check');
+  const [activeTab, setActiveTab] = useState<'check' | 'traffic' | 'audit'>('check');
   const [loading, setLoading] = useState(true);
 
   // Audit State
@@ -108,20 +122,15 @@ export default function CrmDedupPage() {
   const [duplicateEmails, setDuplicateEmails] = useState<DuplicateGroup[]>([]);
   const [trafficRows, setTrafficRows] = useState<any[]>([]);
 
-  // ── FORM STATES (EXACTLY MATCHING MOBILE APP FLUTTER FORM) ──────────────────
-  // 1. Primary
+  // ── FORM STATES PROFILING ──────────────────────────────────────────────────
   const [statusPelanggan, setStatusPelanggan] = useState('New');
   const [title, setTitle] = useState('Mr');
   const [namaDepan, setNamaDepan] = useState('');
   const [namaBelakang, setNamaBelakang] = useState('');
   const [namaPanggilan, setNamaPanggilan] = useState('');
-
-  // 2. Contact
   const [kewarganegaraan, setKewarganegaraan] = useState('Indonesia');
   const [noHp, setNoHp] = useState('');
   const [email, setEmail] = useState('');
-
-  // 3. Identitas & Domisili
   const [ktpPassport, setKtpPassport] = useState('');
   const [tglLahir, setTglLahir] = useState('');
   const [umur, setUmur] = useState('');
@@ -131,13 +140,11 @@ export default function CrmDedupPage() {
   const [tglPernikahan, setTglPernikahan] = useState('');
   const [memilikiAnak, setMemilikiAnak] = useState('');
   const [jumlahAnak, setJumlahAnak] = useState('');
-  const [domisiliType, setDomisiliType] = useState<'Dalam Negeri' | 'Luar Negeri'>('Dalam Negeri');
+  const [domisiliType] = useState<'Dalam Negeri' | 'Luar Negeri'>('Dalam Negeri');
   const [domisili, setDomisili] = useState('');
   const [pekerjaan, setPekerjaan] = useState('');
   const [tinggiBadan, setTinggiBadan] = useState('');
   const [bentukTubuh, setBentukTubuh] = useState('');
-
-  // 4. Lifestyle & Minat
   const [fashionStyle, setFashionStyle] = useState('');
   const [hobbyKat, setHobbyKat] = useState('');
   const [hobbySub, setHobbySub] = useState('');
@@ -145,24 +152,29 @@ export default function CrmDedupPage() {
   const [warnaFavorit, setWarnaFavorit] = useState('');
   const [liburanFavorit, setLiburanFavorit] = useState('');
   const [topikPembicaraan, setTopikPembicaraan] = useState('');
-
-  // 5. Kuliner
   const [makananFavorit, setMakananFavorit] = useState('');
   const [minumanFavorit, setMinumanFavorit] = useState('');
   const [cakeFavorit, setCakeFavorit] = useState('');
   const [alergiMakanan, setAlergiMakanan] = useState('');
-
-  // 6. Social Media
   const [instagram, setInstagram] = useState('');
   const [tiktok, setTiktok] = useState('');
-
-  // 7. Insight & Meta
   const [pemicu, setPemicu] = useState('');
   const [antusias, setAntusias] = useState('');
   const [karakter, setKarakter] = useState('');
   const [notes, setNotes] = useState('');
   const [lokasiStore, setLokasiStore] = useState('Pacific Intermark');
   const [customerAdvisor, setCustomerAdvisor] = useState('');
+
+  // ── FORM STATES TRAFFIC ────────────────────────────────────────────────────
+  const [trTanggal, setTrTanggal] = useState(new Date().toISOString().split('T')[0]);
+  const [trCustomerName, setTrCustomerName] = useState('');
+  const [trNoHp, setTrNoHp] = useState('');
+  const [trStatus, setTrStatus] = useState('Walk-in');
+  const [trProspectItem, setTrProspectItem] = useState('Jewelry');
+  const [trServedBy, setTrServedBy] = useState('');
+  const [trLocation, setTrLocation] = useState('Pacific Intermark');
+  const [trAutoProfile, setTrAutoProfile] = useState(true);
+  const [trMessage, setTrMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Real-time deduplication check state
   const [checkLoading, setCheckLoading] = useState(false);
@@ -337,7 +349,6 @@ export default function CrmDedupPage() {
       const data = await res.json();
       if (data.success) {
         setSubmitMessage({ type: 'success', text: 'Profil Pelanggan baru berhasil didaftarkan tanpa duplikasi!' });
-        // Reset form
         setNamaDepan('');
         setNamaBelakang('');
         setNamaPanggilan('');
@@ -352,6 +363,46 @@ export default function CrmDedupPage() {
       setSubmitMessage({ type: 'error', text: 'Error: ' + e.message });
     } finally {
       setCheckLoading(false);
+    }
+  };
+
+  // Submit Traffic Entry
+  const handleCreateTraffic = async () => {
+    if (!trCustomerName) {
+      setTrMessage({ type: 'error', text: 'Nama Pengunjung / Pelanggan wajib diisi!' });
+      return;
+    }
+    setTrMessage(null);
+    try {
+      const res = await fetch('/api/crm/dedup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_traffic',
+          autoCreateProfile: trAutoProfile,
+          trafficData: {
+            tanggal_berkunjung: trTanggal,
+            customer_name: trCustomerName,
+            no_hp: trNoHp,
+            status: trStatus,
+            prospect_item: trProspectItem,
+            served_by: trServedBy || 'System SA',
+            location: trLocation,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTrMessage({ type: 'success', text: 'Data Kunjungan / Walk-in Traffic berhasil disimpan!' });
+        setTrCustomerName('');
+        setTrNoHp('');
+        setTrServedBy('');
+        fetchAuditData();
+      } else {
+        setTrMessage({ type: 'error', text: 'Gagal menyimpan traffic: ' + data.error });
+      }
+    } catch (e: any) {
+      setTrMessage({ type: 'error', text: 'Error: ' + e.message });
     }
   };
 
@@ -374,10 +425,10 @@ export default function CrmDedupPage() {
             <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">CRM Client Profiling &amp; Anti-Deduplication</h1>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">CRM Profiling &amp; Traffic Entry Portal</h1>
           </div>
           <p className="text-xs text-slate-500">
-            Formulir input Profil Pelanggan lengkap (sama seperti Mobile App) dengan sistem pencegahan duplikasi real-time.
+            Formulir Input Profil Pelanggan &amp; Catat Traffic Walk-In dengan sistem pencegahan duplikasi real-time.
           </p>
         </div>
 
@@ -443,7 +494,21 @@ export default function CrmDedupPage() {
           )}
         >
           <UserPlus className="w-4 h-4" />
-          Form Profiling Baru (Sama seperti Mobile App)
+          📝 Form Profiling Pelanggan Baru
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('traffic')}
+          className={cn(
+            'flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all',
+            activeTab === 'traffic'
+              ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          )}
+        >
+          <PlusCircle className="w-4 h-4 text-emerald-600" />
+          🚦 Form Catat Traffic / Kunjungan Walk-In
         </button>
 
         <button
@@ -459,23 +524,9 @@ export default function CrmDedupPage() {
           <Merge className="w-4 h-4" />
           Audit &amp; Penggabungan Duplikat ({duplicatePhones.length + duplicateEmails.length})
         </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('traffic')}
-          className={cn(
-            'flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all',
-            activeTab === 'traffic'
-              ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          )}
-        >
-          <LinkIcon className="w-4 h-4" />
-          Integrasi Traffic &amp; Prospek
-        </button>
       </div>
 
-      {/* TAB 1: FULL FORM INPUT (EXACTLY MATCHING MOBILE APP FLUTTER FORM) */}
+      {/* TAB 1: FORM PROFILING PELANGGAN BARU */}
       {activeTab === 'check' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Main 7-Section Form */}
@@ -1024,7 +1075,7 @@ export default function CrmDedupPage() {
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-blue-500" />
-                  Live Deduplication Status
+                  Live Deduplication Monitor
                 </h4>
                 {checkLoading && <span className="text-[10px] text-blue-600 animate-pulse font-bold">Checking...</span>}
               </div>
@@ -1104,7 +1155,175 @@ export default function CrmDedupPage() {
         </div>
       )}
 
-      {/* TAB 2: AUDITING & MERGING */}
+      {/* TAB 2: FORM CATAT TRAFFIC / WALK-IN KUNJUNGAN */}
+      {activeTab === 'traffic' && (
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4 max-w-4xl mx-auto">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                <PlusCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase">Form Catat Traffic / Kunjungan Walk-In Toko</h3>
+                <p className="text-xs text-slate-500">Input kunjungan prospek toko &amp; hubungkan secara otomatis ke Profil CRM.</p>
+              </div>
+            </div>
+
+            {trMessage && (
+              <div
+                className={cn(
+                  'p-4 rounded-2xl text-xs font-bold flex items-center gap-2',
+                  trMessage.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                )}
+              >
+                {trMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <AlertTriangle className="w-5 h-5 text-red-600" />}
+                {trMessage.text}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tanggal Kunjungan</label>
+                <input
+                  type="date"
+                  value={trTanggal}
+                  onChange={(e) => setTrTanggal(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Nama Pengunjung / Pelanggan <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Nama pengunjung toko..."
+                  value={trCustomerName}
+                  onChange={(e) => setTrCustomerName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nomor HP Pengunjung</label>
+                <input
+                  type="text"
+                  placeholder="081234567890"
+                  value={trNoHp}
+                  onChange={(e) => setTrNoHp(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Visit / Kunjungan</label>
+                <select
+                  value={trStatus}
+                  onChange={(e) => setTrStatus(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold"
+                >
+                  {MASTER_DATA.prospekStatus.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Minat Barang</label>
+                <select
+                  value={trProspectItem}
+                  onChange={(e) => setTrProspectItem(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                >
+                  {MASTER_DATA.minatBarang.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Served By (Sales Advisor)</label>
+                <input
+                  type="text"
+                  placeholder="Nama SA yang melayani..."
+                  value={trServedBy}
+                  onChange={(e) => setTrServedBy(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Lokasi Toko / Store</label>
+                <select
+                  value={trLocation}
+                  onChange={(e) => setTrLocation(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold"
+                >
+                  {MASTER_DATA.stores.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3 pt-6">
+                <input
+                  type="checkbox"
+                  id="autoProfile"
+                  checked={trAutoProfile}
+                  onChange={(e) => setTrAutoProfile(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                />
+                <label htmlFor="autoProfile" className="text-xs font-bold text-slate-700 cursor-pointer">
+                  Otomatis Buat Profil CRM Baru untuk Pelanggan Ini
+                </label>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleCreateTraffic}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md mt-4"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Simpan Data Kunjungan Traffic
+            </button>
+          </div>
+
+          {/* History Kunjungan Table */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">History Kunjungan Toko (mirror_traffic)</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50">
+                    <th className="p-3">Tanggal</th>
+                    <th className="p-3">Nama Pelanggan</th>
+                    <th className="p-3">Status Visit</th>
+                    <th className="p-3">Minat Barang</th>
+                    <th className="p-3">Served By</th>
+                    <th className="p-3">Location</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {trafficRows.map((r, idx) => (
+                    <tr key={r.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-medium text-slate-600">{r.tanggal_berkunjung || '—'}</td>
+                      <td className="p-3 font-bold text-slate-900">{r.customer_name || 'Walk-in Guest'}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold text-[10px] border border-blue-200">
+                          {r.status || 'Walk-in'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-600">{r.prospect_item || '—'}</td>
+                      <td className="p-3 text-slate-600">{r.served_by || '—'}</td>
+                      <td className="p-3 text-slate-600">{r.location || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: AUDITING & MERGING */}
       {activeTab === 'audit' && (
         <div className="space-y-6">
           {duplicatePhones.length === 0 && duplicateEmails.length === 0 ? (
@@ -1230,63 +1449,6 @@ export default function CrmDedupPage() {
               )}
             </>
           )}
-        </div>
-      )}
-
-      {/* TAB 3: TRAFFIC LINKER */}
-      {activeTab === 'traffic' && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Integrasi Kunjungan Traffic &amp; Prospek (mirror_traffic)</h3>
-              <p className="text-xs text-slate-500">Daftar kunjungan toko prospek walk-in dan pemetaan ke Profil CRM.</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50">
-                  <th className="p-3">Tanggal</th>
-                  <th className="p-3">Nama Pelanggan</th>
-                  <th className="p-3">Status Visit</th>
-                  <th className="p-3">Served By</th>
-                  <th className="p-3">Location</th>
-                  <th className="p-3 text-right">Aksi Integrasi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {trafficRows.map((r, idx) => (
-                  <tr key={r.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3 font-medium text-slate-600">{r.tanggal_berkunjung || '—'}</td>
-                    <td className="p-3 font-bold text-slate-900">{r.customer_name || 'Walk-in Guest'}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold text-[10px] border border-blue-200">
-                        {r.status || 'Walk-in'}
-                      </span>
-                    </td>
-                    <td className="p-3 text-slate-600">{r.served_by || '—'}</td>
-                    <td className="p-3 text-slate-600">{r.location || '—'}</td>
-                    <td className="p-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('check');
-                          setNamaDepan((r.customer_name || '').split(' ')[0] || '');
-                          setNamaBelakang((r.customer_name || '').split(' ').slice(1).join(' ') || '');
-                          setCustomerAdvisor(r.served_by || '');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-xl text-[11px] font-bold transition-all"
-                      >
-                        <UserPlus className="w-3 h-3" />
-                        Buat Profil CRM
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
     </div>
