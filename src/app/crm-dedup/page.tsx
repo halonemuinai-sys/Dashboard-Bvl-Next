@@ -656,8 +656,8 @@ export default function CrmDedupPage() {
               : 'border-transparent text-slate-500 hover:text-slate-900'
           )}
         >
-          <UserPlus className="w-4 h-4" />
-          📝 Form Profiling Pelanggan Baru (`crm_profiling`)
+          <UserPlus className="w-4 h-4 text-blue-600" />
+          Form Profiling
         </button>
 
         <button
@@ -671,7 +671,7 @@ export default function CrmDedupPage() {
           )}
         >
           <PlusCircle className="w-4 h-4 text-emerald-600" />
-          🚦 Form Traffic &amp; Items (`mirror_traffic` + `traffic_items`)
+          Traffic &amp; Items
         </button>
 
         <button
@@ -684,8 +684,13 @@ export default function CrmDedupPage() {
               : 'border-transparent text-slate-500 hover:text-slate-900'
           )}
         >
-          <Merge className="w-4 h-4" />
-          Audit &amp; Penggabungan Duplikat ({duplicatePhones.length + duplicateEmails.length})
+          <Merge className="w-4 h-4 text-purple-600" />
+          Audit Duplikat
+          {(duplicatePhones.length + duplicateEmails.length) > 0 && (
+            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-amber-100 text-amber-800 rounded-full border border-amber-200 ml-1">
+              {duplicatePhones.length + duplicateEmails.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -714,7 +719,7 @@ export default function CrmDedupPage() {
                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                   <User className="w-4 h-4" />
                 </div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">1. PRIMARY INFORMATION &amp; FOTO CDN</h3>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">1. PRIMARY INFORMATION</h3>
               </div>
 
               {/* Foto Customer CDN Section */}
@@ -861,7 +866,7 @@ export default function CrmDedupPage() {
                 <div className="p-2 bg-violet-50 text-violet-600 rounded-xl">
                   <BadgeInfo className="w-4 h-4" />
                 </div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">3. IDENTITAS &amp; DOMISILI (CONDITIONAL)</h3>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">3. IDENTITAS &amp; DOMISILI</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1043,7 +1048,7 @@ export default function CrmDedupPage() {
                 <div className="p-2 bg-pink-50 text-pink-600 rounded-xl">
                   <Heart className="w-4 h-4" />
                 </div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">4. LIFESTYLE &amp; HOBBY (CONDITIONAL)</h3>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">4. LIFESTYLE &amp; HOBBY</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1415,7 +1420,7 @@ export default function CrmDedupPage() {
                 <PlusCircle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase">Form Catat Prospect Traffic &amp; Items (`mirror_traffic` + `traffic_items`)</h3>
+                <h3 className="text-sm font-black text-slate-900 uppercase">Form Catat Prospect Traffic &amp; Items</h3>
                 <p className="text-xs text-slate-500">Formulir lengkap kunjungan toko dengan bukti CDN &amp; tabel barang diminati multi-row.</p>
               </div>
             </div>
