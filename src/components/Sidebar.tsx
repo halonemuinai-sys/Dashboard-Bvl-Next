@@ -91,6 +91,7 @@ const menuGroups = [
       { name: 'Mobile Portal',        icon: Store,           href: '/m', badge: 'APP', badgeColor: 'bg-indigo-500' },
       { name: 'Clienteling 360',      icon: Heart,           href: '/m/crm', badge: 'NEW', badgeColor: 'bg-rose-500' },
       { name: 'CRM Profiling',        icon: ContactRound,    href: '/crm-profiling', badge: 'NEW', badgeColor: 'bg-violet-500' },
+      { name: 'CRM Deduplikasi',      icon: ShieldCheck,     href: '/crm-dedup', badge: 'NEW', badgeColor: 'bg-emerald-500' },
       { name: 'Event Selling Plan',  icon: Diamond,         href: '/event-selling-plan', badge: 'NEW', badgeColor: 'bg-amber-500' },
       { name: 'App Sheet (CRM)',     icon: Database,        href: '/app-sheet-crm' },
       { name: 'Footfall (Store)',    icon: Users2,          href: '/footfall-store' },
