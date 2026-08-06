@@ -590,10 +590,10 @@ export default function CrmDedupPage() {
             <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">CRM Profiling &amp; Traffic Entry Portal</h1>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">CRM &amp; Traffic</h1>
           </div>
           <p className="text-xs text-slate-500">
-            Formulir Input Profil Pelanggan &amp; Catat Traffic Walk-In dengan fitur foto CDN, conditional fields, dan multi-row traffic items.
+            Input profil pelanggan, catat kunjungan traffic, dan kelola data duplikasi.
           </p>
         </div>
 
