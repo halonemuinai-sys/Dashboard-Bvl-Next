@@ -111,7 +111,6 @@ export async function GET(req: Request) {
 
       const phoneGroups: Record<string, any[]> = {};
       const emailGroups: Record<string, any[]> = {};
-      const fuzzyGroups: { key: string; items: any[] }[] = [];
 
       (profiles || []).forEach(p => {
         const cp = cleanPhone(p.no_hp);
@@ -163,7 +162,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, primaryId, secondaryIds, profileData } = body;
+    const { action, primaryId, secondaryIds, profileData, trafficData, autoCreateProfile } = body;
 
     // Merge profiles action
     if (action === 'merge') {
@@ -199,6 +198,54 @@ export async function POST(req: Request) {
         success: true,
         message: 'Profil baru berhasil dibuat tanpa duplikasi!',
         data: inserted,
+      });
+    }
+
+    // Create traffic entry action
+    if (action === 'create_traffic') {
+      let createdProfileId = trafficData.crm_profile_id || null;
+
+      // Auto-create CRM profile if checked
+      if (autoCreateProfile && trafficData.customer_name) {
+        const { data: newProf, error: profErr } = await supabase
+          .from('crm_profiling')
+          .insert({
+            nama_lengkap: trafficData.customer_name,
+            no_hp: trafficData.no_hp || '',
+            lokasi_store: trafficData.location || 'Pacific Intermark',
+            customer_advisor: trafficData.served_by || 'System SA',
+            status_pelanggan: 'New',
+            tanggal_input: new Date().toISOString().split('T')[0],
+          })
+          .select()
+          .single();
+
+        if (!profErr && newProf) {
+          createdProfileId = newProf.id;
+        }
+      }
+
+      const { data: insTraffic, error: trErr } = await supabase
+        .from('mirror_traffic')
+        .insert({
+          tanggal_berkunjung: trafficData.tanggal_berkunjung || new Date().toISOString().split('T')[0],
+          customer_name: trafficData.customer_name,
+          status: trafficData.status || 'Walk-in',
+          served_by: trafficData.served_by,
+          location: trafficData.location,
+          prospect_item: trafficData.prospect_item,
+          no_hp: trafficData.no_hp,
+          crm_profile_id: createdProfileId,
+        })
+        .select()
+        .single();
+
+      if (trErr) throw trErr;
+
+      return NextResponse.json({
+        success: true,
+        message: 'Kunjungan Traffic / Walk-in berhasil dicatat!',
+        data: insTraffic,
       });
     }
 
