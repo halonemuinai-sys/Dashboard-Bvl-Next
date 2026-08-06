@@ -142,6 +142,27 @@ export async function GET(req: Request) {
         .order('tanggal_berkunjung', { ascending: false })
         .limit(100);
 
+      // Fetch Advisors list from advisor_pins and advisors
+      const { data: pins } = await supabase.from('advisor_pins').select('advisor_name');
+      const { data: advs } = await supabase.from('advisors').select('name');
+
+      const advisorSet = new Set<string>();
+      (pins || []).forEach((p: any) => {
+        if (p.advisor_name) advisorSet.add(p.advisor_name.trim());
+      });
+      (advs || []).forEach((a: any) => {
+        if (a.name) advisorSet.add(a.name.trim());
+      });
+
+      // Default fallbacks if empty
+      if (advisorSet.size === 0) {
+        [
+          'Supervisor PI', 'Store Manager PI', 'Advisor Plaza Indonesia 1', 'Advisor Plaza Indonesia 2',
+          'Store Manager PS', 'Advisor Plaza Senayan 1', 'Advisor Plaza Senayan 2',
+          'Store Manager Bali', 'Advisor Bali 1', 'Advisor Bali 2'
+        ].forEach((n) => advisorSet.add(n));
+      }
+
       return NextResponse.json({
         success: true,
         totalProfiles: (profiles || []).length,
@@ -150,6 +171,7 @@ export async function GET(req: Request) {
         duplicatePhoneGroups: duplicatePhones,
         duplicateEmailGroups: duplicateEmails,
         trafficRows: trafficRows || [],
+        advisorsList: Array.from(advisorSet).sort(),
       });
     }
 

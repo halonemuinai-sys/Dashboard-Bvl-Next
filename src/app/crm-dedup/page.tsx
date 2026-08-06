@@ -161,6 +161,7 @@ export default function CrmDedupPage() {
   const [duplicatePhones, setDuplicatePhones] = useState<DuplicateGroup[]>([]);
   const [duplicateEmails, setDuplicateEmails] = useState<DuplicateGroup[]>([]);
   const [trafficRows, setTrafficRows] = useState<any[]>([]);
+  const [advisorsList, setAdvisorsList] = useState<string[]>([]);
 
   // ── FORM STATES PROFILING (`crm_profiling`) ────────────────────────────────
   const [statusPelanggan, setStatusPelanggan] = useState('New');
@@ -269,6 +270,7 @@ export default function CrmDedupPage() {
         setDuplicatePhones(data.duplicatePhoneGroups || []);
         setDuplicateEmails(data.duplicateEmailGroups || []);
         setTrafficRows(data.trafficRows || []);
+        setAdvisorsList(data.advisorsList || []);
       }
     } catch (e) {
       console.error(e);
@@ -1286,13 +1288,16 @@ export default function CrmDedupPage() {
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Customer Advisor</label>
-                  <input
-                    type="text"
-                    placeholder="Nama Sales Advisor..."
+                  <select
                     value={customerAdvisor}
                     onChange={(e) => setCustomerAdvisor(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                  />
+                  >
+                    <option value="">Pilih Customer Advisor...</option>
+                    {advisorsList.map((adv) => (
+                      <option key={adv} value={adv}>{adv}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1604,13 +1609,16 @@ export default function CrmDedupPage() {
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Served By (SA)</label>
-                  <input
-                    type="text"
-                    placeholder="Nama Advisor..."
+                  <select
                     value={trServedBy}
                     onChange={(e) => setTrServedBy(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium"
-                  />
+                  >
+                    <option value="">Pilih Served By (SA)...</option>
+                    {advisorsList.map((adv) => (
+                      <option key={adv} value={adv}>{adv}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
