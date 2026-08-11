@@ -11,7 +11,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
-  const isAuthPage = pathname === '/login' || pathname === '/m/login';
+  const isStandalonePage = pathname === '/login' || pathname === '/m/login' || pathname.startsWith('/public');
 
   useEffect(() => {
     const checkMobile = () => {
@@ -28,7 +28,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  if (isAuthPage) return <>{children}</>;
+  if (isStandalonePage) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen relative w-full">
