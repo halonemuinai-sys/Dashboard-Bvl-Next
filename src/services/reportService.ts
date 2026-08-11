@@ -122,7 +122,9 @@ export const reportService = {
       return '#dc2626';                  // Red
     };
 
-    const dashboardUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://script.google.com/macros/s/AKfycbze-dmRcWkRsbBx9qdnWe1c6DatoawhFS2cvrgG0el7AOy4BTfxLaVw91PcD4C9NrMS_w/exec';
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://202.6.239.245';
+    const publicOverviewUrl = `${baseUrl}/public/overview`;
+    const dashboardUrl = `${baseUrl}/`;
 
     const html = `
       <!DOCTYPE html>
@@ -169,7 +171,7 @@ export const reportService = {
                     <p style="font-size: 15px; color: #374151; margin: 0 0 30px 0;">Berikut saya sampaikan ringkasan performa penjualan harian per tanggal <b>${displayDate}</b>. Data di bawah ini mencakup pencapaian <i>Month-to-Date</i> (MTD) seluruh butik beserta detail transaksi harian dan <i>crossing sales</i>.</p>
 
                     <!-- Summary -->
-                    <table width="100%" border="0" cellpadding="12" cellspacing="0" style="background-color: #f8fafc; border-radius: 8px; margin-bottom: 30px;">
+                    <table width="100%" border="0" cellpadding="12" cellspacing="0" style="background-color: #f8fafc; border-radius: 8px; margin-bottom: 25px;">
                       <tr>
                         <td style="border-bottom: 1px solid #e2e8f0; font-size: 14px;">Penjualan Store</td>
                         <td align="right" style="border-bottom: 1px solid #e2e8f0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;"><b>${formatCurrency(totalStoreSales)}</b></td>
@@ -180,7 +182,7 @@ export const reportService = {
                       </tr>
                       <tr>
                         <td style="border-bottom: 1px solid #e2e8f0; font-size: 14px;">MDR Cost (MTD)</td>
-                        <td align="right" style="border-bottom: 1px solid #e2e8f0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: ${totalStoreComm / totalStoreGross * 100 > 2 ? '#ef4444' : '#111827'};"><b>${(totalStoreGross > 0 ? (totalStoreComm / totalStoreGross * 100) : 0).toFixed(2)}%</b></td>
+                        <td align="right" style="border-bottom: 1px solid #e2e8f0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: ${totalStoreGross > 0 && (totalStoreComm / totalStoreGross * 100) > 2 ? '#ef4444' : '#111827'};"><b>${(totalStoreGross > 0 ? (totalStoreComm / totalStoreGross * 100) : 0).toFixed(2)}%</b></td>
                       </tr>
                       <tr>
                         <td style="border-bottom: 1px solid #e2e8f0; font-size: 14px;">Penjualan Head Office</td>
@@ -192,9 +194,12 @@ export const reportService = {
                       </tr>
                     </table>
 
-                    <p style="margin-bottom: 30px;">
-                      <b><a href="${dashboardUrl}" style="font-size: 14px; color: #2563eb; text-decoration: none;">&rarr; Lihat Detail di BI Dashboard</a></b>
-                    </p>
+                    <!-- Public Monthly Overview Link Button -->
+                    <div style="margin: 25px 0; text-align: center;">
+                      <a href="${publicOverviewUrl}" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px; border: 1px solid #334155;">
+                        📊 Buka Live Monthly Overview Dashboard (Bebas Login) &rarr;
+                      </a>
+                    </div>
 
                     <!-- Crossing Sales -->
                     <h3 style="font-size: 16px; color: #111827; margin: 30px 0 15px 0; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">Crossing Sales</h3>
