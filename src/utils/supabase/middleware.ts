@@ -19,12 +19,13 @@ export async function updateSession(request: NextRequest) {
   // Protect routes
   const isLoginPage = request.nextUrl.pathname.startsWith('/login')
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
+  const isPublicRoute = request.nextUrl.pathname.startsWith('/public')
   const isPublicFile = request.nextUrl.pathname.match(/\.(.*)$/)
   const isApi = request.nextUrl.pathname.startsWith('/api')
   const isMobileRoute = request.nextUrl.pathname.startsWith('/m')
 
   // Jika tidak login, redirect ke halaman login
-  if (!user && !isLoginPage && !isAuthPage && !isPublicFile && !isApi && !isMobileRoute) {
+  if (!user && !isLoginPage && !isAuthPage && !isPublicRoute && !isPublicFile && !isApi && !isMobileRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
