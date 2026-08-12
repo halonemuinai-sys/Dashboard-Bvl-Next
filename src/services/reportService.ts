@@ -122,8 +122,8 @@ export const reportService = {
       return '#dc2626';                  // Red
     };
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://202.6.239.245';
-    const publicOverviewUrl = `${baseUrl}/public/overview`;
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://dashboard-bvl-next.vercel.app';
+    const publicOverviewUrl = `https://dashboard-bvl-next.vercel.app/public/overview`;
     const dashboardUrl = `${baseUrl}/`;
 
     const html = `
@@ -197,16 +197,16 @@ export const reportService = {
                     <!-- Modern Executive BI Dashboard CTA Card -->
                     <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin: 25px 0; background: #0f172a; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
                       <tr>
-                        <td style="padding: 24px 24px; text-align: center; background: #0f172a;">
-                          <p style="margin: 0 0 6px 0; font-size: 10px; font-weight: 800; color: #f59e0b; text-transform: uppercase; letter-spacing: 1.5px;">LIVE EXECUTIVE BI DASHBOARD</p>
-                          <h2 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: -0.3px;">Monthly Overview Interactive Report</h2>
-                          <p style="margin: 0 0 18px 0; font-size: 12px; color: #94a3b8;">Akses cepat &amp; langsung tanpa perlu login (Live Multi-Year, Daily Trend &amp; Crossing Sales)</p>
+                        <td style="padding: 22px 24px; text-align: center; background: #0f172a;">
+                          <p style="margin: 0 0 4px 0; font-size: 10px; font-weight: 800; color: #f59e0b; text-transform: uppercase; letter-spacing: 1.5px;">LIVE DASHBOARD</p>
+                          <h2 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: -0.3px;">Monthly Overview</h2>
+                          <p style="margin: 0 0 16px 0; font-size: 12px; color: #94a3b8;">Lihat laporan lengkap pergerakan penjualan dan tren butik</p>
                           
                           <table border="0" cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto;">
                             <tr>
                               <td align="center" style="background-color: #d97706; border-radius: 8px; padding: 12px 28px;">
                                 <a href="${publicOverviewUrl}" target="_blank" style="font-size: 13px; font-weight: 800; color: #ffffff; text-decoration: none; display: inline-block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                                  Buka Live Overview Dashboard &nbsp;&rarr;
+                                  Buka Dashboard &nbsp;&rarr;
                                 </a>
                               </td>
                             </tr>
