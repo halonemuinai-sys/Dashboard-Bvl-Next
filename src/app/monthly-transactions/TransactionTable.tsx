@@ -24,6 +24,7 @@ interface Props {
   onCommBlur: (id: number) => void;
   onCommEscape: (id: number) => void;
   onTypeChange: (id: number, type: string) => void;
+  onLocationChange: (id: number, location: string) => void;
   onDelete: (id: number, transNo: string) => void;
   isUnlocked: boolean;
 }
@@ -67,7 +68,7 @@ export default function TransactionTable({
   paged, sorted, filtered, summary,
   sortKey, sortDir, onSort,
   page, totalPages, onPage,
-  savingId, savedIds, commEdits, onCommEdit, onCommBlur, onCommEscape, onTypeChange, onDelete, isUnlocked,
+  savingId, savedIds, commEdits, onCommEdit, onCommBlur, onCommEscape, onTypeChange, onLocationChange, onDelete, isUnlocked,
 }: Props) {
   const totalComm = filtered.reduce((s, r) => s + (r.comm || 0), 0);
 
@@ -104,10 +105,25 @@ export default function TransactionTable({
                     <h4 className="text-xs font-bold font-mono text-indigo-600 mt-0.5">{r.trans_no}</h4>
                   </div>
 
-                  {/* Store Badge */}
-                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-white/80 border border-slate-200 shadow-2xs">
-                    {r.location || 'Store'}
-                  </span>
+                  {/* Store Badge / Selector */}
+                  {isUnlocked ? (
+                    <select
+                      aria-label="Edit location mobile"
+                      value={r.location || ''}
+                      disabled={isSaving}
+                      onChange={e => onLocationChange(r.id, e.target.value)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-lg border border-amber-300 bg-white text-amber-900 cursor-pointer outline-none shadow-2xs"
+                    >
+                      <option value="Plaza Indonesia">Plaza Indonesia</option>
+                      <option value="Plaza Senayan">Plaza Senayan</option>
+                      <option value="Bali">Bali</option>
+                      <option value="Head Office">Head Office</option>
+                    </select>
+                  ) : (
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-white/80 border border-slate-200 shadow-2xs">
+                      {r.location || 'Store'}
+                    </span>
+                  )}
                 </div>
 
                 {/* Main Body: Customer & Salesman */}
@@ -230,7 +246,11 @@ export default function TransactionTable({
               <Th>Trans No</Th>
               <Th>Customer</Th>
               <Th>Salesman</Th>
-              <Th>Lokasi</Th>
+              <Th className={isUnlocked ? 'text-amber-600' : 'text-slate-400'}>
+                <span className="inline-flex items-center gap-1">
+                  Lokasi {isUnlocked ? '✎' : <Lock className="w-2.5 h-2.5" />}
+                </span>
+              </Th>
               <Th>Kategori</Th>
               <Th>Koleksi</Th>
               <Th className={isUnlocked ? 'text-amber-600' : 'text-slate-400'}>
@@ -277,7 +297,26 @@ export default function TransactionTable({
                   <td className="py-2.5 px-4 font-mono text-[11px] text-blue-600 font-bold">{r.trans_no}</td>
                   <td className="py-2.5 px-4 text-slate-700 max-w-[140px] truncate" title={r.customer}>{r.customer || '—'}</td>
                   <td className="py-2.5 px-4 font-bold text-slate-800">{r.salesman || '—'}</td>
-                  <td className="py-2.5 px-4 text-slate-500">{r.location}</td>
+
+                  {/* Lokasi editable */}
+                  <td className="py-1.5 px-4">
+                    {isUnlocked ? (
+                      <select
+                        aria-label="Edit location"
+                        value={r.location || ''}
+                        disabled={isSaving}
+                        onChange={e => onLocationChange(r.id, e.target.value)}
+                        className="text-[11px] font-bold px-2 py-0.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 cursor-pointer outline-none transition-all hover:bg-amber-100 focus:ring-1 focus:ring-amber-400 shadow-2xs"
+                      >
+                        <option value="Plaza Indonesia">Plaza Indonesia</option>
+                        <option value="Plaza Senayan">Plaza Senayan</option>
+                        <option value="Bali">Bali</option>
+                        <option value="Head Office">Head Office</option>
+                      </select>
+                    ) : (
+                      <span className="text-slate-600 font-medium">{r.location || '—'}</span>
+                    )}
+                  </td>
                   <td className="py-2.5 px-4">
                     <span className="text-[10px] font-bold text-slate-600">{r.main_category}</span>
                   </td>

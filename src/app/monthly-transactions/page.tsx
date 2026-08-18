@@ -159,6 +159,16 @@ export default function MonthlyTransactionsPage() {
     finally { setSavingId(null); }
   };
 
+  const saveLocation = async (id: number, newLocation: string) => {
+    setSavingId(id);
+    try {
+      await dashboardService.updateTransaction(id, { location: newLocation });
+      setRows(prev => prev.map(r => r.id === id ? { ...r, location: newLocation } : r));
+      flashSaved(id);
+    } catch (e) { console.error(e); }
+    finally { setSavingId(null); }
+  };
+
   const saveComm = async (id: number) => {
     const raw = commEdits[id];
     if (raw === undefined) return;
@@ -371,6 +381,7 @@ export default function MonthlyTransactionsPage() {
           onCommBlur={saveComm}
           onCommEscape={id => setCommEdits(prev => { const n = { ...prev }; delete n[id]; return n; })}
           onTypeChange={saveType}
+          onLocationChange={saveLocation}
           onDelete={handleDeleteRequest}
           isUnlocked={isUnlocked}
         />

@@ -43,7 +43,7 @@ export async function getTransactions(month: string, year: number) {
   });
 }
 
-export async function updateTransaction(id: number, patch: { comm?: number; type?: string }) {
+export async function updateTransaction(id: number, patch: { comm?: number; type?: string; location?: string }) {
   const { error } = await supabase
     .from('clean_master')
     .update(patch)
