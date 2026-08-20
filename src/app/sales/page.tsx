@@ -99,12 +99,16 @@ export default function SalesDataPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex flex-wrap items-center gap-2">
             <Database className="w-6 h-6 text-blue-600" />
             Sales Data Manager
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Auto Sync: Tiap 3 Jam (sd 23:00 WIB, incl. 21:00)
+            </span>
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            Sync dari API, view transaksi, dan kelola Card Commission
+            Otatisasi sync API Bvlgari tiap 3 jam (termasuk jam 21:00 & 23:00 WIB), view transaksi, dan kelola Card Commission
           </p>
         </div>
         <div className="flex items-center gap-3">
