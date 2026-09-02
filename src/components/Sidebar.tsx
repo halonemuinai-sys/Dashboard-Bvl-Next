@@ -31,6 +31,7 @@ import {
   Boxes,
   Sliders,
   Table,
+  Award,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -83,6 +84,7 @@ const menuGroups = [
       { name: 'Product Projection',  icon: Presentation,    href: '/product-projection' },
       { name: 'Setup & Targets',     icon: Users2,          href: '/advisor-setup' },
       { name: 'Advisor Performance', icon: Briefcase,       href: '/advisor-performance' },
+      { name: 'Advisor Productivity', icon: Award,          href: '/advisor-productivity', badge: 'NEW', badgeColor: 'bg-indigo-500' },
     ]
   },
   {

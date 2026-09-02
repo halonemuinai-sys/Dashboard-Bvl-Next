@@ -91,10 +91,11 @@ const MENU_GROUPS = [
   {
     title: 'Produk & Advisor',
     items: [
-      { path: '/product-rank',        label: 'Product Rank' },
-      { path: '/product-projection',  label: 'Product Projection' },
-      { path: '/advisor-setup',       label: 'Setup & Targets' },
-      { path: '/advisor-performance', label: 'Advisor Performance' },
+      { path: '/product-rank',          label: 'Product Rank' },
+      { path: '/product-projection',    label: 'Product Projection' },
+      { path: '/advisor-setup',         label: 'Setup & Targets' },
+      { path: '/advisor-performance',   label: 'Advisor Performance' },
+      { path: '/advisor-productivity',  label: 'Advisor Productivity' },
     ],
   },
   {
