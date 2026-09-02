@@ -514,8 +514,8 @@ export default function AdvisorProductivityPage() {
                       <th className="py-3 px-4 text-right">Total Net Sales</th>
                       <th className="py-3 px-3 text-center">Trx</th>
                       <th className="py-3 px-3 text-center">Qty</th>
-                      <th className="py-3 px-3 text-center bg-blue-50/40 text-blue-900">🚶 Walk In</th>
-                      <th className="py-3 px-3 text-center bg-violet-50/40 text-violet-900">🔄 Follow Up</th>
+                      <th className="py-3 px-3 text-center bg-blue-50/40 text-blue-900">Walk In</th>
+                      <th className="py-3 px-3 text-center bg-violet-50/40 text-violet-900">Follow Up</th>
                       <th className="py-3 px-4 text-right bg-emerald-50/40 text-emerald-900">🟢 New Cust Sales</th>
                       <th className="py-3 px-3 text-center bg-emerald-50/40 text-emerald-900">% New</th>
                       <th className="py-3 px-4 text-right bg-blue-50/40 text-blue-900">🔵 Exist Cust Sales</th>
