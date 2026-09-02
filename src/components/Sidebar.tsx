@@ -11,6 +11,7 @@ import {
   Store,
   TrendingUp,
   LineChart,
+  Sparkles,
   Calendar,
   ClipboardList,
   CalendarRange,
@@ -58,7 +59,7 @@ const menuGroups = [
       { name: 'Quarterly Budget',    icon: BarChart,        href: '/quarterly-budget' },
       { name: 'Annual Net Sales',    icon: TrendingUp,      href: '/annual-sales' },
       { name: 'Store Performance',   icon: Store,           href: '/store-performance' },
-      { name: 'Forecasting',         icon: LineChart,       href: '/forecasting', badge: 'AI', badgeColor: 'bg-indigo-500' },
+      { name: 'Forecasting',         icon: Sparkles,        href: '/forecasting' },
       { name: 'Sales Simulator',     icon: Sliders,         href: '/sales-simulator', badge: 'NEW', badgeColor: 'bg-indigo-500' },
       { name: 'Comparison Sandbox',  icon: Sliders,         href: '/comparison-sandbox', badge: 'NEW', badgeColor: 'bg-violet-500' },
     ]
