@@ -69,7 +69,7 @@ export default function AdvisorProductivityPage() {
       const [
         { data: cleanRows, error: cleanErr },
         { data: salesPhoneData },
-        { data: historicalRaw },
+        { data: masterRows },
         { data: crmRows }
       ] = await Promise.all([
         supabase
@@ -85,11 +85,10 @@ export default function AdvisorProductivityPage() {
           .gte('transaction_date', startDate)
           .lte('transaction_date', endDate),
 
-        // Fetch all historical customers BEFORE this month
+        // Customer master — first transaction date per phone
         supabase
-          .from('bvlgari_sales')
-          .select('customer_name, phone_no')
-          .lt('transaction_date', startDate),
+          .from('customer_master')
+          .select('phone_no, first_txn_date'),
 
         // CRM App Sheet — Walk In & Follow Up per advisor
         supabase
@@ -131,27 +130,27 @@ export default function AdvisorProductivityPage() {
         }
       });
 
-      const historicalSet = new Set<string>();
-      (historicalRaw || []).forEach((h: any) => {
-        if (h.phone_no && h.phone_no.trim()) historicalSet.add(h.phone_no.trim());
-        if (h.customer_name && h.customer_name.trim()) historicalSet.add(h.customer_name.trim().toLowerCase());
+      // customer_master: phone_no → first_txn_date
+      // NEW = belum pernah transaksi sebelum bulan ini (first_txn_date >= startDate atau tidak ada di master)
+      const masterMap = new Map<string, string>();
+      (masterRows || []).forEach((m: any) => {
+        if (m.phone_no) masterMap.set(m.phone_no.trim(), m.first_txn_date);
       });
 
-      // 3. Process transactions and tag NEW vs EXISTING
+      // 4. Process transactions and tag NEW vs EXISTING
       const details: DetailTransaction[] = [];
-      const periodSeenSet = new Set<string>();
 
       (cleanRows || []).forEach((r: any) => {
         const phone = phoneMap.get(r.trans_no) || '';
         const custName = (r.customer || '').trim();
-        const key = phone || custName.toLowerCase();
 
-        const isExisting = key ? (historicalSet.has(phone) || historicalSet.has(custName.toLowerCase())) : false;
-        const custType: 'NEW' | 'EXISTING' = isExisting ? 'EXISTING' : 'NEW';
-
-        if (key && !isExisting) {
-          periodSeenSet.add(key);
+        let isExisting = false;
+        if (phone) {
+          const firstTxn = masterMap.get(phone);
+          // EXISTING jika punya histori DAN first transaction sebelum bulan ini
+          isExisting = !!firstTxn && firstTxn < startDate;
         }
+        const custType: 'NEW' | 'EXISTING' = isExisting ? 'EXISTING' : 'NEW';
 
         details.push({
           date: r.transaction_date ? r.transaction_date.substring(0, 10) : '',
@@ -170,7 +169,7 @@ export default function AdvisorProductivityPage() {
 
       setDetailTransactions(details);
 
-      // 4. Aggregate metrics by Store & Advisor
+      // 5. Aggregate metrics by Store & Advisor
       const groupedMap = new Map<string, {
         advisor: string;
         store: string;
