@@ -29,6 +29,8 @@ interface AdvisorMetrics {
   pctExistingSales: number;
   atv: number;
   upt: number;
+  walkIn: number;
+  followUp: number;
 }
 
 interface DetailTransaction {
@@ -67,7 +69,8 @@ export default function AdvisorProductivityPage() {
       const [
         { data: cleanRows, error: cleanErr },
         { data: salesPhoneData },
-        { data: historicalRaw }
+        { data: historicalRaw },
+        { data: crmRows }
       ] = await Promise.all([
         supabase
           .from('clean_master')
@@ -86,12 +89,41 @@ export default function AdvisorProductivityPage() {
         supabase
           .from('bvlgari_sales')
           .select('customer_name, phone_no')
-          .lt('transaction_date', startDate)
+          .lt('transaction_date', startDate),
+
+        // CRM App Sheet — Walk In & Follow Up per advisor
+        supabase
+          .from('mirror_traffic')
+          .select('customer_advisor, status, akses_masuk')
+          .gte('transaction_date', startDate)
+          .lte('transaction_date', endDate),
       ]);
 
       if (cleanErr) throw cleanErr;
 
-      // 2. Build lookup maps
+      // 2. Build CRM Walk In / Follow Up map (keyed by normalized advisor name)
+      const crmMap = new Map<string, { walkIn: number; followUp: number }>();
+      const resolveStatusKey = (status: string, aksesmasuk: string): 'walkin' | 'followup' | 'other' => {
+        const check = (val: string): 'walkin' | 'followup' | 'other' => {
+          const l = (val || '').toLowerCase().replace(/ /g, ' ');
+          if (['walk in', 'walk-in', 'walkin'].some(m => l.includes(m))) return 'walkin';
+          if (['follow up', 'follow-up', 'followup'].some(m => l.includes(m))) return 'followup';
+          return 'other';
+        };
+        const k = check(status);
+        return k !== 'other' ? k : check(aksesmasuk);
+      };
+      (crmRows || []).forEach((r: any) => {
+        const key = (r.customer_advisor || '').trim().toLowerCase();
+        if (!key) return;
+        if (!crmMap.has(key)) crmMap.set(key, { walkIn: 0, followUp: 0 });
+        const sk = resolveStatusKey(r.status, r.akses_masuk);
+        const m = crmMap.get(key)!;
+        if (sk === 'walkin') m.walkIn++;
+        else if (sk === 'followup') m.followUp++;
+      });
+
+      // 3. Build phone lookup maps
       const phoneMap = new Map<string, string>();
       (salesPhoneData || []).forEach((s: any) => {
         if (s.transaction_no && s.phone_no) {
@@ -189,6 +221,7 @@ export default function AdvisorProductivityPage() {
         const pctExist = g.totalNetSales > 0 ? (g.existCustSales / g.totalNetSales) * 100 : 0;
         const atv = totalInvoices > 0 ? g.totalNetSales / totalInvoices : 0;
         const upt = totalInvoices > 0 ? g.totalQty / totalInvoices : 0;
+        const crmData = crmMap.get(g.advisor.trim().toLowerCase()) || { walkIn: 0, followUp: 0 };
 
         return {
           advisor: g.advisor,
@@ -203,7 +236,9 @@ export default function AdvisorProductivityPage() {
           existingCustomerCount: g.existCustSet.size,
           pctExistingSales: pctExist,
           atv,
-          upt
+          upt,
+          walkIn: crmData.walkIn,
+          followUp: crmData.followUp,
         };
       });
 
@@ -454,6 +489,8 @@ export default function AdvisorProductivityPage() {
           const subPctExist = subNet > 0 ? (subExist / subNet) * 100 : 0;
           const subAtv = subInvoices > 0 ? subNet / subInvoices : 0;
           const subUpt = subInvoices > 0 ? subQty / subInvoices : 0;
+          const subWalkIn = advisors.reduce((s, r) => s + r.walkIn, 0);
+          const subFollowUp = advisors.reduce((s, r) => s + r.followUp, 0);
 
           return (
             <div key={storeName} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -477,6 +514,8 @@ export default function AdvisorProductivityPage() {
                       <th className="py-3 px-4 text-right">Total Net Sales</th>
                       <th className="py-3 px-3 text-center">Trx</th>
                       <th className="py-3 px-3 text-center">Qty</th>
+                      <th className="py-3 px-3 text-center bg-blue-50/40 text-blue-900">🚶 Walk In</th>
+                      <th className="py-3 px-3 text-center bg-violet-50/40 text-violet-900">🔄 Follow Up</th>
                       <th className="py-3 px-4 text-right bg-emerald-50/40 text-emerald-900">🟢 New Cust Sales</th>
                       <th className="py-3 px-3 text-center bg-emerald-50/40 text-emerald-900">% New</th>
                       <th className="py-3 px-4 text-right bg-blue-50/40 text-blue-900">🔵 Exist Cust Sales</th>
@@ -499,7 +538,13 @@ export default function AdvisorProductivityPage() {
                         </td>
                         <td className="py-3 px-3 text-center font-mono text-slate-700">{adv.totalInvoices}</td>
                         <td className="py-3 px-3 text-center font-mono text-slate-700">{adv.totalQty}</td>
-                        
+                        <td className="py-3 px-3 text-center font-mono font-bold text-blue-700 bg-blue-50/20">
+                          {adv.walkIn > 0 ? adv.walkIn : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono font-bold text-violet-700 bg-violet-50/20">
+                          {adv.followUp > 0 ? adv.followUp : <span className="text-slate-300">—</span>}
+                        </td>
+
                         {/* New Customer */}
                         <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 bg-emerald-50/20">
                           <Amt value={adv.newCustomerSales} />
@@ -538,6 +583,8 @@ export default function AdvisorProductivityPage() {
                       </td>
                       <td className="py-3 px-3 text-center font-mono">{subInvoices}</td>
                       <td className="py-3 px-3 text-center font-mono">{subQty}</td>
+                      <td className="py-3 px-3 text-center font-mono font-bold text-blue-800 bg-blue-50/30">{subWalkIn || '—'}</td>
+                      <td className="py-3 px-3 text-center font-mono font-bold text-violet-800 bg-violet-50/30">{subFollowUp || '—'}</td>
                       <td className="py-3 px-4 text-right font-mono text-emerald-800 bg-emerald-50/30">
                         <Amt value={subNew} />
                         <span className="text-[10px] block font-normal text-emerald-700">({subNewCount} cust)</span>
