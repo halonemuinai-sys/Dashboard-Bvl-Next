@@ -47,3 +47,6 @@ next-env.d.ts
 # database backups
 /backups/
 
+
+.vercel
+.env*
