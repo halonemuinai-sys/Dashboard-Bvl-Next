@@ -514,7 +514,9 @@ export default function DailyReportPage() {
       const a = document.createElement('a');
       a.href = url;
       a.download = `Daily_Sales_Report_${date}.xlsx`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error(err);

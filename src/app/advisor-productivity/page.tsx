@@ -352,7 +352,9 @@ export default function AdvisorProductivityPage() {
     const link = document.createElement('a');
     link.href = url;
     link.download = `Productivity_Report_${MONTHS[month - 1]}_${year}_${selectedStore}.csv`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
