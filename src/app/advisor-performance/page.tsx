@@ -367,7 +367,9 @@ export default function AdvisorPerformancePage() {
       const a      = document.createElement('a');
       a.href       = url;
       a.download   = `Advisor_Performance_${month}_${year}.xlsx`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
@@ -775,7 +777,9 @@ export default function AdvisorPerformancePage() {
       const a      = document.createElement('a');
       a.href       = url;
       a.download   = `Advisor_RataRata_6Bulan_${month}_${year}.xlsx`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);

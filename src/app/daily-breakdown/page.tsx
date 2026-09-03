@@ -415,7 +415,9 @@ export default function DailyBreakdownPage() {
       const a = document.createElement('a');
       a.href = url;
       a.download = `Daily_Breakdown_${month}_${year}.xlsx`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error(err);
