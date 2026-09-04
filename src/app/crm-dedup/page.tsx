@@ -734,8 +734,8 @@ export default function CrmDedupPage() {
                   )}
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Foto Customer (CDN Proxmox)</h4>
-                  <p className="text-[11px] text-slate-500 mb-2">Upload foto ke server CDN (`foto_customer`)</p>
+                  <h4 className="text-xs font-bold text-slate-900">Foto Customer</h4>
+                  <p className="text-[11px] text-slate-500 mb-2">Upload foto profil customer</p>
                   <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all">
                     <Upload className="w-3.5 h-3.5" />
                     {uploadingFoto ? 'Uploading...' : 'Pilih Foto'}
