@@ -175,21 +175,23 @@ export default function KPICards(props: KPIProps) {
 
       {/* Row 1.5: Operational Metrics (Items & Transactions) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard 
-          label="YTD Items Sold" 
+        <MetricCard
+          label="YTD Items Sold"
           value={ytdQtyCurrent.toLocaleString('id-ID')}
           trendPct={ytdQtyPrevYear > 0 ? ((ytdQtyCurrent - ytdQtyPrevYear) / ytdQtyPrevYear) * 100 : 0}
           trendLabel="vs last year"
+          prevValue={ytdQtyPrevYear}
           icon={<Package className="w-6 h-6" />}
           colorClass="bg-[#eef2ff] text-[#4f46e5]"
           borderColor="border-t-[#4f46e5]"
           animationDelay="100ms"
         />
-        <MetricCard 
-          label="YTD Transactions" 
+        <MetricCard
+          label="YTD Transactions"
           value={ytdTxCurrent.toLocaleString('id-ID')}
           trendPct={ytdTxPrevYear > 0 ? ((ytdTxCurrent - ytdTxPrevYear) / ytdTxPrevYear) * 100 : 0}
           trendLabel="vs last year"
+          prevValue={ytdTxPrevYear}
           icon={<ReceiptText className="w-6 h-6" />}
           colorClass="bg-[#f5f3ff] text-[#7c3aed]"
           borderColor="border-t-[#7c3aed]"
@@ -337,7 +339,7 @@ function CompactCard({ label, value, subLabel, icon, color, badge, valueClassNam
   );
 }
 
-function MetricCard({ label, value, trendPct, trendLabel, icon, colorClass, borderColor, animationDelay }: any) {
+function MetricCard({ label, value, trendPct, trendLabel, icon, colorClass, borderColor, animationDelay, prevValue }: any) {
   return (
     <div className={cn("group bg-white border-x border-b border-t-[3px] border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1.5 transition-all duration-500 ease-out chart-reveal", borderColor)} style={{ animationDelay }}>
       <div className="flex items-center gap-5">
@@ -353,6 +355,9 @@ function MetricCard({ label, value, trendPct, trendLabel, icon, colorClass, bord
             </span>
             <span className="text-[10px] font-bold text-slate-400">{trendLabel}</span>
           </div>
+          {prevValue !== undefined && (
+            <p className="text-[9px] font-bold text-slate-400 mt-1">LY: {prevValue.toLocaleString('id-ID')}</p>
+          )}
         </div>
       </div>
     </div>
