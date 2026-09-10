@@ -17,6 +17,7 @@ interface DashboardUser {
   email: string;
   full_name: string;
   role: Role;
+  assigned_store?: string;
   is_active: boolean;
 }
 
@@ -49,6 +50,14 @@ const ROLE_BADGE: Record<Role, string> = {
   operations_sales: 'bg-amber-100 text-amber-700',
   crm:              'bg-emerald-100 text-emerald-700',
 };
+
+const STORE_LOCATIONS = [
+  { value: 'ALL', label: 'Semua Store (ALL)' },
+  { value: 'Plaza Indonesia', label: 'Plaza Indonesia' },
+  { value: 'Plaza Senayan', label: 'Plaza Senayan' },
+  { value: 'Bali', label: 'Bali' },
+  { value: 'Head Office', label: 'Head Office' }
+];
 
 const TABLE_LABEL: Record<string, string> = {
   dashboard_users: 'User Access Control',
@@ -136,6 +145,7 @@ export default function UserAccessPage() {
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<Role>('operations_sales');
+  const [newAssignedStore, setNewAssignedStore] = useState<string>('ALL');
   const [newPassword, setNewPassword] = useState('');
   const [addingUser, setAddingUser] = useState(false);
 
@@ -235,11 +245,13 @@ export default function UserAccessPage() {
         email: newEmail.trim().toLowerCase(),
         fullName: newName.trim(),
         role: newRole,
+        assignedStore: newAssignedStore,
         password: newPassword.trim() || undefined,
       });
       setNewEmail('');
       setNewName('');
       setNewPassword('');
+      setNewAssignedStore('ALL');
       setShowForm(false);
       load();
     } catch (err: any) {
@@ -273,6 +285,11 @@ export default function UserAccessPage() {
   const changeUserRole = async (user: DashboardUser, role: Role) => {
     await supabase.from('dashboard_users').update({ role }).eq('id', user.id);
     setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role } : u));
+  };
+
+  const changeUserStore = async (user: DashboardUser, assigned_store: string) => {
+    await supabase.from('dashboard_users').update({ assigned_store }).eq('id', user.id);
+    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, assigned_store } : u));
   };
 
   const deleteUser = async (id: number) => {
@@ -357,7 +374,7 @@ export default function UserAccessPage() {
                   <X className="w-4 h-4 text-slate-400 hover:text-slate-700" />
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <input value={newName} onChange={e => setNewName(e.target.value)}
                   placeholder="Full Name"
                   className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
@@ -370,6 +387,10 @@ export default function UserAccessPage() {
                 <select value={newRole} onChange={e => setNewRole(e.target.value as Role)} aria-label="Select role"
                   className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white">
                   {assignableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+                <select value={newAssignedStore} onChange={e => setNewAssignedStore(e.target.value)} aria-label="Select store location"
+                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white font-medium text-slate-700">
+                  {STORE_LOCATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
               <button type="button" onClick={addUser} disabled={addingUser || !newEmail || !newName}
@@ -387,16 +408,18 @@ export default function UserAccessPage() {
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Nama</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Email</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Role</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Lokasi Store</th>
                   <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Status</th>
                   <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {users.length === 0 && (
-                  <tr><td colSpan={5} className="text-center py-10 text-slate-400 text-sm italic">Belum ada user terdaftar</td></tr>
+                  <tr><td colSpan={6} className="text-center py-10 text-slate-400 text-sm italic">Belum ada user terdaftar</td></tr>
                 )}
                 {users.map(user => {
                   const isSA = user.role === 'super_admin';
+                  const currentStore = user.assigned_store || 'ALL';
                   return (
                     <tr key={user.id} className={cn('hover:bg-slate-50 transition-colors', !user.is_active && 'opacity-50')}>
                       <td className="px-4 py-3 font-medium text-slate-900 flex items-center gap-2">
@@ -416,6 +439,12 @@ export default function UserAccessPage() {
                             {assignableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                           </select>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <select title="Change store location" value={currentStore} onChange={e => changeUserStore(user, e.target.value)}
+                          className="text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 outline-none cursor-pointer hover:border-indigo-300">
+                          {STORE_LOCATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button type="button" onClick={() => toggleUserActive(user)}

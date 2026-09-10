@@ -6,6 +6,7 @@ type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | null;
 
 interface UserAccessState {
   role: Role;
+  assignedStore: string;
   allowedPaths: Set<string>;
   loading: boolean;
   canAccess: (path: string) => boolean;
@@ -13,6 +14,7 @@ interface UserAccessState {
 
 const UserAccessContext = createContext<UserAccessState>({
   role: null,
+  assignedStore: 'ALL',
   allowedPaths: new Set(),
   loading: true,
   canAccess: () => true,
@@ -20,6 +22,7 @@ const UserAccessContext = createContext<UserAccessState>({
 
 export function UserAccessProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role>(null);
+  const [assignedStore, setAssignedStore] = useState<string>('ALL');
   const [allowedPaths, setAllowedPaths] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
@@ -29,9 +32,11 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
         const res = await fetch('/api/me');
         const data = await res.json();
         setRole(data.role ?? null);
+        setAssignedStore(data.assignedStore ?? 'ALL');
         setAllowedPaths(new Set(data.allowedPaths ?? []));
       } catch {
         setRole(null);
+        setAssignedStore('ALL');
         setAllowedPaths(new Set(['*']));
       } finally {
         setLoading(false);
@@ -54,7 +59,7 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <UserAccessContext.Provider value={{ role, allowedPaths, loading, canAccess }}>
+    <UserAccessContext.Provider value={{ role, assignedStore, allowedPaths, loading, canAccess }}>
       {children}
     </UserAccessContext.Provider>
   );

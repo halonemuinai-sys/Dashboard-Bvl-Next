@@ -8,8 +8,12 @@ import { Row, Summary, SortKey, SortDir, MONTHS, PAGE_SIZE } from './_types';
 import TransactionSummary from './TransactionSummary';
 import TransactionFilters from './TransactionFilters';
 import TransactionTable from './TransactionTable';
+import { useUserAccess } from '@/lib/user-access-context';
 
 export default function MonthlyTransactionsPage() {
+  const { assignedStore } = useUserAccess();
+  const isStoreScoped = Boolean(assignedStore && assignedStore !== 'ALL');
+
   const today = new Date();
   const [month, setMonth] = useState(MONTHS[today.getMonth()]);
   const [year, setYear]   = useState(String(today.getFullYear()));
@@ -21,6 +25,13 @@ export default function MonthlyTransactionsPage() {
   const [filterLoc, setFilterLoc] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterType, setFilterType] = useState('');
+
+  // Lock filterLoc to assignedStore if assigned
+  useEffect(() => {
+    if (isStoreScoped && assignedStore) {
+      setFilterLoc(assignedStore);
+    }
+  }, [assignedStore, isStoreScoped]);
 
   // Sort + Pagination
   const [sortKey, setSortKey] = useState<SortKey>('transaction_date');
@@ -370,6 +381,7 @@ export default function MonthlyTransactionsPage() {
           filterType={filterType} onType={setFilterType}
           locations={locations} categories={categories} types={types}
           totalFiltered={filtered.length} page={page} totalPages={totalPages}
+          lockLocation={isStoreScoped}
         />
         <TransactionTable
           paged={paged} sorted={sorted} filtered={filtered} summary={summary}
