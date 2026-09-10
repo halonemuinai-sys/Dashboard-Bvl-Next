@@ -23,17 +23,19 @@ export async function GET() {
     // Query data user dari database untuk memastikan akun aktif
     const { data: dbUser } = await supabase
       .from('dashboard_users')
-      .select('role, is_active')
+      .select('role, is_active, assigned_store')
       .eq('email', userPayload.email.toLowerCase())
       .single();
 
     if (!dbUser || !dbUser.is_active) {
-      return NextResponse.json({ role: null, allowedPaths: [] });
+      return NextResponse.json({ role: null, assignedStore: 'ALL', allowedPaths: [] });
     }
+
+    const assignedStore = dbUser.assigned_store || 'ALL';
 
     // super_admin & management_it mendapatkan akses penuh ke semua menu
     if (dbUser.role === 'super_admin' || dbUser.role === 'management_it') {
-      return NextResponse.json({ role: dbUser.role, allowedPaths: ['*'] });
+      return NextResponse.json({ role: dbUser.role, assignedStore, allowedPaths: ['*'] });
     }
 
     // Ambil detail path menu yang diizinkan untuk role tersebut
@@ -46,7 +48,7 @@ export async function GET() {
       .filter((r: { allowed: boolean }) => r.allowed)
       .map((r: { menu_path: string }) => r.menu_path);
 
-    return NextResponse.json({ role: dbUser.role, allowedPaths });
+    return NextResponse.json({ role: dbUser.role, assignedStore, allowedPaths });
   } catch (error: any) {
     console.error("Error in GET /api/me:", error);
     return NextResponse.json({ role: null, allowedPaths: [] });

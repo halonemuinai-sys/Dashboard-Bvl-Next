@@ -9,6 +9,7 @@ import {
 import { cn, formatCurrency } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import Amt from '@/components/Amt';
+import { useUserAccess } from '@/lib/user-access-context';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -48,10 +49,19 @@ interface DetailTransaction {
 }
 
 export default function AdvisorProductivityPage() {
+  const { assignedStore } = useUserAccess();
+  const isStoreScoped = Boolean(assignedStore && assignedStore !== 'ALL');
+
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
   const [selectedStore, setSelectedStore] = useState('ALL');
+
+  useEffect(() => {
+    if (isStoreScoped && assignedStore) {
+      setSelectedStore(assignedStore);
+    }
+  }, [assignedStore, isStoreScoped]);
   const [loading, setLoading] = useState(true);
 
   const [advisorData, setAdvisorData] = useState<AdvisorMetrics[]>([]);
@@ -403,9 +413,10 @@ export default function AdvisorProductivityPage() {
             <select
               value={selectedStore}
               onChange={e => setSelectedStore(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
+              disabled={isStoreScoped}
+              className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
             >
-              <option value="ALL">Semua Store</option>
+              {!isStoreScoped && <option value="ALL">Semua Store</option>}
               {stores.map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}

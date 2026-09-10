@@ -4,7 +4,7 @@ import { createClient } from '@/utils/supabase/server'
 import { hashPassword } from '@/utils/auth'
 import { revalidatePath } from 'next/cache'
 
-export async function createUserAction(formData: { email: string; fullName: string; role: string; password?: string }) {
+export async function createUserAction(formData: { email: string; fullName: string; role: string; assignedStore?: string; password?: string }) {
   const supabase = await createClient()
 
   let hashedPassword = null
@@ -16,6 +16,7 @@ export async function createUserAction(formData: { email: string; fullName: stri
     email: formData.email.trim().toLowerCase(),
     full_name: formData.fullName.trim(),
     role: formData.role,
+    assigned_store: formData.assignedStore || 'ALL',
     password: hashedPassword,
     is_active: true,
   })

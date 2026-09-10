@@ -11,14 +11,15 @@ interface Props {
   totalFiltered: number;
   page: number;
   totalPages: number;
+  lockLocation?: boolean;
 }
 
 export default function TransactionFilters({
   search, onSearch, filterLoc, onLoc, filterCat, onCat, filterType, onType,
-  locations, categories, types, totalFiltered, page, totalPages,
+  locations, categories, types, totalFiltered, page, totalPages, lockLocation,
 }: Props) {
-  const hasFilters = search || filterLoc || filterCat || filterType;
-  const clearAll = () => { onSearch(''); onLoc(''); onCat(''); onType(''); };
+  const hasFilters = search || (filterLoc && !lockLocation) || filterCat || filterType;
+  const clearAll = () => { onSearch(''); if (!lockLocation) onLoc(''); onCat(''); onType(''); };
 
   return (
     <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center gap-3">
@@ -36,9 +37,9 @@ export default function TransactionFilters({
 
       <div className="flex items-center gap-2 flex-wrap">
         <Filter className="w-3.5 h-3.5 text-slate-400" />
-        <select aria-label="Filter location" value={filterLoc} onChange={e => onLoc(e.target.value)}
-          className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-600 font-bold outline-none cursor-pointer hover:border-slate-300">
-          <option value="">All Stores</option>
+        <select aria-label="Filter location" value={filterLoc} onChange={e => onLoc(e.target.value)} disabled={lockLocation}
+          className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-600 font-bold outline-none cursor-pointer hover:border-slate-300 disabled:opacity-75 disabled:cursor-not-allowed">
+          {!lockLocation && <option value="">All Stores</option>}
           {locations.map(l => <option key={l} value={l}>{l}</option>)}
         </select>
         <select aria-label="Filter category" value={filterCat} onChange={e => onCat(e.target.value)}
