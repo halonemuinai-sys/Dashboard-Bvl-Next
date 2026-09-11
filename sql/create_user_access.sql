@@ -55,7 +55,7 @@ INSERT INTO role_menu_access (role, menu_path, allowed) VALUES
   ('management_it', '/operations-sales', true),
   ('management_it', '/user-access', true),
 -- Operations Sales: sales & advisor menus
-  ('operations_sales', '/', true),
+  ('operations_sales', '/', false),
   ('operations_sales', '/operations-sales', true),
   ('operations_sales', '/quarterly-standard', true),
   ('operations_sales', '/quarterly-budget', true),

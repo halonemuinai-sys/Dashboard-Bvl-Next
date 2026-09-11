@@ -102,8 +102,9 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     // Jika masih loading dan belum ada cache permissions sama sekali,
     // JANGAN tampilkan menu yang dilarang (cegah flash of unauthorized menus)
     if (loading) {
-      // Izinkan path umum dashboard sementara verifikasi selesai
-      return path === '/' || path === '/operations-sales';
+      if (role === 'operations_sales') return path === '/operations-sales';
+      if (role === 'crm') return path === '/crm-profiling';
+      return path === '/';
     }
 
     return false;
