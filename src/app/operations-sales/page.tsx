@@ -37,8 +37,6 @@ export default function OperationsSalesPage() {
   // Interactive React States
   const [chartMetric, setChartMetric] = useState<'sales' | 'qty' | 'pace'>('sales');
   const [showBenchmark, setShowBenchmark] = useState(true);
-  const [advisorTab, setAdvisorTab] = useState<'all' | 'met' | 'unmet'>('all');
-  const [advisorSearch, setAdvisorSearch] = useState('');
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
 
   // Data
@@ -139,7 +137,7 @@ export default function OperationsSalesPage() {
     return { date: latest.dayLabel, sales: latest.sales, prevSales: prev.sales };
   }, [dailyChartData]);
 
-  // Filtered & searched advisors
+  // Filtered advisors
   const filteredAdvisors = useMemo(() => {
     if (!advisorData.length) return [];
     let list = [...advisorData];
@@ -156,27 +154,8 @@ export default function OperationsSalesPage() {
       });
     }
 
-    // Filter by tab (all / met / unmet)
-    if (advisorTab === 'met') {
-      list = list.filter(a => {
-        const achv = a.achievement ?? (a.target > 0 ? ((a.netSales ?? a.actual ?? 0) / a.target) * 100 : 0);
-        return achv >= 100;
-      });
-    } else if (advisorTab === 'unmet') {
-      list = list.filter(a => {
-        const achv = a.achievement ?? (a.target > 0 ? ((a.netSales ?? a.actual ?? 0) / a.target) * 100 : 0);
-        return achv < 100;
-      });
-    }
-
-    // Filter by search query
-    if (advisorSearch.trim()) {
-      const q = advisorSearch.toLowerCase();
-      list = list.filter(a => (a.name || '').toLowerCase().includes(q) || (a.location || a.store || '').toLowerCase().includes(q));
-    }
-
     return list.sort((a: any, b: any) => (b.netSales ?? b.actual ?? 0) - (a.netSales ?? a.actual ?? 0));
-  }, [advisorData, storeFilter, advisorTab, advisorSearch]);
+  }, [advisorData, storeFilter]);
 
   if (loading || !overviewData) {
     return <BvlgariLoader message="Loading Operations Sales Dashboard..." />;
@@ -715,127 +694,78 @@ export default function OperationsSalesPage() {
           </div>
         </div>
 
-        {/* Right: Advisor Performance Radar (2 cols) */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/80 shadow-xs flex flex-col justify-between overflow-hidden">
-          <div className="p-6 pb-2 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-                <Award className="w-5 h-5 text-amber-500" /> Advisor Leaderboard
-              </h3>
+        {/* Right: Advisor Performance Leaderboard — Simple & Clean (2 cols) */}
+        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/80 shadow-xs flex flex-col justify-between overflow-hidden p-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <Award className="w-5 h-5 text-amber-500" /> Top Sales Advisors
+                </h3>
+                <p className="text-xs text-slate-400">Ranked by MTD Net Sales</p>
+              </div>
               <Link href="/advisor-performance" className="text-xs font-bold text-blue-600 hover:underline">
                 View All →
               </Link>
             </div>
 
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search advisor name..."
-                value={advisorSearch}
-                onChange={e => setAdvisorSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
-              />
-            </div>
+            {/* Simple Clean Ranked List */}
+            <div className="divide-y divide-slate-100/80 overflow-y-auto max-h-[310px] custom-scrollbar">
+              {filteredAdvisors.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs">
+                  <Users className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                  <p>Tidak ada advisor untuk filter ini</p>
+                </div>
+              ) : (
+                filteredAdvisors.slice(0, 7).map((adv: any, idx: number) => {
+                  const salesVal = adv.netSales ?? adv.actual ?? 0;
+                  const achv = adv.achievement ?? (adv.target > 0 ? (salesVal / adv.target) * 100 : 0);
+                  const locName = adv.location || adv.store || 'Store';
+                  const isMet = achv >= 100;
 
-            {/* Filter Tabs */}
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl text-xs">
-              <button
-                type="button"
-                onClick={() => setAdvisorTab('all')}
-                className={cn(
-                  "flex-1 py-1 font-bold rounded-lg transition-all cursor-pointer",
-                  advisorTab === 'all' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                All ({filteredAdvisors.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdvisorTab('met')}
-                className={cn(
-                  "flex-1 py-1 font-bold rounded-lg transition-all cursor-pointer",
-                  advisorTab === 'met' ? "bg-white text-emerald-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                Met Target (≥100%)
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdvisorTab('unmet')}
-                className={cn(
-                  "flex-1 py-1 font-bold rounded-lg transition-all cursor-pointer",
-                  advisorTab === 'unmet' ? "bg-white text-amber-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                Under (&lt;100%)
-              </button>
-            </div>
-          </div>
-
-          {/* Advisor List */}
-          <div className="px-6 py-2 flex-1 overflow-y-auto max-h-[290px] custom-scrollbar space-y-2">
-            {filteredAdvisors.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-xs">
-                <Users className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                <p>Tidak ada advisor yang cocok dengan kriteria ini</p>
-              </div>
-            ) : (
-              filteredAdvisors.map((adv: any, idx: number) => {
-                const salesVal = adv.netSales ?? adv.actual ?? 0;
-                const achv = adv.achievement ?? (adv.target > 0 ? (salesVal / adv.target) * 100 : 0);
-                const locName = adv.location || adv.store || 'Store';
-                const isMet = achv >= 100;
-
-                return (
-                  <div
-                    key={adv.id || idx}
-                    className="p-3 rounded-2xl bg-slate-50/70 hover:bg-slate-100/90 border border-slate-100 transition-all space-y-2 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xs font-black w-5 text-center text-slate-500">
-                          {MEDALS[idx] || `#${idx + 1}`}
+                  return (
+                    <div
+                      key={adv.id || idx}
+                      className="py-2.5 flex items-center justify-between hover:bg-slate-50/80 px-2 rounded-xl transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={cn(
+                          "w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0",
+                          idx === 0 ? "bg-amber-100 text-amber-800" :
+                          idx === 1 ? "bg-slate-200 text-slate-700" :
+                          idx === 2 ? "bg-orange-100 text-orange-800" :
+                          "bg-slate-50 text-slate-400 text-[11px]"
+                        )}>
+                          {MEDALS[idx] || idx + 1}
                         </span>
-                        <div>
-                          <p className="text-xs font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate max-w-[140px]">
-                            {adv.name}
-                          </p>
+                        <div className="truncate">
+                          <p className="text-xs font-bold text-slate-800 truncate">{adv.name}</p>
                           <p className="text-[10px] text-slate-400">{locName}</p>
                         </div>
                       </div>
 
-                      <div className="text-right font-mono">
-                        <p className="text-xs font-black text-slate-900"><Amt value={salesVal} /></p>
+                      <div className="text-right shrink-0 font-mono">
+                        <p className="text-xs font-extrabold text-slate-900"><Amt value={salesVal} /></p>
                         <span className={cn(
-                          "text-[9px] font-bold px-1.5 py-0.2 rounded-md",
-                          isMet ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"
+                          "text-[10px] font-bold px-1.5 py-0.2 rounded-md",
+                          isMet ? "text-emerald-700 bg-emerald-50" : "text-slate-500 bg-slate-100"
                         )}>
-                          {achv.toFixed(0)}%
+                          {achv.toFixed(0)}% Target
                         </span>
                       </div>
                     </div>
-
-                    {/* Mini Progress Bar */}
-                    <div className="h-1 w-full bg-slate-200 rounded-full overflow-hidden">
-                      <div
-                        className={cn("h-full rounded-full transition-all duration-500", isMet ? "bg-emerald-500" : "bg-blue-500")}
-                        style={{ width: `${Math.min(100, achv)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          <div className="p-4 pt-2 border-t border-slate-100">
+          <div className="pt-3 border-t border-slate-100 mt-2">
             <Link
               href="/advisor-setup"
-              className="block w-full text-center py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all"
+              className="block w-full text-center py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all"
             >
-              Manage Advisor Targets & Rota →
+              Manage Targets & Rota →
             </Link>
           </div>
         </div>
