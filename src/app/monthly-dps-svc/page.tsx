@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
 import Amt from '@/components/Amt';
+import { useUserAccess } from '@/lib/user-access-context';
 
 interface Row {
   id: number;
@@ -85,6 +86,7 @@ const fmtDate = (iso: string) => {
 };
 
 export default function MonthlyDpsSvcPage() {
+  const { isAdmin } = useUserAccess();
   const today = new Date();
   const [month, setMonth] = useState(MONTHS[today.getMonth()]);
   const [year, setYear]   = useState(String(today.getFullYear()));
@@ -104,7 +106,7 @@ export default function MonthlyDpsSvcPage() {
   const [page, setPage] = useState(1);
 
   // Lock/unlock state — persisted per month+year in localStorage
-  const lockKey = `monthtrans_dpssvc_locked_${month}_${year}`;
+  const lockKey = `dps_svc_locked_${month}_${year}`;
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
 
@@ -140,10 +142,13 @@ export default function MonthlyDpsSvcPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; transNo: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const handleDeleteRequest = (id: number, transNo: string) => setDeleteTarget({ id, transNo });
+  const handleDeleteRequest = (id: number, transNo: string) => {
+    if (!isAdmin) return;
+    setDeleteTarget({ id, transNo });
+  };
 
   const confirmDelete = async () => {
-    if (!deleteTarget) return;
+    if (!isAdmin || !deleteTarget) return;
     setDeleting(true);
     try {
       await dashboardService.deleteDpsSvcTransaction(deleteTarget.id);
@@ -550,14 +555,14 @@ export default function MonthlyDpsSvcPage() {
                 <Th onClick={() => toggleSort('net_sales')} className="text-right bg-violet-50/40">
                   <span className="inline-flex items-center gap-1 text-violet-600">Net Sales <SortIcon col="net_sales" sortKey={sortKey} sortDir={sortDir} /></span>
                 </Th>
-                {isUnlocked && <Th className="text-center text-rose-400 w-10"> </Th>}
+                {isUnlocked && isAdmin && <Th className="text-center text-rose-400 w-10"> </Th>}
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-50">
               {paged.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-16 text-center text-slate-400 text-sm">
+                  <td colSpan={isUnlocked && isAdmin ? 13 : 12} className="py-16 text-center text-slate-400 text-sm">
                     Tidak ada transaksi {activeTab} ditemukan
                   </td>
                 </tr>
@@ -644,7 +649,7 @@ export default function MonthlyDpsSvcPage() {
                     </td>
 
                     <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 bg-violet-50/30"><Amt value={r.net_sales} /></td>
-                    {isUnlocked && (
+                    {isUnlocked && isAdmin && (
                       <td className="py-2.5 px-2 text-center">
                         <button
                           type="button"
