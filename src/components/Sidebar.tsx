@@ -55,6 +55,7 @@ const menuGroups = [
     title: "OVERVIEW",
     items: [
       { name: 'Monthly Overview',    icon: LayoutDashboard, href: '/' },
+      { name: 'Operations Sales',   icon: LayoutDashboard, href: '/operations-sales', badge: 'NEW', badgeColor: 'bg-amber-500' },
       { name: 'Quarterly Standard',  icon: PieChart,        href: '/quarterly-standard' },
       { name: 'Quarterly Budget',    icon: BarChart,        href: '/quarterly-budget' },
       { name: 'Annual Net Sales',    icon: TrendingUp,      href: '/annual-sales' },

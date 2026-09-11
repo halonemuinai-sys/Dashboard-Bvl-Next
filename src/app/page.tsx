@@ -16,17 +16,29 @@ import CrossingSalesWidget from '@/components/CrossingSalesWidget';
 import TopAdvisorsWidget from '@/components/TopAdvisorsWidget';
 import BvlgariLoader from '@/components/BvlgariLoader';
 
+import { useUserAccess } from '@/lib/user-access-context';
+import { useRouter } from 'next/navigation';
+
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 const fmtPct = (n: number) => n.toFixed(1) + '%';
 
 export default function MonthlyOverviewPage() {
+  const { role } = useUserAccess();
+  const router = useRouter();
+
   const [month, setMonth] = useState(MONTHS[new Date().getMonth()]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [data, setData] = useState<MonthlyOverviewData | null>(null);
   const [syncKey, setSyncKey] = useState(0);
+
+  useEffect(() => {
+    if (role === 'operations_sales') {
+      router.replace('/operations-sales');
+    }
+  }, [role, router]);
 
   const handleSync = () => { setSyncing(true); setSyncKey(k => k + 1); };
 
