@@ -153,3 +153,17 @@ body {
   animation: float-badge 3s ease-in-out infinite;
 }
 
+@keyframes border-beam-norm {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+.animate-border-beam {
+  animation: border-beam-norm 3.2s linear infinite;
+}
+
+

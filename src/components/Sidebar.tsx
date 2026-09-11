@@ -68,7 +68,7 @@ const menuGroups = [
     items: [
       { name: 'Daily Report',        icon: Calendar,        href: '/daily-report' },
       { name: 'Daily Breakdown',     icon: Table,           href: '/daily-breakdown' },
-      { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions' },
+      { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions', badge: 'INPUT', badgeColor: 'bg-blue-600' },
       { name: 'DP & SVC Trans.',     icon: ClipboardList,   href: '/monthly-dps-svc', badge: 'NEW', badgeColor: 'bg-violet-500' },
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
       { name: 'Crossing Sales',      icon: Repeat,          href: '/crossing-sales' },
@@ -178,6 +178,8 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
             <div className="space-y-1">
               {visibleItems.map((item) => {
                 const isActive = pathname === item.href;
+                const isSpecialAction = item.href === '/monthly-transactions';
+
                 return (
                   <Link
                     key={item.name}
@@ -192,20 +194,48 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
                       "flex items-center transition-all duration-200 group relative",
                       isActuallyOpen ? "justify-between px-4 py-2.5 rounded-xl" : "justify-center p-3 rounded-xl mx-2",
                       isActive
-                        ? "bg-blue-50 text-blue-700 border border-blue-100 shadow-sm"
+                        ? "bg-blue-50 text-blue-700 border border-blue-200 shadow-sm"
+                        : isSpecialAction
+                        ? "bg-blue-50/40 text-blue-900 border border-blue-200/60 font-semibold hover:bg-blue-50/70"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                     )}
                   >
+                    {/* Animated Beam traversing the corners for Monthly Trans. */}
+                    {isSpecialAction && (
+                      <span className="absolute inset-0 rounded-xl pointer-events-none p-[1px] overflow-hidden z-10">
+                        <svg className="w-full h-full" style={{ filter: 'drop-shadow(0 0 3px rgba(37,99,235,0.6))' }}>
+                          <defs>
+                            <linearGradient id="transCornerBeam" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#93c5fd" stopOpacity="0.2" />
+                              <stop offset="50%" stopColor="#2563eb" stopOpacity="1" />
+                              <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.8" />
+                            </linearGradient>
+                          </defs>
+                          <rect
+                            width="100%"
+                            height="100%"
+                            rx="11"
+                            fill="none"
+                            stroke="url(#transCornerBeam)"
+                            strokeWidth="2.5"
+                            pathLength="100"
+                            strokeDasharray="24 76"
+                            className="animate-border-beam"
+                          />
+                        </svg>
+                      </span>
+                    )}
+
                     <div className="flex items-center gap-3">
-                      <item.icon className={cn("w-5 h-5", isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-700")} />
+                      <item.icon className={cn("w-5 h-5", isActive || isSpecialAction ? "text-blue-600" : "text-slate-400 group-hover:text-slate-700")} />
                       {isActuallyOpen && <span className="text-sm font-medium tracking-tight">{item.name}</span>}
                     </div>
                     {isActuallyOpen && item.badge && !isActive && (
                       <span className={cn(
                         "text-[8px] font-black px-1.5 py-0.5 rounded-full text-white shrink-0",
                         item.badgeColor,
-                        (item.badge === 'UPDATE' || item.badge === 'NEW') && "animate-pulse shadow-lg",
-                        item.badge === 'UPDATE' ? "shadow-amber-200" : "shadow-indigo-200"
+                        (item.badge === 'UPDATE' || item.badge === 'NEW' || item.badge === 'INPUT') && "animate-pulse shadow-lg",
+                        item.badge === 'INPUT' ? "shadow-blue-300" : item.badge === 'UPDATE' ? "shadow-amber-200" : "shadow-indigo-200"
                       )}>
                         {item.badge}
                       </span>
