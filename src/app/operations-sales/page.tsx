@@ -21,7 +21,6 @@ import {
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const STORES = ['ALL', 'Plaza Indonesia', 'Plaza Senayan', 'Bali'];
-const MEDALS = ['🥇', '🥈', '🥉'];
 
 export default function OperationsSalesPage() {
   const { assignedStore } = useUserAccess();
@@ -682,8 +681,8 @@ export default function OperationsSalesPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-500" /> Top Sales Advisors
+                <h3 className="text-base font-black text-slate-900 tracking-tight">
+                  Top Sales Advisors
                 </h3>
                 <p className="text-xs text-slate-400">Ranked by MTD Net Sales</p>
               </div>
@@ -692,12 +691,11 @@ export default function OperationsSalesPage() {
               </Link>
             </div>
 
-            {/* Simple Clean Ranked List */}
+            {/* Modern Minimal Typographic Ranked List (No Icons) */}
             <div className="divide-y divide-slate-100/80 overflow-y-auto max-h-[310px] custom-scrollbar">
               {filteredAdvisors.length === 0 ? (
                 <div className="text-center py-12 text-slate-400 text-xs">
-                  <Users className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                  <p>Tidak ada advisor untuk filter ini</p>
+                  <p className="text-slate-400">Tidak ada advisor untuk filter ini</p>
                 </div>
               ) : (
                 filteredAdvisors.slice(0, 7).map((adv: any, idx: number) => {
@@ -711,15 +709,15 @@ export default function OperationsSalesPage() {
                       key={adv.id || idx}
                       className="py-2.5 flex items-center justify-between hover:bg-slate-50/80 px-2 rounded-xl transition-colors"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-3.5 min-w-0">
                         <span className={cn(
-                          "w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0",
-                          idx === 0 ? "bg-amber-100 text-amber-800" :
-                          idx === 1 ? "bg-slate-200 text-slate-700" :
-                          idx === 2 ? "bg-orange-100 text-orange-800" :
-                          "bg-slate-50 text-slate-400 text-[11px]"
+                          "font-mono text-xs font-bold w-5 shrink-0 text-left",
+                          idx === 0 ? "text-slate-900 font-black" :
+                          idx === 1 ? "text-slate-700 font-extrabold" :
+                          idx === 2 ? "text-slate-600 font-bold" :
+                          "text-slate-400"
                         )}>
-                          {MEDALS[idx] || idx + 1}
+                          {String(idx + 1).padStart(2, '0')}
                         </span>
                         <div className="truncate">
                           <p className="text-xs font-bold text-slate-800 truncate">{adv.name}</p>
