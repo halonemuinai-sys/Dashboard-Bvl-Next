@@ -91,29 +91,40 @@ export default function OperationsSalesPage() {
   const dailyRunRateActual = daysElapsed > 0 ? totalStoreActual / daysElapsed : 0;
 
   // Filter daily sales trend
-  const dailyData = useMemo(() => {
+  const dailyChartData = useMemo(() => {
     if (!overviewData?.dailyTrendData) return [];
-    return overviewData.dailyTrendData;
+    return overviewData.dailyTrendData.map((d: any, i: number) => ({
+      day: `${i + 1}`,
+      sales: d.net || 0,
+      qty: d.qty || 0,
+    }));
   }, [overviewData]);
 
   // Today / latest sales
   const latestDailySales = useMemo(() => {
-    if (!dailyData.length) return { date: '-', sales: 0, prevSales: 0 };
-    const valid = dailyData.filter((d: any) => d.sales > 0);
+    if (!dailyChartData.length) return { date: '-', sales: 0, prevSales: 0 };
+    const valid = dailyChartData.filter((d: any) => d.sales > 0);
     if (!valid.length) return { date: '-', sales: 0, prevSales: 0 };
     const latest = valid[valid.length - 1];
     const prev = valid.length > 1 ? valid[valid.length - 2] : { sales: 0 };
-    return { date: latest.date, sales: latest.sales, prevSales: prev.sales };
-  }, [dailyData]);
+    return { date: `Tgl ${latest.day}`, sales: latest.sales, prevSales: prev.sales };
+  }, [dailyChartData]);
 
   // Filter advisors for selected store
   const filteredAdvisors = useMemo(() => {
     if (!advisorData.length) return [];
     let list = [...advisorData];
     if (storeFilter !== 'ALL') {
-      list = list.filter(a => (a.store || '').toLowerCase().includes(storeFilter.toLowerCase()));
+      list = list.filter(a => {
+        const loc = (a.location || a.store || '').toLowerCase();
+        const sf = storeFilter.toLowerCase();
+        if (sf.includes('indonesia') || sf.includes('pi')) return loc.includes('indonesia') || loc.includes('pi');
+        if (sf.includes('senayan') || sf.includes('ps')) return loc.includes('senayan') || loc.includes('ps');
+        if (sf.includes('bali')) return loc.includes('bali');
+        return loc.includes(sf);
+      });
     }
-    return list.sort((a: any, b: any) => b.actual - a.actual);
+    return list.sort((a: any, b: any) => (b.netSales ?? b.actual ?? 0) - (a.netSales ?? a.actual ?? 0));
   }, [advisorData, storeFilter]);
 
   if (loading || !overviewData) {
@@ -361,9 +372,9 @@ export default function OperationsSalesPage() {
 
           <div className="h-[280px] w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+              <BarChart data={dailyChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
                 <YAxis
                   tickFormatter={v => (v / 1_000_000).toFixed(0) + 'M'}
                   tick={{ fontSize: 10, fill: '#64748b' }}
@@ -397,7 +408,9 @@ export default function OperationsSalesPage() {
                 <p className="text-xs text-slate-400 py-6 text-center">Tidak ada data advisor untuk filter ini</p>
               ) : (
                 filteredAdvisors.slice(0, 6).map((adv: any, idx: number) => {
-                  const achv = adv.target > 0 ? (adv.actual / adv.target) * 100 : 0;
+                  const salesVal = adv.netSales ?? adv.actual ?? 0;
+                  const achv = adv.achievement ?? (adv.target > 0 ? (salesVal / adv.target) * 100 : 0);
+                  const locName = adv.location || adv.store || 'Store';
                   return (
                     <div key={adv.id || idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100/80 transition-colors">
                       <div className="flex items-center gap-2.5">
@@ -406,12 +419,12 @@ export default function OperationsSalesPage() {
                         </span>
                         <div>
                           <p className="text-xs font-bold text-slate-800">{adv.name}</p>
-                          <p className="text-[10px] text-slate-400">{adv.store || 'Store'}</p>
+                          <p className="text-[10px] text-slate-400">{locName}</p>
                         </div>
                       </div>
 
                       <div className="text-right font-mono">
-                        <p className="text-xs font-extrabold text-slate-900"><Amt value={adv.actual} /></p>
+                        <p className="text-xs font-extrabold text-slate-900"><Amt value={salesVal} /></p>
                         <p className={cn("text-[9px] font-bold", achv >= 100 ? "text-emerald-600" : "text-slate-400")}>
                           {achv.toFixed(0)}% Target
                         </p>
