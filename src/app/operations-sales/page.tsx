@@ -36,7 +36,6 @@ export default function OperationsSalesPage() {
 
   // Interactive React States
   const [chartMetric, setChartMetric] = useState<'sales' | 'qty' | 'pace'>('sales');
-  const [showBenchmark, setShowBenchmark] = useState(true);
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
 
   // Data
@@ -642,30 +641,13 @@ export default function OperationsSalesPage() {
                           <span>Qty:</span>
                           <strong className="font-mono text-emerald-400">{d.qty} pcs</strong>
                         </div>
-                        {targetPacePerDay > 0 && (
-                          <div className="pt-1.5 border-t border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
-                            <span>Target Benchmark:</span>
-                            <span className="font-mono"><Amt value={targetPacePerDay} /></span>
-                          </div>
-                        )}
                       </div>
                     );
                   }}
                 />
 
                 {chartMetric === 'sales' && (
-                  <>
-                    <Bar dataKey="sales" fill="url(#salesGrad)" radius={[4, 4, 0, 0]} />
-                    {showBenchmark && (
-                      <ReferenceLine
-                        y={targetPacePerDay}
-                        stroke="#f59e0b"
-                        strokeDasharray="3 3"
-                        strokeWidth={1.5}
-                        label={{ value: 'Avg Target', fill: '#f59e0b', fontSize: 10, position: 'top' }}
-                      />
-                    )}
-                  </>
+                  <Bar dataKey="sales" fill="url(#salesGrad)" radius={[4, 4, 0, 0]} />
                 )}
 
                 {chartMetric === 'qty' && (
@@ -686,10 +668,6 @@ export default function OperationsSalesPage() {
             <span className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
               <span>Daily Actual Sales</span>
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-2.5 h-0.5 bg-amber-500" />
-              <span>Avg Daily Target Line</span>
             </span>
           </div>
         </div>
