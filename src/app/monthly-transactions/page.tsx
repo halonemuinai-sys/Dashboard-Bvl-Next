@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { ClipboardList, Calendar as CalendarIcon, RefreshCw, Lock, LockOpen, ShieldAlert, FileDown, Trash2 } from 'lucide-react';
+import { ClipboardList, Calendar as CalendarIcon, RefreshCw, Lock, LockOpen, ShieldAlert, FileDown, Trash2, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
 import { Row, Summary, SortKey, SortDir, MONTHS, PAGE_SIZE } from './_types';
 import TransactionSummary from './TransactionSummary';
 import TransactionFilters from './TransactionFilters';
 import TransactionTable from './TransactionTable';
+import AuditTrailModal from './AuditTrailModal';
 import { useUserAccess } from '@/lib/user-access-context';
 
 export default function MonthlyTransactionsPage() {
-  const { assignedStore, isAdmin } = useUserAccess();
+  const { assignedStore, isAdmin, userEmail } = useUserAccess();
   const isStoreScoped = Boolean(assignedStore && assignedStore !== 'ALL');
+  const [showAuditTrail, setShowAuditTrail] = useState(false);
 
   const today = new Date();
   const [month, setMonth] = useState(MONTHS[today.getMonth()]);
@@ -86,7 +88,7 @@ export default function MonthlyTransactionsPage() {
     if (!isAdmin || !deleteTarget) return;
     setDeleting(true);
     try {
-      await dashboardService.deleteTransaction(deleteTarget.id);
+      await dashboardService.deleteTransaction(deleteTarget.id, userEmail);
       setRows(prev => prev.filter(r => r.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (e) { console.error(e); }
@@ -166,7 +168,7 @@ export default function MonthlyTransactionsPage() {
   const saveType = async (id: number, newType: string) => {
     setSavingId(id);
     try {
-      await dashboardService.updateTransaction(id, { type: newType });
+      await dashboardService.updateTransaction(id, { type: newType }, userEmail);
       setRows(prev => prev.map(r => r.id === id ? { ...r, type: newType } : r));
       flashSaved(id);
     } catch (e) { console.error(e); }
@@ -177,7 +179,7 @@ export default function MonthlyTransactionsPage() {
     if (!isAdmin) return;
     setSavingId(id);
     try {
-      await dashboardService.updateTransaction(id, { location: newLocation });
+      await dashboardService.updateTransaction(id, { location: newLocation }, userEmail);
       setRows(prev => prev.map(r => r.id === id ? { ...r, location: newLocation } : r));
       flashSaved(id);
     } catch (e) { console.error(e); }
@@ -194,7 +196,7 @@ export default function MonthlyTransactionsPage() {
     if (val === current) { setCommEdits(prev => { const n = { ...prev }; delete n[id]; return n; }); return; }
     setSavingId(id);
     try {
-      await dashboardService.updateTransaction(id, { comm: val });
+      await dashboardService.updateTransaction(id, { comm: val }, userEmail);
       setRows(prev => prev.map(r => r.id === id ? { ...r, comm: val } : r));
       setCommEdits(prev => { const n = { ...prev }; delete n[id]; return n; });
       flashSaved(id);
@@ -293,6 +295,19 @@ export default function MonthlyTransactionsPage() {
             <FileDown className="w-4 h-4" />
             <span className="hidden sm:inline">Download</span>
           </button>
+
+          {/* Audit Trail Button (Admin only) */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowAuditTrail(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-white border-blue-200 text-blue-700 hover:bg-blue-50"
+              title="Lihat Log Riwayat Perubahan Transaksi"
+            >
+              <History className="w-4 h-4 text-blue-600" />
+              <span className="hidden sm:inline">Audit Trail</span>
+            </button>
+          )}
 
           {/* Lock / Unlock toggle */}
           {isUnlocked ? (
@@ -403,6 +418,12 @@ export default function MonthlyTransactionsPage() {
           isAdmin={isAdmin}
         />
       </div>
+
+      {/* Audit Trail Modal */}
+      <AuditTrailModal
+        isOpen={showAuditTrail}
+        onClose={() => setShowAuditTrail(false)}
+      />
     </div>
   );
 }

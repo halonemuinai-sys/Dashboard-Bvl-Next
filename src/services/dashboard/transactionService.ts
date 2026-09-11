@@ -43,20 +43,104 @@ export async function getTransactions(month: string, year: number) {
   });
 }
 
-export async function updateTransaction(id: number, patch: { comm?: number; type?: string; location?: string }) {
+export interface TransactionAuditLog {
+  id: number;
+  user_email: string;
+  action_type: string;
+  table_name: string;
+  record_id: string;
+  old_values: any;
+  new_values: any;
+  created_at: string;
+}
+
+export async function updateTransaction(
+  id: number,
+  patch: { comm?: number; type?: string; location?: string },
+  userEmail?: string
+) {
   const { error } = await supabase
     .from('clean_master')
     .update(patch)
     .eq('id', id);
   if (error) throw error;
+
+  if (userEmail) {
+    try {
+      const { data: latestLog } = await supabase
+        .from('audit_logs')
+        .select('id')
+        .eq('table_name', 'clean_master')
+        .eq('record_id', String(id))
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestLog && latestLog.id) {
+        await supabase
+          .from('audit_logs')
+          .update({ user_email: userEmail.toLowerCase() })
+          .eq('id', latestLog.id);
+      }
+    } catch (auditErr) {
+      console.warn('Could not stamp user_email on audit_logs:', auditErr);
+    }
+  }
 }
 
-export async function deleteTransaction(id: number) {
+export async function deleteTransaction(id: number, userEmail?: string) {
   const { error } = await supabase
     .from('clean_master')
     .delete()
     .eq('id', id);
   if (error) throw error;
+
+  if (userEmail) {
+    try {
+      const { data: latestLog } = await supabase
+        .from('audit_logs')
+        .select('id')
+        .eq('table_name', 'clean_master')
+        .eq('record_id', String(id))
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestLog && latestLog.id) {
+        await supabase
+          .from('audit_logs')
+          .update({ user_email: userEmail.toLowerCase() })
+          .eq('id', latestLog.id);
+      }
+    } catch (auditErr) {
+      console.warn('Could not stamp user_email on audit_logs:', auditErr);
+    }
+  }
+}
+
+export async function getTransactionAuditLogs(limit: number = 200) {
+  const { data, error } = await supabase
+    .from('audit_logs')
+    .select('*')
+    .in('table_name', ['clean_master', 'bvlgari_sales'])
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []) as TransactionAuditLog[];
+}
+
+export async function getDashboardUsersMap() {
+  const { data } = await supabase
+    .from('dashboard_users')
+    .select('email, full_name, role');
+  const map: Record<string, { full_name: string; role: string }> = {};
+  (data || []).forEach((u: { email: string; full_name: string; role: string }) => {
+    if (u.email) {
+      map[u.email.toLowerCase()] = { full_name: u.full_name, role: u.role };
+    }
+  });
+  return map;
 }
 
 export async function getDpsSvcTransactions(month: string, year: number) {

@@ -42,6 +42,8 @@ export const dashboardService = {
   getTransactions:             transaction.getTransactions,
   updateTransaction:           transaction.updateTransaction,
   deleteTransaction:           transaction.deleteTransaction,
+  getTransactionAuditLogs:     transaction.getTransactionAuditLogs,
+  getDashboardUsersMap:        transaction.getDashboardUsersMap,
   getDpsSvcTransactions:       transaction.getDpsSvcTransactions,
   updateDpsSvcTransaction:     transaction.updateDpsSvcTransaction,
   deleteDpsSvcTransaction:     transaction.deleteDpsSvcTransaction,

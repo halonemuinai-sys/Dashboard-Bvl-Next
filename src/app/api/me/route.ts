@@ -41,7 +41,13 @@ export async function GET() {
 
     // super_admin & management_it mendapatkan akses penuh ke semua menu
     if (dbUser.role === 'super_admin' || dbUser.role === 'management_it') {
-      return NextResponse.json({ role: dbUser.role, assignedStore, allowedPaths: ['*'] });
+      return NextResponse.json({
+        email: userPayload.email,
+        fullName: dbUser.full_name,
+        role: dbUser.role,
+        assignedStore,
+        allowedPaths: ['*'],
+      });
     }
 
     // Ambil detail path menu yang diizinkan untuk role tersebut
@@ -54,7 +60,13 @@ export async function GET() {
       .filter((r: { allowed: boolean }) => r.allowed)
       .map((r: { menu_path: string }) => r.menu_path);
 
-    return NextResponse.json({ role: dbUser.role, assignedStore, allowedPaths });
+    return NextResponse.json({
+      email: userPayload.email,
+      fullName: dbUser.full_name,
+      role: dbUser.role,
+      assignedStore,
+      allowedPaths,
+    });
   } catch (error: any) {
     console.error("Error in GET /api/me:", error);
     return NextResponse.json({ role: null, allowedPaths: [] });
