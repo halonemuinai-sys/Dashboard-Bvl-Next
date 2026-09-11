@@ -206,7 +206,14 @@ export default function TransactionTable({
                           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                           if (e.key === 'Escape') onCommEscape(r.id);
                         }}
-                        className="w-24 text-right text-xs font-mono font-bold px-2 py-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className={cn(
+                          "w-24 text-right text-xs font-mono font-bold px-2 py-1 rounded-lg border outline-none transition-all",
+                          commEdits[r.id] !== undefined
+                            ? "border-blue-400 bg-blue-50 text-blue-900 ring-1 ring-blue-300"
+                            : (!commVal || commVal === '0' || commVal === '')
+                              ? "border-emerald-300 bg-gradient-to-r from-emerald-100/80 via-emerald-50 to-teal-50 text-emerald-900 placeholder:text-emerald-500/70 focus:bg-white focus:ring-2 focus:ring-emerald-400"
+                              : "border-amber-300 bg-amber-50 text-amber-900 focus:ring-2 focus:ring-amber-500"
+                        )}
                       />
                     ) : (
                       r.comm > 0 ? (
@@ -214,7 +221,7 @@ export default function TransactionTable({
                           <Amt value={r.comm} />
                         </p>
                       ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gradient-to-r from-slate-100 to-slate-50 text-slate-400 border border-slate-200 inline-block mt-0.5">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gradient-to-r from-emerald-100/80 via-emerald-50 to-teal-100/70 text-emerald-800 border border-emerald-200/80 inline-block mt-0.5">
                           —
                         </span>
                       )
@@ -362,7 +369,7 @@ export default function TransactionTable({
                   <td className="py-2.5 px-4 text-right font-mono text-rose-400">{r.val_disc > 0 ? <Amt value={r.val_disc} /> : '—'}</td>
 
                   {/* Comm editable */}
-                  <td className={cn("py-1.5 px-4 text-right transition-all", (!commVal || commVal === '0' || commVal === '') && "bg-slate-50/50")}>
+                  <td className={cn("py-1.5 px-4 text-right transition-all", (!commVal || commVal === '0' || commVal === '') && "bg-emerald-50/50")}>
                     {isUnlocked ? (
                       <input
                         type="text"
@@ -385,7 +392,7 @@ export default function TransactionTable({
                           commEdits[r.id] !== undefined
                             ? "border-blue-400 bg-blue-50 text-blue-900 ring-1 ring-blue-300 font-bold"
                             : (!commVal || commVal === '0' || commVal === '')
-                              ? "border-slate-200 bg-gradient-to-r from-slate-100/90 to-slate-50 text-slate-600 font-medium placeholder:text-slate-400 shadow-2xs hover:border-slate-300 focus:border-blue-400 focus:bg-white"
+                              ? "border-emerald-300 bg-gradient-to-r from-emerald-100/80 via-emerald-50 to-teal-50 text-emerald-900 font-medium placeholder:text-emerald-500/70 shadow-2xs hover:border-emerald-400 focus:border-emerald-400 focus:bg-white"
                               : "border-transparent bg-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 focus:border-blue-300 focus:bg-white"
                         )}
                       />
@@ -394,7 +401,7 @@ export default function TransactionTable({
                         {r.comm > 0 ? (
                           <Amt value={r.comm} />
                         ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gradient-to-r from-slate-100 to-slate-50 text-slate-400 border border-slate-200">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gradient-to-r from-emerald-100/80 via-emerald-50 to-teal-100/70 text-emerald-800 border border-emerald-200/80">
                             —
                           </span>
                         )}
