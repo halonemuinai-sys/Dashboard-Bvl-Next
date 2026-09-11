@@ -209,9 +209,15 @@ export default function TransactionTable({
                         className="w-24 text-right text-xs font-mono font-bold px-2 py-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     ) : (
-                      <p className="text-xs font-bold font-mono text-emerald-700 mt-0.5">
-                        {r.comm > 0 ? <Amt value={r.comm} /> : <span className="text-slate-400">—</span>}
-                      </p>
+                      r.comm > 0 ? (
+                        <p className="text-xs font-bold font-mono text-emerald-700 mt-0.5">
+                          <Amt value={r.comm} />
+                        </p>
+                      ) : (
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 via-orange-50 to-amber-100 text-amber-800 border border-amber-200/80 shadow-2xs inline-block mt-0.5">
+                          Kosong —
+                        </span>
+                      )
                     )}
                   </div>
                 </div>
@@ -361,6 +367,7 @@ export default function TransactionTable({
                       <input
                         type="text"
                         aria-label="Edit comm"
+                        placeholder="Isi Comm..."
                         value={commVal}
                         disabled={isSaving}
                         onChange={e => {
@@ -377,12 +384,20 @@ export default function TransactionTable({
                           "w-28 text-right text-xs font-mono px-2 py-1 rounded-lg border outline-none transition-all",
                           commEdits[r.id] !== undefined
                             ? "border-amber-300 bg-amber-50 text-amber-800 ring-1 ring-amber-300"
-                            : "border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 focus:border-amber-300 focus:bg-amber-50"
+                            : (!commVal || commVal === '0' || commVal === '')
+                              ? "border-amber-300/80 bg-gradient-to-r from-amber-100/80 via-orange-50 to-amber-50 text-amber-900 font-bold placeholder:text-amber-600/60 shadow-2xs hover:border-amber-400 hover:from-amber-100"
+                              : "border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 focus:border-amber-300 focus:bg-amber-50"
                         )}
                       />
                     ) : (
                       <span className="text-xs font-mono text-slate-600 flex items-center justify-end gap-1">
-                        {r.comm > 0 ? <Amt value={r.comm} /> : <span className="text-slate-300">—</span>}
+                        {r.comm > 0 ? (
+                          <Amt value={r.comm} />
+                        ) : (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 via-orange-50 to-amber-100 text-amber-800 border border-amber-200/80 shadow-2xs">
+                            Kosong —
+                          </span>
+                        )}
                         <Lock className="w-2.5 h-2.5 text-slate-300" />
                       </span>
                     )}
