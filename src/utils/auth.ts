@@ -140,3 +140,91 @@ export async function verifySessionToken(token: string): Promise<{ email: string
     return null;
   }
 }
+
+/**
+ * Membuat token reset password yang aman, bertanda tangan HMAC, dan kedaluwarsa dalam 1 jam
+ * Menyertakan potongan hash password saat ini untuk menjamin sifat sekali pakai (single-use)
+ */
+export async function generatePasswordResetToken(email: string, currentPasswordHash: string): Promise<string> {
+  const encoder = new TextEncoder();
+  // Expire dalam 60 menit (1 jam)
+  const exp = Date.now() + 60 * 60 * 1000;
+  const sig = (currentPasswordHash || 'empty').slice(0, 16);
+  const payload = JSON.stringify({
+    email: email.toLowerCase().trim(),
+    exp,
+    purpose: 'pwd_reset',
+    sig,
+  });
+  const payloadBase64 = btoa(payload);
+
+  const hmacKey = await getHmacKey();
+  const signatureBuffer = await crypto.subtle.sign(
+    "HMAC",
+    hmacKey,
+    encoder.encode(payloadBase64)
+  );
+
+  const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  return `${payloadBase64}.${signatureHex}`;
+}
+
+/**
+ * Memverifikasi validitas token reset password
+ * Memeriksa: format, HMAC signature, kedaluwarsa, dan kecocokan hash password (single-use guarantee)
+ */
+export async function verifyPasswordResetToken(
+  token: string,
+  currentPasswordHash: string
+): Promise<{ valid: boolean; email?: string; error?: string }> {
+  if (!token || !token.includes('.')) {
+    return { valid: false, error: 'Token reset tidak valid atau rusak.' };
+  }
+
+  const [payloadBase64, signatureHex] = token.split('.');
+
+  try {
+    const encoder = new TextEncoder();
+    const hmacKey = await getHmacKey();
+
+    const expectedBuffer = await crypto.subtle.sign(
+      "HMAC",
+      hmacKey,
+      encoder.encode(payloadBase64)
+    );
+
+    const expectedHex = Array.from(new Uint8Array(expectedBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    if (signatureHex !== expectedHex) {
+      return { valid: false, error: 'Tanda tangan token tidak sah.' };
+    }
+
+    const payloadJson = atob(payloadBase64);
+    const payload = JSON.parse(payloadJson);
+
+    if (payload.purpose !== 'pwd_reset') {
+      return { valid: false, error: 'Tujuan token tidak sesuai.' };
+    }
+
+    if (Date.now() > payload.exp) {
+      return { valid: false, error: 'Tautan reset password telah kedaluwarsa (lebih dari 60 menit). Silakan minta tautan baru.' };
+    }
+
+    // Single-use check: verifikasi apakah hash password saat ini masih sama dengan saat token dibuat
+    const expectedSig = (currentPasswordHash || 'empty').slice(0, 16);
+    if (payload.sig !== expectedSig) {
+      return { valid: false, error: 'Tautan reset password ini sudah pernah digunakan atau password telah diperbarui.' };
+    }
+
+    return { valid: true, email: payload.email };
+  } catch (e) {
+    console.error("Reset token verification error:", e);
+    return { valid: false, error: 'Gagal memverifikasi token reset password.' };
+  }
+}
+
