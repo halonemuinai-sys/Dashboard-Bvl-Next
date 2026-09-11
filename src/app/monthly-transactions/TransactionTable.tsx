@@ -362,7 +362,7 @@ export default function TransactionTable({
                   <td className="py-2.5 px-4 text-right font-mono text-rose-400">{r.val_disc > 0 ? <Amt value={r.val_disc} /> : '—'}</td>
 
                   {/* Comm editable */}
-                  <td className="py-1.5 px-4 text-right">
+                  <td className={cn("py-1.5 px-4 text-right transition-all rounded-lg", (!commVal || commVal === '0' || commVal === '') && "bg-gradient-to-r from-amber-100/80 via-orange-100/70 to-amber-100/80")}>
                     {isUnlocked ? (
                       <input
                         type="text"
@@ -381,12 +381,12 @@ export default function TransactionTable({
                           if (e.key === 'Escape') onCommEscape(r.id);
                         }}
                         className={cn(
-                          "w-28 text-right text-xs font-mono px-2 py-1 rounded-lg border outline-none transition-all",
+                          "w-28 text-right text-xs font-mono px-2.5 py-1 rounded-xl border outline-none transition-all",
                           commEdits[r.id] !== undefined
-                            ? "border-amber-300 bg-amber-50 text-amber-800 ring-1 ring-amber-300"
+                            ? "border-amber-400 bg-amber-50 text-amber-900 ring-2 ring-amber-300 font-bold"
                             : (!commVal || commVal === '0' || commVal === '')
-                              ? "border-amber-300/80 bg-gradient-to-r from-amber-100/80 via-orange-50 to-amber-50 text-amber-900 font-bold placeholder:text-amber-600/60 shadow-2xs hover:border-amber-400 hover:from-amber-100"
-                              : "border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 focus:border-amber-300 focus:bg-amber-50"
+                              ? "border-amber-400 bg-gradient-to-r from-amber-200/90 via-orange-100 to-amber-100 text-amber-950 font-black placeholder:text-amber-800/80 shadow-xs hover:border-amber-500 focus:ring-2 focus:ring-amber-400"
+                              : "border-transparent bg-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 focus:border-amber-300 focus:bg-amber-50"
                         )}
                       />
                     ) : (
@@ -394,7 +394,7 @@ export default function TransactionTable({
                         {r.comm > 0 ? (
                           <Amt value={r.comm} />
                         ) : (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 via-orange-50 to-amber-100 text-amber-800 border border-amber-200/80 shadow-2xs">
+                          <span className="text-[11px] font-black px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-200 via-orange-100 to-amber-200 text-amber-950 border border-amber-300/90 shadow-2xs">
                             Kosong —
                           </span>
                         )}
