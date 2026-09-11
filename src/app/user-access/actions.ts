@@ -12,14 +12,23 @@ export async function createUserAction(formData: { email: string; fullName: stri
     hashedPassword = await hashPassword(formData.password)
   }
 
-  const { error } = await supabase.from('dashboard_users').insert({
+  const payload: any = {
     email: formData.email.trim().toLowerCase(),
     full_name: formData.fullName.trim(),
     role: formData.role,
-    assigned_store: formData.assignedStore || 'ALL',
     password: hashedPassword,
     is_active: true,
+  }
+
+  let { error } = await supabase.from('dashboard_users').insert({
+    ...payload,
+    assigned_store: formData.assignedStore || 'ALL',
   })
+
+  if (error && error.message.includes('assigned_store')) {
+    const fallback = await supabase.from('dashboard_users').insert(payload)
+    error = fallback.error
+  }
 
   if (error) {
     throw new Error(error.message)

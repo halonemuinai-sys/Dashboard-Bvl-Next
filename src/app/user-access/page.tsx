@@ -288,8 +288,12 @@ export default function UserAccessPage() {
   };
 
   const changeUserStore = async (user: DashboardUser, assigned_store: string) => {
-    await supabase.from('dashboard_users').update({ assigned_store }).eq('id', user.id);
-    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, assigned_store } : u));
+    const { error } = await supabase.from('dashboard_users').update({ assigned_store }).eq('id', user.id);
+    if (!error) {
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, assigned_store } : u));
+    } else {
+      console.warn('Could not update assigned_store:', error.message);
+    }
   };
 
   const deleteUser = async (id: number) => {

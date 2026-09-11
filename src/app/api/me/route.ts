@@ -23,7 +23,7 @@ export async function GET() {
     // Query data user dari database untuk memastikan akun aktif
     const { data: dbUser } = await supabase
       .from('dashboard_users')
-      .select('role, is_active, assigned_store')
+      .select('role, is_active')
       .eq('email', userPayload.email.toLowerCase())
       .single();
 
@@ -31,7 +31,7 @@ export async function GET() {
       return NextResponse.json({ role: null, assignedStore: 'ALL', allowedPaths: [] });
     }
 
-    const assignedStore = dbUser.assigned_store || 'ALL';
+    const assignedStore = (dbUser as any).assigned_store || 'ALL';
 
     // super_admin & management_it mendapatkan akses penuh ke semua menu
     if (dbUser.role === 'super_admin' || dbUser.role === 'management_it') {
