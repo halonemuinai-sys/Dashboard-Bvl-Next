@@ -418,23 +418,28 @@ export default function OperationsSalesPage() {
           </div>
         </div>
 
-        {/* Card 4: Quick Action Portal */}
+        {/* Card 4: Quick Action Portal (Clean White, No Purple) */}
         <Link
           href="/monthly-transactions"
-          className="group relative bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-2xl text-white shadow-md hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden"
+          className="group relative bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden cursor-pointer"
         >
-          <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none" />
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black uppercase tracking-wider text-blue-200">
-              Operations Hub
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500 opacity-80 group-hover:h-1.5 transition-all" />
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <ClipboardList className="w-3.5 h-3.5 text-blue-600" /> Operations Hub
             </span>
-            <ClipboardList className="w-5 h-5 text-blue-200 group-hover:scale-125 group-hover:rotate-6 transition-all duration-300" />
+            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md group-hover:bg-blue-100 transition-colors">
+              Shortcut
+            </span>
           </div>
 
-          <div className="mt-4">
-            <h4 className="text-base font-black text-white">Input Sales & Comm</h4>
-            <p className="text-xs text-blue-100/80 mt-0.5 flex items-center gap-1">
-              Monthly Transactions <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          <div className="mt-3">
+            <h4 className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">
+              Input Sales & Comm
+            </h4>
+            <p className="text-xs font-bold text-blue-600 mt-1 flex items-center gap-1">
+              <span>Open Monthly Transactions</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </p>
           </div>
         </Link>
@@ -767,9 +772,9 @@ export default function OperationsSalesPage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {[
-            { href: '/monthly-transactions', icon: ClipboardList, label: 'Monthly Trans.', sub: 'Input & Edit Sales', color: 'from-blue-500 to-indigo-600', shadow: 'shadow-blue-500/20' },
+            { href: '/monthly-transactions', icon: ClipboardList, label: 'Monthly Trans.', sub: 'Input & Edit Sales', color: 'from-blue-500 to-cyan-600', shadow: 'shadow-blue-500/20' },
             { href: '/daily-report', icon: CalendarIcon, label: 'Daily Report', sub: 'Day-to-day Status', color: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-500/20' },
-            { href: '/monthly-dps-svc', icon: Layers, label: 'DP & SVC', sub: 'Down Payment & Service', color: 'from-violet-500 to-purple-600', shadow: 'shadow-violet-500/20' },
+            { href: '/monthly-dps-svc', icon: Layers, label: 'DP & SVC', sub: 'Down Payment & Service', color: 'from-teal-500 to-cyan-600', shadow: 'shadow-teal-500/20' },
             { href: '/crossing-sales', icon: Repeat, label: 'Crossing Sales', sub: 'Inter-store Transfers', color: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/20' },
             { href: '/advisor-setup', icon: Users, label: 'Setup Targets', sub: 'Store & Staff Targets', color: 'from-rose-500 to-pink-600', shadow: 'shadow-rose-500/20' },
           ].map(item => (
