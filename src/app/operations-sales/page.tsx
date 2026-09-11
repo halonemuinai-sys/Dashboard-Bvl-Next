@@ -750,13 +750,16 @@ export default function OperationsSalesPage() {
       </div>
 
       {/* ═════════════════════════════════════════════════════════════════════
-          5. FLOATING OPERATIONAL ACTION DOCK
+          5. MODERN LIGHT OPERATIONAL ACTION HUB (NO BLACK)
       ═════════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-3xl bg-slate-900 p-6 text-white shadow-xl space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="rounded-3xl bg-white border border-slate-200/80 p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
-            <h3 className="text-base font-black tracking-tight text-white flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-400" /> Operational Action Hub
+            <h3 className="text-base font-black tracking-tight text-slate-900 flex items-center gap-2">
+              <span className="p-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/60">
+                <Zap className="w-4 h-4" />
+              </span>
+              Operational Action Hub
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">Quick access shortcuts to core operational modules</p>
           </div>
@@ -764,22 +767,25 @@ export default function OperationsSalesPage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {[
-            { href: '/monthly-transactions', icon: ClipboardList, label: 'Monthly Trans.', sub: 'Input & Edit Sales', color: 'from-blue-500 to-indigo-600' },
-            { href: '/daily-report', icon: CalendarIcon, label: 'Daily Report', sub: 'Day-to-day Status', color: 'from-emerald-500 to-teal-600' },
-            { href: '/monthly-dps-svc', icon: Layers, label: 'DP & SVC', sub: 'Down Payment & Service', color: 'from-violet-500 to-purple-600' },
-            { href: '/crossing-sales', icon: Repeat, label: 'Crossing Sales', sub: 'Inter-store Transfers', color: 'from-amber-500 to-orange-600' },
-            { href: '/advisor-setup', icon: Users, label: 'Setup Targets', sub: 'Store & Staff Targets', color: 'from-rose-500 to-pink-600' },
+            { href: '/monthly-transactions', icon: ClipboardList, label: 'Monthly Trans.', sub: 'Input & Edit Sales', color: 'from-blue-500 to-indigo-600', shadow: 'shadow-blue-500/20' },
+            { href: '/daily-report', icon: CalendarIcon, label: 'Daily Report', sub: 'Day-to-day Status', color: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-500/20' },
+            { href: '/monthly-dps-svc', icon: Layers, label: 'DP & SVC', sub: 'Down Payment & Service', color: 'from-violet-500 to-purple-600', shadow: 'shadow-violet-500/20' },
+            { href: '/crossing-sales', icon: Repeat, label: 'Crossing Sales', sub: 'Inter-store Transfers', color: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/20' },
+            { href: '/advisor-setup', icon: Users, label: 'Setup Targets', sub: 'Store & Staff Targets', color: 'from-rose-500 to-pink-600', shadow: 'shadow-rose-500/20' },
           ].map(item => (
             <Link
               key={item.href}
               href={item.href}
-              className="group relative p-4 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 hover:border-white/20 transition-all duration-300 flex flex-col justify-between space-y-3 cursor-pointer"
+              className="group relative p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/70 hover:border-blue-300 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between space-y-3 cursor-pointer"
             >
-              <div className={cn("w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center text-white shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all duration-300", item.color)}>
+              <div className={cn("w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center text-white shadow-md group-hover:scale-110 group-hover:rotate-3 transition-all duration-300", item.color, item.shadow)}>
                 <item.icon className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-black text-white group-hover:text-amber-300 transition-colors">{item.label}</p>
+                <p className="text-xs font-black text-slate-800 group-hover:text-blue-600 transition-colors flex items-center justify-between">
+                  <span>{item.label}</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-blue-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">{item.sub}</p>
               </div>
             </Link>
