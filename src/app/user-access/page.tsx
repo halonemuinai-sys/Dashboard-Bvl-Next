@@ -167,11 +167,32 @@ export default function UserAccessPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [usersRes, accessRes] = await Promise.all([
+    const [usersRes, accessRes, advisorsRes] = await Promise.all([
       supabase.from('dashboard_users').select('*').order('full_name'),
       supabase.from('role_menu_access').select('*'),
+      supabase.from('advisors').select('name, home_location'),
     ]);
-    setUsers(usersRes.data || []);
+
+    const advisorMap = new Map<string, string>();
+    (advisorsRes.data || []).forEach((a: any) => {
+      if (a.name && a.home_location) {
+        advisorMap.set(a.name.toLowerCase().trim(), a.home_location);
+      }
+    });
+
+    let localMap: Record<string, string> = {};
+    try {
+      localMap = JSON.parse(localStorage.getItem('user_store_assignments') || '{}');
+    } catch (e) {}
+
+    const mappedUsers = (usersRes.data || []).map((u: any) => {
+      const emailKey = u.email.toLowerCase().trim();
+      const nameKey = u.full_name.toLowerCase().trim();
+      const store = localMap[emailKey] || advisorMap.get(nameKey) || u.assigned_store || 'ALL';
+      return { ...u, assigned_store: store };
+    });
+
+    setUsers(mappedUsers);
     setMenuAccess((accessRes.data || []) as MenuAccess[]);
     setLoading(false);
   }, []);
@@ -288,12 +309,29 @@ export default function UserAccessPage() {
   };
 
   const changeUserStore = async (user: DashboardUser, assigned_store: string) => {
-    const { error } = await supabase.from('dashboard_users').update({ assigned_store }).eq('id', user.id);
-    if (!error) {
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, assigned_store } : u));
-    } else {
-      console.warn('Could not update assigned_store:', error.message);
-    }
+    // 1. Optimistic UI update
+    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, assigned_store } : u));
+
+    // 2. Persist to localStorage for client cache
+    try {
+      const localMap = JSON.parse(localStorage.getItem('user_store_assignments') || '{}');
+      localMap[user.email.toLowerCase().trim()] = assigned_store;
+      localStorage.setItem('user_store_assignments', JSON.stringify(localMap));
+    } catch (e) {}
+
+    // 3. Sync to advisors table in Supabase
+    try {
+      const { data: advList } = await supabase.from('advisors').select('id, name');
+      const matchAdv = (advList || []).find((a: any) => a.name.toLowerCase().trim() === user.full_name.toLowerCase().trim());
+      if (matchAdv) {
+        await supabase.from('advisors').update({ home_location: assigned_store }).eq('id', matchAdv.id);
+      } else {
+        await supabase.from('advisors').insert({ name: user.full_name, home_location: assigned_store, is_active: true });
+      }
+    } catch (e) {}
+
+    // 4. Try updating dashboard_users
+    await supabase.from('dashboard_users').update({ assigned_store }).eq('id', user.id);
   };
 
   const deleteUser = async (id: number) => {
