@@ -45,11 +45,12 @@ export async function login(formData: FormData) {
   // Generate session token
   const token = await generateSessionToken(dbUser.email, dbUser.role)
 
-  // Simpan token ke HTTP-Only cookie (secure: false agar berfungsi di HTTP biasa / tanpa SSL)
+  // Simpan token ke HTTP-Only cookie (secure: true di production/Vercel HTTPS)
+  const isProd = process.env.NODE_ENV === 'production';
   const cookieStore = await cookies()
   cookieStore.set('session_token', token, {
     httpOnly: true,
-    secure: false,
+    secure: isProd,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60, // 7 hari
     path: '/',
