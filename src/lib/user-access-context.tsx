@@ -6,6 +6,7 @@ type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | null;
 
 interface UserAccessState {
   role: Role;
+  isAdmin: boolean;
   assignedStore: string;
   allowedPaths: Set<string>;
   loading: boolean;
@@ -14,6 +15,7 @@ interface UserAccessState {
 
 const UserAccessContext = createContext<UserAccessState>({
   role: null,
+  isAdmin: false,
   assignedStore: 'ALL',
   allowedPaths: new Set(),
   loading: true,
@@ -110,8 +112,10 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
+  const isAdmin = role === 'super_admin' || role === 'management_it';
+
   return (
-    <UserAccessContext.Provider value={{ role, assignedStore, allowedPaths, loading, canAccess }}>
+    <UserAccessContext.Provider value={{ role, isAdmin, assignedStore, allowedPaths, loading, canAccess }}>
       {children}
     </UserAccessContext.Provider>
   );

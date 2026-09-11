@@ -11,7 +11,7 @@ import TransactionTable from './TransactionTable';
 import { useUserAccess } from '@/lib/user-access-context';
 
 export default function MonthlyTransactionsPage() {
-  const { assignedStore } = useUserAccess();
+  const { assignedStore, isAdmin } = useUserAccess();
   const isStoreScoped = Boolean(assignedStore && assignedStore !== 'ALL');
 
   const today = new Date();
@@ -77,10 +77,13 @@ export default function MonthlyTransactionsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; transNo: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const handleDeleteRequest = (id: number, transNo: string) => setDeleteTarget({ id, transNo });
+  const handleDeleteRequest = (id: number, transNo: string) => {
+    if (!isAdmin) return;
+    setDeleteTarget({ id, transNo });
+  };
 
   const confirmDelete = async () => {
-    if (!deleteTarget) return;
+    if (!isAdmin || !deleteTarget) return;
     setDeleting(true);
     try {
       await dashboardService.deleteTransaction(deleteTarget.id);
@@ -171,6 +174,7 @@ export default function MonthlyTransactionsPage() {
   };
 
   const saveLocation = async (id: number, newLocation: string) => {
+    if (!isAdmin) return;
     setSavingId(id);
     try {
       await dashboardService.updateTransaction(id, { location: newLocation });
@@ -396,6 +400,7 @@ export default function MonthlyTransactionsPage() {
           onLocationChange={saveLocation}
           onDelete={handleDeleteRequest}
           isUnlocked={isUnlocked}
+          isAdmin={isAdmin}
         />
       </div>
     </div>

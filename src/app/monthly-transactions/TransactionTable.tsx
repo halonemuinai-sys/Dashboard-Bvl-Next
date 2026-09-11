@@ -27,6 +27,7 @@ interface Props {
   onLocationChange: (id: number, location: string) => void;
   onDelete: (id: number, transNo: string) => void;
   isUnlocked: boolean;
+  isAdmin: boolean;
 }
 
 function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
@@ -68,7 +69,7 @@ export default function TransactionTable({
   paged, sorted, filtered, summary,
   sortKey, sortDir, onSort,
   page, totalPages, onPage,
-  savingId, savedIds, commEdits, onCommEdit, onCommBlur, onCommEscape, onTypeChange, onLocationChange, onDelete, isUnlocked,
+  savingId, savedIds, commEdits, onCommEdit, onCommBlur, onCommEscape, onTypeChange, onLocationChange, onDelete, isUnlocked, isAdmin,
 }: Props) {
   const totalComm = filtered.reduce((s, r) => s + (r.comm || 0), 0);
 
@@ -97,7 +98,7 @@ export default function TransactionTable({
                 )}
               >
                 {/* Header Row: Trans No & Date */}
-                <div className="flex justify-between items-start pr-8">
+                <div className={cn("flex justify-between items-start", isAdmin ? "pr-8" : "pr-2")}>
                   <div>
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
                       {fmtDate(r.transaction_date)}
@@ -106,7 +107,7 @@ export default function TransactionTable({
                   </div>
 
                   {/* Store Badge / Selector */}
-                  {isUnlocked ? (
+                  {isUnlocked && isAdmin ? (
                     <select
                       aria-label="Edit location mobile"
                       value={r.location || ''}
@@ -229,18 +230,20 @@ export default function TransactionTable({
                   </div>
                 </div>
 
-                {/* Trash Icon Button - Always Visible */}
-                <div className="absolute top-2.5 right-2.5">
-                  <button
-                    type="button"
-                    title="Hapus transaksi ini"
-                    onClick={() => onDelete(r.id, r.trans_no)}
-                    disabled={isSaving}
-                    className="p-1.5 rounded-lg bg-rose-50 text-rose-500 border border-rose-200 hover:bg-rose-100 transition-colors shadow-2xs"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                {/* Trash Icon Button - Only Visible to Administrator */}
+                {isAdmin && (
+                  <div className="absolute top-2.5 right-2.5">
+                    <button
+                      type="button"
+                      title="Hapus transaksi ini"
+                      onClick={() => onDelete(r.id, r.trans_no)}
+                      disabled={isSaving}
+                      className="p-1.5 rounded-lg bg-rose-50 text-rose-500 border border-rose-200 hover:bg-rose-100 transition-colors shadow-2xs"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
 
               </div>
             );
@@ -259,9 +262,9 @@ export default function TransactionTable({
               <Th>Trans No</Th>
               <Th>Customer</Th>
               <Th>Salesman</Th>
-              <Th className={isUnlocked ? 'text-amber-600' : 'text-slate-400'}>
+              <Th className={isUnlocked && isAdmin ? 'text-amber-600' : 'text-slate-400'}>
                 <span className="inline-flex items-center gap-1">
-                  Lokasi {isUnlocked ? '✎' : <Lock className="w-2.5 h-2.5" />}
+                  Lokasi {isUnlocked && isAdmin ? '✎' : <Lock className="w-2.5 h-2.5" />}
                 </span>
               </Th>
               <Th>Kategori</Th>
@@ -288,14 +291,14 @@ export default function TransactionTable({
               <Th onClick={() => onSort('net_sales')} className="text-right bg-blue-50/40">
                 <span className="inline-flex items-center gap-1 text-blue-600">Net Sales <SortIcon col="net_sales" sortKey={sortKey} sortDir={sortDir} /></span>
               </Th>
-              <Th className="text-center text-rose-500 w-12">Hapus</Th>
+              {isAdmin && <Th className="text-center text-rose-500 w-12">Hapus</Th>}
             </tr>
           </thead>
 
           <tbody className="divide-y divide-slate-50">
             {paged.length === 0 ? (
               <tr>
-                <td colSpan={14} className="py-16 text-center text-slate-400 text-sm">
+                <td colSpan={isAdmin ? 14 : 13} className="py-16 text-center text-slate-400 text-sm">
                   Tidak ada transaksi ditemukan
                 </td>
               </tr>
@@ -311,9 +314,9 @@ export default function TransactionTable({
                   <td className="py-2.5 px-4 text-slate-700 max-w-[140px] truncate" title={r.customer}>{r.customer || '—'}</td>
                   <td className="py-2.5 px-4 font-bold text-slate-800">{r.salesman || '—'}</td>
 
-                  {/* Lokasi editable */}
+                  {/* Lokasi editable - only for Administrator */}
                   <td className="py-1.5 px-4">
-                    {isUnlocked ? (
+                    {isUnlocked && isAdmin ? (
                       <select
                         aria-label="Edit location"
                         value={r.location || ''}
@@ -412,18 +415,20 @@ export default function TransactionTable({
 
                   <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 bg-blue-50/30"><Amt value={r.net_sales} /></td>
 
-                  {/* Trash button always visible on desktop table */}
-                  <td className="py-2.5 px-2 text-center">
-                    <button
-                      type="button"
-                      title="Hapus transaksi ini"
-                      onClick={() => onDelete(r.id, r.trans_no)}
-                      disabled={isSaving}
-                      className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors disabled:opacity-30"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
+                  {/* Trash button only visible to Administrator */}
+                  {isAdmin && (
+                    <td className="py-2.5 px-2 text-center">
+                      <button
+                        type="button"
+                        title="Hapus transaksi ini"
+                        onClick={() => onDelete(r.id, r.trans_no)}
+                        disabled={isSaving}
+                        className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors disabled:opacity-30"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -440,7 +445,7 @@ export default function TransactionTable({
                 <td className="py-3 px-4 text-right font-mono text-rose-500"><Amt value={summary.totalDisc} /></td>
                 <td className="py-3 px-4 text-right font-mono text-slate-500"><Amt value={totalComm} /></td>
                 <td className="py-3 px-4 text-right font-mono text-blue-700 bg-blue-50/40"><Amt value={summary.totalNet} /></td>
-                <td></td>
+                {isAdmin && <td></td>}
               </tr>
             </tfoot>
           )}
