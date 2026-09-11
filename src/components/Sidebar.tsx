@@ -240,7 +240,14 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
 
         <button
           type="button"
-          onClick={() => logout()}
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('bvl_user_role');
+              localStorage.removeItem('bvl_assigned_store');
+              localStorage.removeItem('bvl_allowed_paths');
+            }
+            logout();
+          }}
           title={isActuallyOpen ? undefined : "Sign Out"}
           className={cn(
             "flex items-center justify-center transition-all border border-red-100 text-red-500 hover:bg-red-50",
