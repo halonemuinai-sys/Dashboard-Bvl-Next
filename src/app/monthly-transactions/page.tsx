@@ -35,7 +35,7 @@ export default function MonthlyTransactionsPage() {
 
   // Sort + Pagination
   const [sortKey, setSortKey] = useState<SortKey>('transaction_date');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
 
   // Lock/unlock state — persisted per month+year in localStorage
