@@ -21,9 +21,32 @@ const UserAccessContext = createContext<UserAccessState>({
 });
 
 export function UserAccessProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<Role>(null);
-  const [assignedStore, setAssignedStore] = useState<string>('ALL');
-  const [allowedPaths, setAllowedPaths] = useState<Set<string>>(new Set());
+  const [role, setRole] = useState<Role>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('bvl_user_role') as Role) || null;
+    }
+    return null;
+  });
+
+  const [assignedStore, setAssignedStore] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('bvl_assigned_store') || 'ALL';
+    }
+    return 'ALL';
+  });
+
+  const [allowedPaths, setAllowedPaths] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('bvl_allowed_paths');
+      if (cached) {
+        try {
+          return new Set(JSON.parse(cached));
+        } catch {}
+      }
+    }
+    return new Set();
+  });
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,13 +54,28 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
       try {
         const res = await fetch('/api/me');
         const data = await res.json();
-        setRole(data.role ?? null);
-        setAssignedStore(data.assignedStore ?? 'ALL');
-        setAllowedPaths(new Set(data.allowedPaths ?? []));
+        const nextRole = data.role ?? null;
+        const nextStore = data.assignedStore ?? 'ALL';
+        const nextPaths = data.allowedPaths ?? [];
+
+        setRole(nextRole);
+        setAssignedStore(nextStore);
+        setAllowedPaths(new Set(nextPaths));
+
+        if (typeof window !== 'undefined') {
+          if (nextRole) {
+            localStorage.setItem('bvl_user_role', nextRole);
+            localStorage.setItem('bvl_assigned_store', nextStore);
+            localStorage.setItem('bvl_allowed_paths', JSON.stringify(nextPaths));
+          } else {
+            localStorage.removeItem('bvl_user_role');
+            localStorage.removeItem('bvl_assigned_store');
+            localStorage.removeItem('bvl_allowed_paths');
+          }
+        }
       } catch {
-        setRole(null);
-        setAssignedStore('ALL');
-        setAllowedPaths(new Set(['*']));
+        // Pada error network, JANGAN set allowedPaths ke ['*'] (jangan bocorkan semua menu)
+        // Tetap gunakan cached permissions jika ada
       } finally {
         setLoading(false);
       }
@@ -52,10 +90,23 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const canAccess = (path: string): boolean => {
-    if (loading) return true;
-    if (role === null) return true;
+    // Super admin & management IT mendapatkan akses penuh
+    if (role === 'super_admin' || role === 'management_it') return true;
     if (allowedPaths.has('*')) return true;
-    return allowedPaths.has(path);
+
+    // Jika permissions sudah ada (baik dari cache localStorage maupun fetch), periksa path
+    if (allowedPaths.size > 0) {
+      return allowedPaths.has(path);
+    }
+
+    // Jika masih loading dan belum ada cache permissions sama sekali,
+    // JANGAN tampilkan menu yang dilarang (cegah flash of unauthorized menus)
+    if (loading) {
+      // Izinkan path umum dashboard sementara verifikasi selesai
+      return path === '/' || path === '/operations-sales';
+    }
+
+    return false;
   };
 
   return (
