@@ -7,6 +7,8 @@ type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | null;
 interface UserAccessState {
   role: Role;
   isAdmin: boolean;
+  userEmail: string;
+  userName: string;
   assignedStore: string;
   allowedPaths: Set<string>;
   loading: boolean;
@@ -16,6 +18,8 @@ interface UserAccessState {
 const UserAccessContext = createContext<UserAccessState>({
   role: null,
   isAdmin: false,
+  userEmail: '',
+  userName: '',
   assignedStore: 'ALL',
   allowedPaths: new Set(),
   loading: true,
@@ -28,6 +32,20 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
       return (localStorage.getItem('bvl_user_role') as Role) || null;
     }
     return null;
+  });
+
+  const [userEmail, setUserEmail] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('bvl_user_email') || '';
+    }
+    return '';
+  });
+
+  const [userName, setUserName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('bvl_user_name') || '';
+    }
+    return '';
   });
 
   const [assignedStore, setAssignedStore] = useState<string>(() => {
@@ -57,20 +75,28 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
         const res = await fetch('/api/me');
         const data = await res.json();
         const nextRole = data.role ?? null;
+        const nextEmail = data.email ?? '';
+        const nextName = data.fullName ?? '';
         const nextStore = data.assignedStore ?? 'ALL';
         const nextPaths = data.allowedPaths ?? [];
 
         setRole(nextRole);
+        setUserEmail(nextEmail);
+        setUserName(nextName);
         setAssignedStore(nextStore);
         setAllowedPaths(new Set(nextPaths));
 
         if (typeof window !== 'undefined') {
           if (nextRole) {
             localStorage.setItem('bvl_user_role', nextRole);
+            localStorage.setItem('bvl_user_email', nextEmail);
+            localStorage.setItem('bvl_user_name', nextName);
             localStorage.setItem('bvl_assigned_store', nextStore);
             localStorage.setItem('bvl_allowed_paths', JSON.stringify(nextPaths));
           } else {
             localStorage.removeItem('bvl_user_role');
+            localStorage.removeItem('bvl_user_email');
+            localStorage.removeItem('bvl_user_name');
             localStorage.removeItem('bvl_assigned_store');
             localStorage.removeItem('bvl_allowed_paths');
           }
@@ -115,7 +141,7 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
   const isAdmin = role === 'super_admin' || role === 'management_it';
 
   return (
-    <UserAccessContext.Provider value={{ role, isAdmin, assignedStore, allowedPaths, loading, canAccess }}>
+    <UserAccessContext.Provider value={{ role, isAdmin, userEmail, userName, assignedStore, allowedPaths, loading, canAccess }}>
       {children}
     </UserAccessContext.Provider>
   );
