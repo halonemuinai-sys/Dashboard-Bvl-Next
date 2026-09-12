@@ -539,7 +539,7 @@ export default function InvoiceManagementPage() {
               type="button"
               onClick={handleSyncToApi}
               disabled={syncing}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-violet-600 border-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-blue-600 border-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               title={`Sync data dari Bvlgari API untuk ${month} ${year}`}
             >
               {syncing ? (
@@ -611,11 +611,11 @@ export default function InvoiceManagementPage() {
         <div className={cn(
           'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold border animate-in fade-in duration-300',
           syncResult.success
-            ? 'bg-violet-50 border-violet-200 text-violet-800'
+            ? 'bg-blue-50 border-blue-200 text-blue-800'
             : 'bg-red-50 border-red-200 text-red-800'
         )}>
           {syncResult.success
-            ? <CheckCircle2 className="w-4 h-4 shrink-0 text-violet-600" />
+            ? <CheckCircle2 className="w-4 h-4 shrink-0 text-blue-600" />
             : <XCircle className="w-4 h-4 shrink-0 text-red-600" />}
           {syncResult.success
             ? `Sync selesai — ${syncResult.rawInserted ?? 0} baru dimasukkan, ${syncResult.normalizedInserted ?? 0} dinormalisasi, ${syncResult.skippedDuplicates ?? 0} duplikat dilewati`
