@@ -15,6 +15,9 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  CloudDownload,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
@@ -110,6 +113,34 @@ export default function InvoiceManagementPage() {
   const [savedItemIds, setSavedItemIds] = useState<Set<number>>(new Set());
   const [savingInvoiceNo, setSavingInvoiceNo] = useState<string | null>(null);
   const [exportingExcel, setExportingExcel] = useState(false);
+
+  // Sync to API
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{
+    success: boolean;
+    rawInserted?: number;
+    normalizedInserted?: number;
+    skippedDuplicates?: number;
+    error?: string;
+  } | null>(null);
+
+  const handleSyncToApi = async () => {
+    if (!isAdmin) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const monthNum = MONTHS.indexOf(month) + 1;
+      const res = await fetch(`/api/cron/sync-sales?month=${monthNum}&year=${year}`, { method: 'POST' });
+      const data = await res.json();
+      setSyncResult(data);
+      if (data.success) await fetchData();
+    } catch (err: any) {
+      setSyncResult({ success: false, error: err.message });
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncResult(null), 6000);
+    }
+  };
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -502,6 +533,26 @@ export default function InvoiceManagementPage() {
             <RefreshCw className="w-4 h-4" />
           </button>
 
+          {/* Sync to API — admin only */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleSyncToApi}
+              disabled={syncing}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-violet-600 border-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              title={`Sync data dari Bvlgari API untuk ${month} ${year}`}
+            >
+              {syncing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CloudDownload className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">
+                {syncing ? 'Syncing...' : 'Sync to API'}
+              </span>
+            </button>
+          )}
+
           {/* Download Executive Excel (.xlsx) */}
           <button
             type="button"
@@ -554,6 +605,23 @@ export default function InvoiceManagementPage() {
           )}
         </div>
       </div>
+
+      {/* Sync Result Banner */}
+      {syncResult && (
+        <div className={cn(
+          'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold border animate-in fade-in duration-300',
+          syncResult.success
+            ? 'bg-violet-50 border-violet-200 text-violet-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        )}>
+          {syncResult.success
+            ? <CheckCircle2 className="w-4 h-4 shrink-0 text-violet-600" />
+            : <XCircle className="w-4 h-4 shrink-0 text-red-600" />}
+          {syncResult.success
+            ? `Sync selesai — ${syncResult.rawInserted ?? 0} baru dimasukkan, ${syncResult.normalizedInserted ?? 0} dinormalisasi, ${syncResult.skippedDuplicates ?? 0} duplikat dilewati`
+            : `Sync gagal: ${syncResult.error ?? 'Unknown error'}`}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
