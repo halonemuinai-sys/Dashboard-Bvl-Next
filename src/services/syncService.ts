@@ -6,8 +6,9 @@ import { supabase } from '@/lib/supabase';
 // Flow: API Bvlgari -> bvlgari_sales (raw) -> clean_master (normalized)
 // ==========================================
 
-// API Config — kita panggil via proxy Next.js API Route untuk menghindari CORS
-// Proxy route: /api/sync-sales (lihat src/app/api/sync-sales/route.ts)
+// API Config — panggil langsung dari server (tidak perlu proxy, CORS hanya berlaku di browser)
+const BVLGARI_API_BASE = process.env.BVLGARI_API_BASE || 'http://139.99.102.231:8089/demo';
+const BVLGARI_API_TOKEN = process.env.BVLGARI_API_TOKEN || '';
 
 // --- TYPES ---
 interface ApiSalesItem {
@@ -72,10 +73,12 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
     const collMap = new Map<string, string>();
     (masterColls || []).forEach((r: any) => collMap.set(String(r.code).trim().toUpperCase(), r.description));
 
-    // 3. Fetch via Next.js API proxy (menghindari CORS)
-    const proxyUrl = `/api/sync-sales?startdate=${encodeURIComponent(startDate)}&enddate=${encodeURIComponent(endDate)}`;
-    
-    const response = await fetch(proxyUrl);
+    // 3. Fetch langsung dari server ke Bvlgari API (no CORS server-side)
+    const apiUrl = `${BVLGARI_API_BASE}/dailysalestransaction?startdate=${encodeURIComponent(startDate)}&enddate=${encodeURIComponent(endDate)}`;
+
+    const response = await fetch(apiUrl, {
+      headers: BVLGARI_API_TOKEN ? { 'Authorization': BVLGARI_API_TOKEN } : {},
+    });
 
     if (!response.ok) {
       let errMsg = `API Error: HTTP ${response.status}`;
