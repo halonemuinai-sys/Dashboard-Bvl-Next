@@ -68,6 +68,7 @@ const TABLE_LABEL: Record<string, string> = {
   footfall_store: 'Traffic Footfall (Store)',
   footfall_crm: 'Traffic Footfall (CRM)',
   clean_master: 'Transactions Data',
+  transaction_records_meta: 'Invoice Records Meta',
 };
 
 const MENU_GROUPS = [
@@ -89,6 +90,7 @@ const MENU_GROUPS = [
     items: [
       { path: '/daily-report',         label: 'Daily Report' },
       { path: '/daily-breakdown',      label: 'Daily Breakdown' },
+      { path: '/invoice-management',   label: 'Invoice Management' },
       { path: '/monthly-transactions', label: 'Monthly Transactions' },
       { path: '/monthly-dps-svc',      label: 'DP & SVC Transactions' },
       { path: '/heatmap-calendar',     label: 'Heatmap Calendar' },

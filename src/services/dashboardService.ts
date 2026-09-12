@@ -12,6 +12,7 @@ import * as advisor      from './dashboard/advisorService';
 import * as daily        from './dashboard/dailyService';
 import * as crossing     from './dashboard/crossingService';
 import * as transaction  from './dashboard/transactionService';
+import * as invoice      from './dashboard/invoiceService';
 import * as analytics    from './dashboard/analyticsService';
 import * as footfall     from './dashboard/footfallService';
 import * as crmDash      from './dashboard/crmDashService';
@@ -47,6 +48,14 @@ export const dashboardService = {
   getDpsSvcTransactions:       transaction.getDpsSvcTransactions,
   updateDpsSvcTransaction:     transaction.updateDpsSvcTransaction,
   deleteDpsSvcTransaction:     transaction.deleteDpsSvcTransaction,
+
+  // Invoice Management
+  getInvoices:                 invoice.getInvoices,
+  saveInvoiceMeta:             invoice.saveInvoiceMeta,
+  updateInvoiceLocation:       invoice.updateInvoiceLocation,
+  updateInvoiceItemComm:       invoice.updateInvoiceItemComm,
+  updateInvoiceItemType:       invoice.updateInvoiceItemType,
+  deleteInvoice:               invoice.deleteInvoice,
 
   // Analytics
   getQuarterlyBudget:          analytics.getQuarterlyBudget,
