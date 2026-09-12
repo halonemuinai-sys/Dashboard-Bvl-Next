@@ -123,7 +123,7 @@ export function buildCrossingSheet(wb: any, data: ReportData) {
     'No. Invoice',
     'No. Cash Bill',
     'Customer Name',
-    'Net Sales (Rp)',
+    'Net Sales',
     'Qty (pcs)',
   ]);
   actHdrRow.height = 26;

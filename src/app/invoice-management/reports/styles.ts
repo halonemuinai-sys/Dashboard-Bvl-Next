@@ -39,7 +39,7 @@ export const borderAll = (color = C.border) => ({
   right: thinBorder(color),
 });
 
-export const numFmt = 'Rp #,##0;[Red](Rp #,##0);"-"';
+export const numFmt = '#,##0;[Red](#,##0);"-"';
 export const pctFmt = '+0.00%;-0.00%;0.00%';
 export const pctPositiveFmt = '0.00%';
 export const intFmt = '#,##0';
