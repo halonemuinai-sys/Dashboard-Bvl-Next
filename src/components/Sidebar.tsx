@@ -33,6 +33,7 @@ import {
   Sliders,
   Table,
   Award,
+  Receipt,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -68,6 +69,7 @@ const menuGroups = [
     items: [
       { name: 'Daily Report',        icon: Calendar,        href: '/daily-report' },
       { name: 'Daily Breakdown',     icon: Table,           href: '/daily-breakdown' },
+      { name: 'Invoice Management',  icon: Receipt,         href: '/invoice-management', badge: 'NEW', badgeColor: 'bg-emerald-600' },
       { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions', badge: 'INPUT', badgeColor: 'bg-blue-600' },
       { name: 'DP & SVC Trans.',     icon: ClipboardList,   href: '/monthly-dps-svc', badge: 'NEW', badgeColor: 'bg-violet-500' },
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
