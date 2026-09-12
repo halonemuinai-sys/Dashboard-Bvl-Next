@@ -9,6 +9,8 @@ import {
   LockOpen,
   ShieldAlert,
   FileDown,
+  FileSpreadsheet,
+  Loader2,
   Trash2,
   Search,
   ChevronDown,
@@ -29,6 +31,7 @@ import {
 } from '@/services/dashboard/invoiceService';
 import InvoiceTable from './InvoiceTable';
 import InvoiceMetaModal from './InvoiceMetaModal';
+import { exportInvoiceExecutiveReport } from './reports';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -106,6 +109,7 @@ export default function InvoiceManagementPage() {
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [savedItemIds, setSavedItemIds] = useState<Set<number>>(new Set());
   const [savingInvoiceNo, setSavingInvoiceNo] = useState<string | null>(null);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -410,6 +414,19 @@ export default function InvoiceManagementPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Export Executive Excel Report (Multi-Sheet)
+  const handleExportExcel = async () => {
+    if (filtered.length === 0) return;
+    setExportingExcel(true);
+    try {
+      await exportInvoiceExecutiveReport(filtered, month, parseInt(year, 10));
+    } catch (err) {
+      console.error('Error generating executive Excel report:', err);
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
@@ -485,15 +502,34 @@ export default function InvoiceManagementPage() {
             <RefreshCw className="w-4 h-4" />
           </button>
 
-          {/* Download CSV */}
+          {/* Download Executive Excel (.xlsx) */}
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={filtered.length === 0 || exportingExcel}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            title="Download Laporan Lengkap 5 Sheet: Sales by Location, Crossing Sales, Invoices, Items, dan Compliance"
+          >
+            {exportingExcel ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">
+              {exportingExcel ? 'Membuat Excel...' : 'Export Excel (.xlsx)'}
+            </span>
+          </button>
+
+          {/* Download Quick CSV */}
           <button
             type="button"
             onClick={exportCsv}
             disabled={filtered.length === 0}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-white border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            title="Export data mentah format CSV"
           >
-            <FileDown className="w-4 h-4" />
-            <span className="hidden sm:inline">Export CSV</span>
+            <FileDown className="w-4 h-4 text-slate-500" />
+            <span className="hidden sm:inline">CSV</span>
           </button>
 
           {/* Lock / Unlock Toggle */}
