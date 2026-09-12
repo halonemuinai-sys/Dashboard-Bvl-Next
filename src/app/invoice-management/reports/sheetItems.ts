@@ -28,7 +28,7 @@ export function buildItemsSheet(wb: any, data: ReportData) {
     { width: 20 }, // K: Collection
     { width: 10 }, // L: Qty
     { width: 20 }, // M: Gross Sales
-    { width: 18 }, // N: Diskon (Rp)
+    { width: 18 }, // N: Diskon
     { width: 14 }, // O: Diskon (%)
     { width: 20 }, // P: Net Sales
     { width: 12 }, // Q: Type Item
@@ -64,7 +64,7 @@ export function buildItemsSheet(wb: any, data: ReportData) {
     'Collection',
     'Qty',
     'Gross Sales',
-    'Diskon (Rp)',
+    'Diskon',
     'Diskon (%)',
     'Net Sales',
     'Type',

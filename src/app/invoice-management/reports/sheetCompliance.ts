@@ -22,7 +22,7 @@ export function buildComplianceSheet(wb: any, data: ReportData) {
     { width: 22 }, // F: Sales Advisor
     { width: 24 }, // G: Customer Name
     { width: 20 }, // H: Gross Sales
-    { width: 18 }, // I: Diskon (Rp)
+    { width: 18 }, // I: Diskon
     { width: 14 }, // J: Diskon (%)
     { width: 18 }, // K: DWA No / Ref
     { width: 32 }, // L: Alasan Pemberian Diskon
@@ -51,7 +51,7 @@ export function buildComplianceSheet(wb: any, data: ReportData) {
     'Sales Advisor',
     'Customer Name',
     'Gross Sales',
-    'Diskon (Rp)',
+    'Diskon',
     'Diskon (%)',
     'DWA No / Ref',
     'Alasan Pemberian Diskon',
