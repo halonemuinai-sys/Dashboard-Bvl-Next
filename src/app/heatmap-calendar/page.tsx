@@ -5,6 +5,8 @@ import { CalendarRange, TrendingUp, TrendingDown, Star, RefreshCw, StickyNote } 
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import { dashboardService } from '@/services/dashboardService';
+import { supabase } from '@/lib/supabase';
+import { useUserAccess } from '@/lib/user-access-context';
 
 type HeatmapData = Awaited<ReturnType<typeof dashboardService.getHeatmapData>>;
 type Metric = 'net' | 'qty';
@@ -165,6 +167,7 @@ export default function HeatmapCalendarPage() {
   const [metric, setMetric] = useState<Metric>('net');
   const [data,   setData]   = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { userEmail } = useUserAccess();
   const [notes,  setNotes]  = useState<Record<number, string>>({});
   const [modal,  setModal]  = useState<{ open: boolean; day: number; text: string }>({ open: false, day: 0, text: '' });
   const [charCount, setCharCount] = useState(0);
@@ -176,13 +179,42 @@ export default function HeatmapCalendarPage() {
   }, [month, year, store]);
 
   useEffect(() => {
+    let isCancelled = false;
+    const yr = Number(year);
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    // 1. Load from localStorage first for instant display
     const loaded: Record<number, string> = {};
     for (let d = 1; d <= 31; d++) {
-      const v = localStorage.getItem(NOTE_KEY(Number(year), month, d));
+      const v = localStorage.getItem(NOTE_KEY(yr, month, d));
       if (v) loaded[d] = v;
     }
     setNotes(loaded);
-  }, [month, year]);
+
+    // 2. Fetch from Supabase daily_sales_journal and merge
+    (async () => {
+      try {
+        const journalMap = await dashboardService.getJournalEntries(month, yr, store);
+        if (!isCancelled && journalMap) {
+          const merged = { ...loaded };
+          Object.values(journalMap).forEach(entry => {
+            if (entry.note && entry.entry_date) {
+              const dayNum = parseInt(entry.entry_date.split('-')[2], 10);
+              if (dayNum >= 1 && dayNum <= 31) {
+                merged[dayNum] = entry.note;
+                localStorage.setItem(NOTE_KEY(yr, month, dayNum), entry.note);
+              }
+            }
+          });
+          setNotes(merged);
+        }
+      } catch (err) {
+        console.warn('Could not load notes from Supabase:', err);
+      }
+    })();
+
+    return () => { isCancelled = true; };
+  }, [month, year, store]);
 
   const maxVal = useMemo(() => {
     if (!data) return 1;
@@ -194,23 +226,59 @@ export default function HeatmapCalendarPage() {
     setCharCount((notes[day] ?? '').length);
   }, [notes]);
 
-  const saveNote = useCallback(() => {
+  const saveNote = useCallback(async () => {
     const text = modal.text.trim();
+    const day = modal.day;
+    const yr = Number(year);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dateStr = `${yr}-${pad(month)}-${pad(day)}`;
+
     if (text) {
-      localStorage.setItem(NOTE_KEY(Number(year), month, modal.day), text);
-      setNotes(prev => ({ ...prev, [modal.day]: text }));
+      localStorage.setItem(NOTE_KEY(yr, month, day), text);
+      setNotes(prev => ({ ...prev, [day]: text }));
+
+      try {
+        await dashboardService.saveJournalEntry(
+          {
+            entry_date: dateStr,
+            location: store,
+            note: text,
+            tags: [],
+          },
+          userEmail || 'anonymous'
+        );
+      } catch (err) {
+        console.warn('Could not save note to Supabase daily_sales_journal:', err);
+      }
     } else {
-      localStorage.removeItem(NOTE_KEY(Number(year), month, modal.day));
-      setNotes(prev => { const n = { ...prev }; delete n[modal.day]; return n; });
+      localStorage.removeItem(NOTE_KEY(yr, month, day));
+      setNotes(prev => { const n = { ...prev }; delete n[day]; return n; });
+
+      try {
+        await dashboardService.deleteJournalEntry(dateStr, store);
+      } catch (err) {
+        console.warn('Could not delete note from Supabase daily_sales_journal:', err);
+      }
     }
     setModal(m => ({ ...m, open: false }));
-  }, [modal, year, month]);
+  }, [modal, year, month, store, userEmail]);
 
-  const deleteNote = useCallback(() => {
-    localStorage.removeItem(NOTE_KEY(Number(year), month, modal.day));
-    setNotes(prev => { const n = { ...prev }; delete n[modal.day]; return n; });
+  const deleteNote = useCallback(async () => {
+    const day = modal.day;
+    const yr = Number(year);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dateStr = `${yr}-${pad(month)}-${pad(day)}`;
+
+    localStorage.removeItem(NOTE_KEY(yr, month, day));
+    setNotes(prev => { const n = { ...prev }; delete n[day]; return n; });
     setModal(m => ({ ...m, open: false }));
-  }, [modal, year, month]);
+
+    try {
+      await dashboardService.deleteJournalEntry(dateStr, store);
+    } catch (err) {
+      console.warn('Could not delete note from Supabase daily_sales_journal:', err);
+    }
+  }, [modal, year, month, store]);
 
   const kpi = data?.kpi;
 

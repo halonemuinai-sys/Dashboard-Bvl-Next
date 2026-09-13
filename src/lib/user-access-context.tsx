@@ -27,49 +27,31 @@ const UserAccessContext = createContext<UserAccessState>({
 });
 
 export function UserAccessProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<Role>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('bvl_user_role') as Role) || null;
-    }
-    return null;
-  });
-
-  const [userEmail, setUserEmail] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('bvl_user_email') || '';
-    }
-    return '';
-  });
-
-  const [userName, setUserName] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('bvl_user_name') || '';
-    }
-    return '';
-  });
-
-  const [assignedStore, setAssignedStore] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('bvl_assigned_store') || 'ALL';
-    }
-    return 'ALL';
-  });
-
-  const [allowedPaths, setAllowedPaths] = useState<Set<string>>(() => {
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem('bvl_allowed_paths');
-      if (cached) {
-        try {
-          return new Set(JSON.parse(cached));
-        } catch {}
-      }
-    }
-    return new Set();
-  });
-
+  // Initial state MUST match between server and client render (no localStorage reads here),
+  // otherwise React throws a hydration mismatch. The localStorage cache is applied inside the
+  // effect below, which only runs client-side after the first paint has already matched SSR.
+  const [role, setRole] = useState<Role>(null);
+  const [userEmail, setUserEmail] = useState<string>('');
+  const [userName, setUserName] = useState<string>('');
+  const [assignedStore, setAssignedStore] = useState<string>('ALL');
+  const [allowedPaths, setAllowedPaths] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Apply cached permissions immediately post-mount so the UI doesn't flash "no access"
+    // while the fresh /api/me fetch below is in flight.
+    const cachedRole = localStorage.getItem('bvl_user_role') as Role;
+    if (cachedRole) {
+      setRole(cachedRole);
+      setUserEmail(localStorage.getItem('bvl_user_email') || '');
+      setUserName(localStorage.getItem('bvl_user_name') || '');
+      setAssignedStore(localStorage.getItem('bvl_assigned_store') || 'ALL');
+      const cachedPaths = localStorage.getItem('bvl_allowed_paths');
+      if (cachedPaths) {
+        try { setAllowedPaths(new Set(JSON.parse(cachedPaths))); } catch {}
+      }
+    }
+
     async function load() {
       try {
         const res = await fetch('/api/me');

@@ -17,6 +17,7 @@ import * as analytics    from './dashboard/analyticsService';
 import * as footfall     from './dashboard/footfallService';
 import * as crmDash      from './dashboard/crmDashService';
 import * as product      from './dashboard/productService';
+import * as journal      from './dashboard/journalService';
 
 export const dashboardService = {
   // Overview
@@ -81,4 +82,10 @@ export const dashboardService = {
   // Product
   getProductRank:              product.getProductRank,
   getHeatmapData:              product.getHeatmapData,
+
+  // Sales Journal / Daily Notes
+  getJournalEntries:           journal.getJournalEntries,
+  saveJournalEntry:            journal.saveJournalEntry,
+  deleteJournalEntry:          journal.deleteJournalEntry,
+  getDayContext:               journal.getDayContext,
 };
