@@ -34,6 +34,7 @@ import {
   Table,
   Award,
   Receipt,
+  NotebookPen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -73,6 +74,7 @@ const menuGroups = [
       { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions', badge: 'INPUT', badgeColor: 'bg-blue-600' },
       { name: 'DP & SVC Trans.',     icon: ClipboardList,   href: '/monthly-dps-svc', badge: 'NEW', badgeColor: 'bg-violet-500' },
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
+      { name: 'Sales Journal',       icon: NotebookPen,     href: '/sales-journal', badge: 'NEW', badgeColor: 'bg-blue-600' },
       { name: 'Crossing Sales',      icon: Repeat,          href: '/crossing-sales' },
       { name: 'Sales Data',          icon: Database,        href: '/sales', badge: 'SYNC', badgeColor: 'bg-emerald-500' },
       { name: 'Sales Data (DP/SVC)', icon: Database,        href: '/sales-dps-svc', badge: 'SYNC', badgeColor: 'bg-violet-500' },
