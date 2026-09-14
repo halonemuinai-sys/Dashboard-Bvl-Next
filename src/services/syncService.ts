@@ -52,6 +52,36 @@ interface SyncResult {
  * Porting dari: fetchDailySales() di 4-API_Sales.gs
  */
 export async function syncSalesData(month: number, year: number): Promise<SyncResult> {
+  // If running in browser (client-side), delegate to Next.js API route to avoid CORS & hide token
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/sync-sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month, year }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        return {
+          success: false,
+          rawInserted: 0,
+          normalizedInserted: 0,
+          skippedDuplicates: 0,
+          error: errJson.error || `Server Error (${res.status})`,
+        };
+      }
+      return await res.json();
+    } catch (err: any) {
+      return {
+        success: false,
+        rawInserted: 0,
+        normalizedInserted: 0,
+        skippedDuplicates: 0,
+        error: err.message || 'Gagal menghubungi server API sync.',
+      };
+    }
+  }
+
   try {
     // 1. Hitung range tanggal
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;

@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Audit Report - Dashboard BVL v2</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 12mm 12mm 10mm 12mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      background-color: #ffffff;
+      color: #1e293b;
+      font-size: 8.5pt;
+      line-height: 1.4;
+    }
+    .page {
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 271mm;
+      max-height: 271mm;
+      overflow: hidden;
+      padding-bottom: 2mm;
+    }
+    .page:last-child {
+      page-break-after: auto;
+    }
+    .page-content {
+      flex: 1;
+    }
+    
+    /* Header & Branding */
+    .header-bar {
+      border-bottom: 2px solid #c5a880;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .brand-title {
+      font-size: 15pt;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #0f172a;
+      text-transform: uppercase;
+    }
+    .brand-subtitle {
+      font-size: 8pt;
+      color: #64748b;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      margin-top: 1px;
+    }
+    .badge-date {
+      text-align: right;
+      font-size: 7.5pt;
+      color: #475569;
+    }
+    .badge-pill {
+      display: inline-block;
+      background: #f1f5f9;
+      color: #0f172a;
+      border: 1px solid #cbd5e1;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 7pt;
+    }
+
+    /* Section Styles */
+    .section-title {
+      font-size: 10pt;
+      font-weight: 700;
+      color: #0f172a;
+      border-left: 4px solid #c5a880;
+      padding-left: 8px;
+      margin-top: 10px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Metric Cards Grid */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .metric-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      text-align: center;
+      border-top: 3px solid #0f172a;
+    }
+    .metric-card.gold {
+      border-top: 3px solid #c5a880;
+    }
+    .metric-val {
+      font-size: 15pt;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.1;
+    }
+    .metric-label {
+      font-size: 7pt;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .metric-sub {
+      font-size: 6.5pt;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+      font-size: 7.5pt;
+    }
+    th {
+      background: #0f172a;
+      color: #ffffff;
+      font-weight: 600;
+      text-align: left;
+      padding: 5px 7px;
+      letter-spacing: 0.3px;
+      font-size: 7pt;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 4px 7px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #334155;
+    }
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .text-center {
+      text-align: center;
+    }
+    .font-semibold {
+      font-weight: 600;
+    }
+
+    /* Status Badges */
+    .badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 6.5pt;
+      font-weight: 600;
+    }
+    .badge-gold { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .badge-blue { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+    .badge-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .badge-amber { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+
+    /* Callout Card */
+    .callout {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #3b82f6;
+      border-radius: 4px;
+      padding: 7px 10px;
+      margin-bottom: 10px;
+      font-size: 7.5pt;
+      color: #334155;
+    }
+    .callout-title {
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 2px;
+      font-size: 8pt;
+    }
+
+    /* Footer */
+    .footer {
+      border-top: 1px solid #cbd5e1;
+      padding-top: 5px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 7pt;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PAGE 1: EXECUTIVE OVERVIEW & LANGUAGE / LAYER BREAKDOWN -->
+  <div class="page">
+    <div class="page-content">
+      <div class="header-bar">
+      <div>
+        <div class="brand-title">B V L G A R I &bull; INDONESIA</div>
+        <div class="brand-subtitle">EXECUTIVE CODEBASE AUDIT &amp; ARCHITECTURE REPORT &bull; <code>dashboard-bvl-v2</code></div>
+      </div>
+      <div class="badge-date">
+        <span class="badge-pill">CONFIDENTIAL &bull; INTERNAL IT</span><br>
+        <span style="font-size: 7.5pt; color: #64748b;">Tanggal: 13 September 2026</span>
+      </div>
+    </div>
+
+    <!-- 4 KPI Metrics Grid -->
+    <div class="metric-grid">
+      <div class="metric-card gold">
+        <div class="metric-val">38,117</div>
+        <div class="metric-label">Active Source LOC</div>
+        <div class="metric-sub">Dalam direktori <code>src/</code></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val">33,541</div>
+        <div class="metric-label">Pure Code Lines</div>
+        <div class="metric-sub">Eksklusif komentar &amp; spasi</div>
+      </div>
+      <div class="metric-card gold">
+        <div class="metric-val">149</div>
+        <div class="metric-label">Core Source Files</div>
+        <div class="metric-sub">100% TypeScript (0 JSX)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val">45</div>
+        <div class="metric-label">Functional Modules</div>
+        <div class="metric-sub">21 App Router Endpoints</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <div class="callout-title">Ringkasan Eksekutif Arsitektur</div>
+      Sistem <strong>Dashboard BVL v2</strong> beroperasi dengan stack enterprise modern berbasis <strong>Next.js 16.2.4 (Turbopack)</strong>, <strong>React 19.2.4</strong>, <strong>Supabase PostgreSQL Cloud</strong>, dan <strong>Tailwind CSS v4</strong>. Seluruh basis kode telah termigrasi 100% ke TypeScript murni dengan 71 static/dynamic routes tervalidasi lolos build produksi tanpa error.
+    </div>
+
+    <!-- Section 1: Breakdown By Technology -->
+    <div class="section-title">1. Distribusi Bahasa &amp; Ekstensi Berkas (Core Workspace)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Format / Bahasa</th>
+          <th>Kategori Fungsional</th>
+          <th class="text-right">Files</th>
+          <th class="text-right">Total Baris</th>
+          <th class="text-right">Pure Code</th>
+          <th class="text-right">Komentar</th>
+          <th class="text-right">Proporsi</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-blue">.tsx</span> <strong>TypeScript React</strong></td>
+          <td>Komponen Antarmuka (UI) &amp; Page Routes</td>
+          <td class="text-right">74</td>
+          <td class="text-right font-semibold">26,303</td>
+          <td class="text-right">23,753</td>
+          <td class="text-right">328</td>
+          <td class="text-right font-semibold">54.5%</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-blue">.ts</span> <strong>TypeScript Logic</strong></td>
+          <td>Business Services, Context, API Endpoints</td>
+          <td class="text-right">80</td>
+          <td class="text-right font-semibold">11,793</td>
+          <td class="text-right">9,769</td>
+          <td class="text-right">513</td>
+          <td class="text-right font-semibold">22.4%</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-amber">.json</span> <strong>JSON Config</strong></td>
+          <td>Package manifests &amp; compiler settings</td>
+          <td class="text-right">5</td>
+          <td class="text-right font-semibold">8,539</td>
+          <td class="text-right">8,536</td>
+          <td class="text-right">0</td>
+          <td class="text-right font-semibold">19.6%</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-green">.md</span> <strong>Dokumentasi</strong></td>
+          <td>SOP Operasional, Panduan Integrasi, Log</td>
+          <td class="text-right">12</td>
+          <td class="text-right font-semibold">1,196</td>
+          <td class="text-right">753</td>
+          <td class="text-right">185</td>
+          <td class="text-right font-semibold">1.7%</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-gold">.sql</span> <strong>SQL Migrations</strong></td>
+          <td>Supabase DDL, Trigger Audit &amp; RLS Policies</td>
+          <td class="text-right">8</td>
+          <td class="text-right font-semibold">399</td>
+          <td class="text-right">307</td>
+          <td class="text-right">48</td>
+          <td class="text-right font-semibold">0.7%</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-blue">.js</span> <strong>Maintenance Scripts</strong></td>
+          <td>Utility &amp; operational runners</td>
+          <td class="text-right">2</td>
+          <td class="text-right font-semibold">380</td>
+          <td class="text-right">307</td>
+          <td class="text-right">10</td>
+          <td class="text-right font-semibold">0.7%</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-amber">.css</span> <strong>CSS Stylesheet</strong></td>
+          <td>Tailwind v4 theme variables &amp; globals</td>
+          <td class="text-right">1</td>
+          <td class="text-right font-semibold">170</td>
+          <td class="text-right">126</td>
+          <td class="text-right">15</td>
+          <td class="text-right font-semibold">0.3%</td>
+        </tr>
+        <tr style="background: #f1f5f9; font-weight: 700;">
+          <td colspan="2">TOTAL WORKSPACE (EXCL. LOCKFILES &amp; BACKUP DUMPS)</td>
+          <td class="text-right">182</td>
+          <td class="text-right">48,780</td>
+          <td class="text-right">43,551</td>
+          <td class="text-right">1,099</td>
+          <td class="text-right">100.0%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Section 2: Architectural Layering -->
+    <div class="section-title">2. Distribusi Arsitektur Layer (Direktori <code>src/</code>)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Layer Arsitektur</th>
+          <th>Tanggung Jawab Teknis</th>
+          <th class="text-right">Files</th>
+          <th class="text-right">Total Baris</th>
+          <th class="text-right">Pure Code</th>
+          <th class="text-right">% Code</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong><code>src/app/</code></strong></td>
+          <td>Next.js App Router (45 Route Modul + 21 API Endpoints)</td>
+          <td class="text-right">102</td>
+          <td class="text-right font-semibold">29,589</td>
+          <td class="text-right">26,404</td>
+          <td class="text-right">78.7%</td>
+        </tr>
+        <tr>
+          <td><strong><code>src/services/</code></strong></td>
+          <td>Business Logic Layer, Supabase Aggregations, Data Services</td>
+          <td class="text-right">22</td>
+          <td class="text-right font-semibold">5,728</td>
+          <td class="text-right">4,727</td>
+          <td class="text-right">14.1%</td>
+        </tr>
+        <tr>
+          <td><strong><code>src/components/</code></strong></td>
+          <td>Reusable Global UI Widgets (KPI Cards, Charts, Modals)</td>
+          <td class="text-right">13</td>
+          <td class="text-right font-semibold">2,097</td>
+          <td class="text-right">1,899</td>
+          <td class="text-right">5.7%</td>
+        </tr>
+        <tr>
+          <td><strong><code>src/utils/</code></strong></td>
+          <td>Supabase Client/Server Configuration &amp; Middleware Guard</td>
+          <td class="text-right">4</td>
+          <td class="text-right font-semibold">313</td>
+          <td class="text-right">229</td>
+          <td class="text-right">0.7%</td>
+        </tr>
+        <tr>
+          <td><strong><code>src/lib/</code></strong></td>
+          <td>Global Context (RBAC), Formatters &amp; Security Tools</td>
+          <td class="text-right">6</td>
+          <td class="text-right font-semibold">298</td>
+          <td class="text-right">218</td>
+          <td class="text-right">0.6%</td>
+        </tr>
+        <tr>
+          <td><strong><code>src/scripts/ &amp; proxy</code></strong></td>
+          <td>Migration runners &amp; edge proxy</td>
+          <td class="text-right">2</td>
+          <td class="text-right font-semibold">92</td>
+          <td class="text-right">64</td>
+          <td class="text-right">0.2%</td>
+        </tr>
+        <tr style="background: #f1f5f9; font-weight: 700;">
+          <td colspan="2">TOTAL AKTIF DI <code>src/</code></td>
+          <td class="text-right">149</td>
+          <td class="text-right">38,117</td>
+          <td class="text-right">33,541</td>
+          <td class="text-right">100.0%</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="footer">
+      <span>Dashboard BVL v2 &bull; Codebase Audit Report</span>
+      <span>Halaman 1 dari 2</span>
+    </div>
+  </div>
+
+  <!-- PAGE 2: MODULES BREAKDOWN, MONOLITHIC AUDIT & RECOMMENDATIONS -->
+  <div class="page">
+    <div class="page-content">
+      <div class="header-bar">
+      <div>
+        <div class="brand-title">B V L G A R I &bull; INDONESIA</div>
+        <div class="brand-subtitle">ANALISIS KOMPLEKSITAS &amp; REKOMENDASI ARSITEKTUR</div>
+      </div>
+      <div class="badge-date">
+        <span class="badge-pill">SECTION 3 - 5</span><br>
+        <span style="font-size: 7.5pt; color: #64748b;">Dashboard BVL v2</span>
+      </div>
+    </div>
+
+    <!-- Section 3: Functional Modules Breakdown -->
+    <div class="section-title">3. Breakdown Modul Bisnis Utama (Top Feature Modules)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Nama Modul</th>
+          <th>Cakupan Fungsionalitas &amp; Deliverables</th>
+          <th class="text-right">Files</th>
+          <th class="text-right">Total Baris</th>
+          <th>Tingkat Modularitas</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Invoice Management</strong></td>
+          <td>Header-Detail accordion, detail modal, 5-sheet Executive Excel Report</td>
+          <td class="text-right">12</td>
+          <td class="text-right font-semibold">3,174</td>
+          <td><span class="badge badge-green">Tinggi (Sangat Bersih)</span></td>
+        </tr>
+        <tr>
+          <td><strong>API Endpoints (<code>/api</code>)</strong></td>
+          <td>Backend services, auth verify, sync cron, customer data access</td>
+          <td class="text-right">21</td>
+          <td class="text-right font-semibold">2,027</td>
+          <td><span class="badge badge-green">Modular (REST)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Mobile Interface (<code>/m</code>)</strong></td>
+          <td>Dedicated responsive view: CRM profiling, daily sales, advisor list</td>
+          <td class="text-right">7</td>
+          <td class="text-right font-semibold">1,746</td>
+          <td><span class="badge badge-green">Modular (Sub-routes)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Monthly Transactions</strong></td>
+          <td>Virtual pagination data grid, multi-store filtering, item details</td>
+          <td class="text-right">6</td>
+          <td class="text-right font-semibold">1,529</td>
+          <td><span class="badge badge-green">Modular Component</span></td>
+        </tr>
+        <tr>
+          <td><strong>CRM Deduplication</strong></td>
+          <td>Algoritma matching no. HP, email normalizer, merging tool</td>
+          <td class="text-right">3</td>
+          <td class="text-right font-semibold">1,430</td>
+          <td><span class="badge badge-blue">Terkonsolidasi</span></td>
+        </tr>
+        <tr>
+          <td><strong>Crossing Sales</strong></td>
+          <td>Cross-store crossing matrix, advisor allocation, Excel export builder</td>
+          <td class="text-right">7</td>
+          <td class="text-right font-semibold">1,286</td>
+          <td><span class="badge badge-green">Modular (Reports Split)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Advisor Performance</strong></td>
+          <td>Target vs achievement, KPI ranking, individual advisor tracking</td>
+          <td class="text-right">1</td>
+          <td class="text-right font-semibold">1,166</td>
+          <td><span class="badge badge-amber">Monolitik Page</span></td>
+        </tr>
+        <tr>
+          <td><strong>Daily Sales Report</strong></td>
+          <td>Laporan harian store, multi-year comparison, instant PDF export</td>
+          <td class="text-right">1</td>
+          <td class="text-right font-semibold">1,054</td>
+          <td><span class="badge badge-amber">Monolitik Page</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Section 4: Monolithic File Assessment -->
+    <div class="section-title">4. Analisis Berkas Terbesar &amp; Potensi Refaktorisasi</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 35%;">Berkas Sumber</th>
+          <th class="text-right" style="width: 10%;">Baris</th>
+          <th style="width: 23%;">Tipe &amp; Kompleksitas</th>
+          <th style="width: 32%;">Rekomendasi Pemecahan / Tindakan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code style="font-size: 7pt; font-family: monospace;">src/app/advisor-performance/page.tsx</code></td>
+          <td class="text-right font-semibold">1,166</td>
+          <td><span class="badge badge-amber">Tinggi (&gt; 1,000 LOC)</span></td>
+          <td>Pecah ke subkomponen: <code>AdvisorTable</code>, <code>KPICards</code>, dan <code>FilterBar</code>.</td>
+        </tr>
+        <tr>
+          <td><code style="font-size: 7pt; font-family: monospace;">src/app/daily-report/page.tsx</code></td>
+          <td class="text-right font-semibold">1,054</td>
+          <td><span class="badge badge-amber">Tinggi (&gt; 1,000 LOC)</span></td>
+          <td>Ekstraksi export logic (jsPDF/XLSX) ke utility terpisah.</td>
+        </tr>
+        <tr>
+          <td><code style="font-size: 7pt; font-family: monospace;">src/app/daily-breakdown/page.tsx</code></td>
+          <td class="text-right font-semibold">1,039</td>
+          <td><span class="badge badge-amber">Tinggi (&gt; 1,000 LOC)</span></td>
+          <td>Pisahkan visual chart dan data summary table.</td>
+        </tr>
+        <tr>
+          <td><code style="font-size: 7pt; font-family: monospace;">src/services/reportService.ts</code></td>
+          <td class="text-right font-semibold">939</td>
+          <td><span class="badge badge-blue">Sedang (Multi-domain)</span></td>
+          <td>Split per domain (misal: <code>crossingReportService</code> &amp; <code>monthlyReportService</code>).</td>
+        </tr>
+        <tr>
+          <td><code style="font-size: 7pt; font-family: monospace;">src/app/sales-simulator/page.tsx</code></td>
+          <td class="text-right font-semibold">936</td>
+          <td><span class="badge badge-blue">Sedang (Simulation UI)</span></td>
+          <td>Pindahkan simulation math formulas ke custom hook <code>useSalesSimulator()</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Section 5: Roadmap & Architectural Verdict -->
+    <div class="section-title">5. Kesimpulan &amp; Rekomendasi Roadmap</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 7px 9px;">
+        <div style="font-weight: 700; color: #0f172a; font-size: 7.5pt; margin-bottom: 3px; text-transform: uppercase;">
+          Kekuatan Arsitektur Saat Ini
+        </div>
+        <ul style="padding-left: 12px; font-size: 7pt; color: #475569; line-height: 1.35;">
+          <li><strong>Zero Build Errors:</strong> 71 halaman tervalidasi build Next.js 16 tanpa peringatan tipe.</li>
+          <li><strong>Pola Modular Baru Berhasil:</strong> Modul <code>invoice-management</code> menjadi standar emas pemisahan UI, modal, dan sheet builder.</li>
+          <li><strong>Audit Trail Aktif:</strong> Trigger PostgreSQL mencatat riwayat perubahan data krusial.</li>
+          <li><strong>Dual Persistence:</strong> Sales journal memiliki sinkronisasi Supabase + fallback offline.</li>
+        </ul>
+      </div>
+
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 7px 9px;">
+        <div style="font-weight: 700; color: #0f172a; font-size: 7.5pt; margin-bottom: 3px; text-transform: uppercase;">
+          Rekomendasi Tahap Berikutnya
+        </div>
+        <ul style="padding-left: 12px; font-size: 7pt; color: #475569; line-height: 1.35;">
+          <li><strong>Modularisasi Halaman Besar:</strong> Pecah 3 halaman &gt; 1,000 baris menggunakan pola sub-komponen.</li>
+          <li><strong>Unified Export Utility:</strong> Satukan fungsi PDF/Excel export agar tidak menduplikasi styling antar modul.</li>
+          <li><strong>Optimasi Payload Query:</strong> Implementasi server-side caching untuk endpoint transaksi volume tinggi.</li>
+        </ul>
+      </div>
+    </div>
+    </div>
+
+    <div class="footer">
+      <span>Dashboard BVL v2 &bull; Codebase Audit Report</span>
+      <span>Halaman 2 dari 2</span>
+    </div>
+  </div>
+
+</body>
+</html>

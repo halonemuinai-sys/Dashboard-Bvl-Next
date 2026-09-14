@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { syncSalesData } from '@/services/syncService';
 
 // Config dari environment variables
 const BVLGARI_API_BASE = process.env.BVLGARI_API_BASE || 'http://139.99.102.231:8089/demo';
@@ -7,13 +8,35 @@ const BVLGARI_API_TOKEN = process.env.BVLGARI_API_TOKEN || '';
 // CORS headers untuk mobile app dan dashboard
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 // Handle preflight OPTIONS request
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
+}
+
+/**
+ * Endpoint POST untuk memicu sync sales data dari Bvlgari API di server.
+ * Menghindari CORS dan menjaga token tetap aman di server.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { searchParams } = new URL(request.url);
+
+    const month = body.month ?? (searchParams.get('month') ? parseInt(searchParams.get('month')!, 10) : new Date().getMonth() + 1);
+    const year = body.year ?? (searchParams.get('year') ? parseInt(searchParams.get('year')!, 10) : new Date().getFullYear());
+
+    const result = await syncSalesData(month, year);
+    return NextResponse.json(result, { headers: corsHeaders });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: 0, error: err.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
 }
 
 /**
