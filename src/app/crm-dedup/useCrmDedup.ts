@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ProfileItem, DuplicateGroup, TrafficItemRow } from './masterData';
+import { ProfileItem, DuplicateGroup, TrafficItemRow, DbCustomerItem } from './masterData';
 
 export function useCrmDedup() {
   const [loading, setLoading] = useState(true);
@@ -89,6 +89,35 @@ export function useCrmDedup() {
   const [newKategori, setNewKategori] = useState('Jewelry');
   const [newKoleksi, setNewKoleksi] = useState('');
   const [trMessage, setTrMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [selectedDbCustomer, setSelectedDbCustomer] = useState<DbCustomerItem | null>(null);
+
+  const selectCustomerFromDb = useCallback((customer: DbCustomerItem) => {
+    setSelectedDbCustomer(customer);
+    setTrCustomerName(customer.name);
+    if (customer.nickname) setTrNamaPanggilan(customer.nickname);
+    if (customer.phone) setTrNoHp(customer.phone);
+    if (customer.email) setTrEmail(customer.email);
+    setTrStatusPelanggan('Existing Customer');
+
+    // Autofill visit & segmentation fields
+    if (customer.statusVisit) setTrStatus(customer.statusVisit);
+    if (customer.prospectLevel) setTrProspectLevel(customer.prospectLevel);
+    if (customer.minatBarang) setTrMinatBarang(customer.minatBarang);
+    if (customer.aksesMasuk) setTrAksesMasuk(customer.aksesMasuk);
+    if (customer.siapa) setTrSiapa(customer.siapa);
+    if (customer.faktorPemicu) setTrFaktorPemicu(customer.faktorPemicu);
+    if (customer.groupSize) setTrGroupSize(String(customer.groupSize));
+
+    // Store & Advisor
+    if (customer.store) setTrLocation(customer.store);
+    if (customer.advisor) setTrServedBy(customer.advisor);
+
+    setTrAutoProfile(false);
+  }, []);
+
+  const clearSelectedCustomer = useCallback(() => {
+    setSelectedDbCustomer(null);
+  }, []);
 
   // Dedup check state
   const [checkLoading, setCheckLoading] = useState(false);
@@ -293,6 +322,7 @@ export function useCrmDedup() {
       const data = await res.json();
       if (data.success) {
         setTrMessage({ type: 'success', text: 'Data Kunjungan Traffic & Items berhasil disimpan!' });
+        setSelectedDbCustomer(null);
         setTrCustomerName(''); setTrNamaPanggilan(''); setTrNoHp('');
         setTrEmail(''); setTrNotes(''); setTrBuktiChatUrl(''); setTrItems([]);
         fetchAuditData();
@@ -360,6 +390,7 @@ export function useCrmDedup() {
     // traffic form
     trTanggal, setTrTanggal,
     trCustomerName, setTrCustomerName,
+    selectedDbCustomer, setSelectedDbCustomer, selectCustomerFromDb, clearSelectedCustomer,
     trNamaPanggilan, setTrNamaPanggilan,
     trNoHp, setTrNoHp,
     trEmail, setTrEmail,
