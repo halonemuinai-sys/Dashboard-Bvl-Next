@@ -12,9 +12,10 @@ import BvlgariLoader from '@/components/BvlgariLoader';
 import { MASTER_DATA } from './masterData';
 import { useCrmDedup } from './useCrmDedup';
 import { CustomerPickerCombobox } from './components/CustomerPickerCombobox';
+import { TrafficHistoryTable } from './components/TrafficHistoryTable';
 
 export default function CrmDedupPage() {
-  const [activeTab, setActiveTab] = useState<'check' | 'traffic' | 'audit'>('check');
+  const [activeTab, setActiveTab] = useState<'check' | 'traffic' | 'audit' | 'history'>('check');
   const crm = useCrmDedup();
 
   if (crm.loading) {
@@ -92,6 +93,7 @@ export default function CrmDedupPage() {
           { key: 'check',   label: 'Form Profiling',      icon: <UserPlus className="w-4 h-4 text-blue-600" /> },
           { key: 'traffic', label: 'Traffic & Items',     icon: <PlusCircle className="w-4 h-4 text-emerald-600" /> },
           { key: 'audit',   label: 'Audit Duplikat',      icon: <Merge className="w-4 h-4 text-purple-600" />, badge: crm.duplicatePhones.length + crm.duplicateEmails.length },
+          { key: 'history', label: 'Riwayat Traffic & Profil', icon: <Layers className="w-4 h-4 text-amber-600" /> },
         ] as const).map(tab => (
           <button
             key={tab.key}
@@ -975,6 +977,20 @@ export default function CrmDedupPage() {
             </>
           )}
         </div>
+      )}
+
+      {/* ── TAB 4: RIWAYAT TRAFFIC & PROFIL (INTEGRASI 360) ── */}
+      {activeTab === 'history' && (
+        <TrafficHistoryTable
+          onSelectCustomerForProfiling={(name, phone, email) => {
+            const parts = (name || '').trim().split(' ');
+            crm.setNamaDepan(parts[0] || '');
+            crm.setNamaBelakang(parts.slice(1).join(' ') || '');
+            crm.setNoHp(phone || '');
+            crm.setEmail(email || '');
+            setActiveTab('check');
+          }}
+        />
       )}
     </div>
   );

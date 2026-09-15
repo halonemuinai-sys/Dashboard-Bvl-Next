@@ -6,6 +6,8 @@ import {
   User, Heart, Briefcase, Globe,
   AtSign, UtensilsCrossed, FileDown, Store,
   ChevronLeft, ChevronRight, Users, Filter,
+  ShoppingBag, Calendar, Sparkles, Loader2, Image as ImageIcon,
+  CheckCircle2, TrendingUp, ArrowUpRight, Clock, Award
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dashboardService, type CrmProfilingRow } from '@/services/dashboardService';
@@ -160,125 +162,592 @@ function Field({ label, value: v }: { label: string; value: string | null | unde
   );
 }
 
+interface CustomerHistoryTraffic {
+  id: number | string;
+  tanggal_berkunjung?: string;
+  location?: string;
+  served_by?: string;
+  customer_advisor?: string;
+  status?: string;
+  prospect_item?: string;
+  minat_barang?: string;
+  detail_items?: string;
+  gross_sales?: number;
+  disc_pct?: number;
+  net_sales?: number;
+  notes?: string;
+  bukti_chat?: string;
+  siapa?: string;
+  akses_masuk?: string;
+}
+
+interface CustomerHistorySales {
+  id: number | string;
+  doc_date?: string;
+  doc_num?: string;
+  store?: string;
+  item_code?: string;
+  item_name?: string;
+  product_line?: string;
+  collection?: string;
+  qty?: number;
+  net_sales?: number;
+}
+
+interface CustomerHistoryData {
+  summary: {
+    totalVisits: number;
+    totalSalesTransactions: number;
+    totalLifetimeSales: number;
+    lastVisitDate: string | null;
+    topCollections: (string | { name: string; spend: number })[];
+  };
+  trafficVisits: CustomerHistoryTraffic[];
+  salesTransactions: CustomerHistorySales[];
+}
+
 function ProfileModal({ row, onClose }: { row: CrmProfilingRow; onClose: () => void }) {
+  const [modalTab, setModalTab] = useState<'profile' | 'traffic' | 'sales'>('profile');
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyData, setHistoryData] = useState<CustomerHistoryData | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const fullName = row.full_name_tittle || row.nama_lengkap || `${row.nama_depan || ''} ${row.nama_belakang || ''}`.trim() || '—';
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCustomerHistory = async () => {
+      setHistoryLoading(true);
+      try {
+        const params = new URLSearchParams({
+          action: 'get_customer_history',
+          name: fullName !== '—' ? fullName : (row.nama_lengkap || ''),
+          phone: row.no_hp || '',
+          email: row.email || '',
+        });
+        const res = await fetch(`/api/crm/dedup?${params.toString()}`);
+        const data = await res.json();
+        if (isMounted && data.success) {
+          setHistoryData(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch customer 360 history:', err);
+      } finally {
+        if (isMounted) setHistoryLoading(false);
+      }
+    };
+
+    fetchCustomerHistory();
+    return () => {
+      isMounted = false;
+    };
+  }, [row, fullName]);
+
+  const getTrafficStatusBadge = (status?: string) => {
+    const s = (status || '').toLowerCase();
+    if (s.includes('closing')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (s.includes('prospect')) return 'bg-amber-50 text-amber-700 border-amber-200';
+    if (s.includes('browsing')) return 'bg-blue-50 text-blue-700 border-blue-200';
+    return 'bg-slate-50 text-slate-600 border-slate-200';
+  };
+
+  const visitsCount = historyData?.summary.totalVisits ?? 0;
+  const salesCount = historyData?.summary.totalSalesTransactions ?? 0;
+  const lifetimeSales = historyData?.summary.totalLifetimeSales ?? 0;
+
   return (
-    <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Modal Header */}
-        <div className="flex items-start gap-4 p-6 border-b border-slate-100 shrink-0">
-          <Avatar name={row.nama_lengkap || row.nama_depan} store={row.lokasi_store} />
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-black text-slate-900 leading-tight">
-              {row.full_name_tittle || row.nama_lengkap || `${row.nama_depan} ${row.nama_belakang}`.trim() || '—'}
-            </h2>
-            {row.nama_panggilan && (
-              <p className="text-xs text-slate-400 mt-0.5">Panggilan: {row.nama_panggilan}</p>
-            )}
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className={cn('text-[10px] font-black px-2 py-0.5 rounded-full border', storeBadgeColor(row.lokasi_store))}>
-                {storeBadge(row.lokasi_store) || row.lokasi_store || '—'}
-              </span>
-              {row.status_pelanggan && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                  {row.status_pelanggan}
+    <>
+      <div
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          {/* Modal Header */}
+          <div className="p-6 border-b border-slate-100 shrink-0 space-y-4">
+            <div className="flex items-start gap-4">
+              <Avatar name={row.nama_lengkap || row.nama_depan} store={row.lokasi_store} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl font-black text-slate-900 leading-tight">
+                    {fullName}
+                  </h2>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-mono">
+                    ID #{row.id}
+                  </span>
+                </div>
+                {row.nama_panggilan && (
+                  <p className="text-xs text-slate-400 mt-0.5 font-medium">Panggilan: {row.nama_panggilan}</p>
+                )}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className={cn('text-[10px] font-black px-2.5 py-0.5 rounded-full border', storeBadgeColor(row.lokasi_store))}>
+                    {storeBadge(row.lokasi_store) || row.lokasi_store || '—'}
+                  </span>
+                  {row.status_pelanggan && (
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                      {row.status_pelanggan}
+                    </span>
+                  )}
+                  {row.kewarganegaraan && (
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                      {row.kewarganegaraan}
+                    </span>
+                  )}
+                  {row.customer_advisor && (
+                    <span className="text-[10px] font-medium text-slate-400">
+                      CA: <span className="font-bold text-slate-600">{row.customer_advisor}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                title="Tutup"
+                onClick={onClose}
+                className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Customer 360° Summary KPI Pills */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-100/70 text-blue-700 flex items-center justify-center shrink-0">
+                  <Store className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kunjungan Toko</p>
+                  <p className="text-sm font-black text-slate-900">
+                    {historyLoading ? (
+                      <span className="inline-block w-8 h-4 bg-slate-200 animate-pulse rounded" />
+                    ) : (
+                      `${visitsCount} kali`
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Belanja (POS)</p>
+                  <p className="text-sm font-black text-emerald-700 truncate">
+                    {historyLoading ? (
+                      <span className="inline-block w-16 h-4 bg-slate-200 animate-pulse rounded" />
+                    ) : (
+                      `Rp ${lifetimeSales.toLocaleString('id-ID')}`
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-100/70 text-amber-700 flex items-center justify-center shrink-0">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kunjungan Terakhir</p>
+                  <p className="text-xs font-black text-slate-900 truncate">
+                    {historyLoading ? (
+                      <span className="inline-block w-14 h-4 bg-slate-200 animate-pulse rounded" />
+                    ) : (
+                      fmtDate(historyData?.summary.lastVisitDate ?? null)
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Tabs Header */}
+            <div className="flex items-center gap-2 border-b border-slate-200 pt-1">
+              <button
+                type="button"
+                onClick={() => setModalTab('profile')}
+                className={cn(
+                  'flex items-center gap-2 pb-2.5 px-3 text-xs font-bold transition-all border-b-2 -mb-px',
+                  modalTab === 'profile'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                )}
+              >
+                <User className="w-3.5 h-3.5" />
+                Profil & Preferensi
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalTab('traffic')}
+                className={cn(
+                  'flex items-center gap-2 pb-2.5 px-3 text-xs font-bold transition-all border-b-2 -mb-px',
+                  modalTab === 'traffic'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                )}
+              >
+                <Store className="w-3.5 h-3.5" />
+                Riwayat Kunjungan Toko
+                <span className={cn(
+                  'text-[10px] font-black px-1.5 py-0.2 rounded-full',
+                  modalTab === 'traffic' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-500'
+                )}>
+                  {visitsCount}
                 </span>
-              )}
-              {row.kewarganegaraan && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                  {row.kewarganegaraan}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalTab('sales')}
+                className={cn(
+                  'flex items-center gap-2 pb-2.5 px-3 text-xs font-bold transition-all border-b-2 -mb-px',
+                  modalTab === 'sales'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                )}
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                Riwayat Transaksi POS
+                <span className={cn(
+                  'text-[10px] font-black px-1.5 py-0.2 rounded-full',
+                  modalTab === 'sales' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-500'
+                )}>
+                  {salesCount}
                 </span>
-              )}
+              </button>
             </div>
           </div>
-          <button
-            type="button"
-            title="Tutup"
-            onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
 
-        {/* Modal Body */}
-        <div className="overflow-y-auto flex-1 p-6 custom-scrollbar">
-          {/* Contact */}
-          <Section title="Kontak & Identitas" icon={Phone}>
-            <Field label="No. HP" value={row.no_hp} />
-            <Field label="Email" value={row.email} />
-            <Field label="KTP / Passport" value={row.ktp_passport} />
-            <Field label="Customer Advisor" value={row.customer_advisor} />
-            <Field label="Tanggal Lahir" value={fmtDate(row.tanggal_lahir)} />
-            <Field label="Umur" value={row.umur} />
-            <Field label="Tanggal Input" value={fmtDate(row.tanggal_input)} />
-            <Field label="Lokasi Store" value={row.lokasi_store} />
-          </Section>
+          {/* Modal Body */}
+          <div className="overflow-y-auto flex-1 p-6 custom-scrollbar">
+            {/* ── TAB 1: PROFIL & PREFERENSI ── */}
+            {modalTab === 'profile' && (
+              <div className="space-y-6">
+                {/* Contact */}
+                <Section title="Kontak & Identitas" icon={Phone}>
+                  <Field label="No. HP" value={row.no_hp} />
+                  <Field label="Email" value={row.email} />
+                  <Field label="KTP / Passport" value={row.ktp_passport} />
+                  <Field label="Customer Advisor" value={row.customer_advisor} />
+                  <Field label="Tanggal Lahir" value={fmtDate(row.tanggal_lahir)} />
+                  <Field label="Umur" value={row.umur} />
+                  <Field label="Tanggal Input" value={fmtDate(row.tanggal_input)} />
+                  <Field label="Lokasi Store" value={row.lokasi_store} />
+                </Section>
 
-          {/* Demografi */}
-          <Section title="Demografi" icon={Globe}>
-            <Field label="Domisili" value={row.domisili} />
-            <Field label="Domisili LN" value={row.domisili_luar_negeri} />
-            <Field label="Etnis" value={row.etnis} />
-            <Field label="Agama" value={row.agama} />
-            <Field label="Kewarganegaraan" value={row.kewarganegaraan} />
-          </Section>
+                {/* Demografi */}
+                <Section title="Demografi" icon={Globe}>
+                  <Field label="Domisili" value={row.domisili} />
+                  <Field label="Domisili LN" value={row.domisili_luar_negeri} />
+                  <Field label="Etnis" value={row.etnis} />
+                  <Field label="Agama" value={row.agama} />
+                  <Field label="Kewarganegaraan" value={row.kewarganegaraan} />
+                </Section>
 
-          {/* Pekerjaan & Lifestyle */}
-          <Section title="Pekerjaan & Lifestyle" icon={Briefcase}>
-            <Field label="Pekerjaan" value={row.pekerjaan} />
-            <Field label="Fashion Style" value={row.fashion_style} />
-            <Field label="Bentuk Tubuh" value={row.bentuk_tubuh} />
-            <Field label="Tinggi Badan" value={row.tinggi_badan} />
-            <Field label="Warna Favorit" value={row.warna_favorit} />
-          </Section>
+                {/* Pekerjaan & Lifestyle */}
+                <Section title="Pekerjaan & Lifestyle" icon={Briefcase}>
+                  <Field label="Pekerjaan" value={row.pekerjaan} />
+                  <Field label="Fashion Style" value={row.fashion_style} />
+                  <Field label="Bentuk Tubuh" value={row.bentuk_tubuh} />
+                  <Field label="Tinggi Badan" value={row.tinggi_badan} />
+                  <Field label="Warna Favorit" value={row.warna_favorit} />
+                </Section>
 
-          {/* Makanan & Minuman */}
-          <Section title="Makanan & Minuman" icon={UtensilsCrossed}>
-            <Field label="Cake Favorit" value={row.cake_favorit} />
-            <Field label="Makanan Favorit" value={row.makanan_favorit} />
-            <Field label="Minuman Favorit" value={row.minuman_favorit} />
-            <Field label="Alergi Makanan" value={row.alergi_makanan} />
-          </Section>
+                {/* Makanan & Minuman */}
+                <Section title="Makanan & Minuman" icon={UtensilsCrossed}>
+                  <Field label="Cake Favorit" value={row.cake_favorit} />
+                  <Field label="Makanan Favorit" value={row.makanan_favorit} />
+                  <Field label="Minuman Favorit" value={row.minuman_favorit} />
+                  <Field label="Alergi Makanan" value={row.alergi_makanan} />
+                </Section>
 
-          {/* Hobby & Interests */}
-          <Section title="Hobby & Minat" icon={Heart}>
-            <Field label="Hobby" value={row.hobby} />
-            <Field label="Kategori Hobby" value={row.hobby_kategori} />
-            <Field label="Sub Hobby" value={row.hobby_sub} />
-            <Field label="Hobby Lainnya" value={row.hobby_others} />
-            <Field label="Tempat Liburan" value={row.tempat_liburan_favorit} />
-            <Field label="Topik Favorit" value={row.topik_pembicaraan_favorit} />
-          </Section>
+                {/* Hobby & Interests */}
+                <Section title="Hobby & Minat" icon={Heart}>
+                  <Field label="Hobby" value={row.hobby} />
+                  <Field label="Kategori Hobby" value={row.hobby_kategori} />
+                  <Field label="Sub Hobby" value={row.hobby_sub} />
+                  <Field label="Hobby Lainnya" value={row.hobby_others} />
+                  <Field label="Tempat Liburan" value={row.tempat_liburan_favorit} />
+                  <Field label="Topik Favorit" value={row.topik_pembicaraan_favorit} />
+                </Section>
 
-          {/* Keluarga */}
-          <Section title="Keluarga" icon={Users}>
-            <Field label="Status Pernikahan" value={row.status_pernikahan} />
-            <Field label="Tanggal Pernikahan" value={fmtDate(row.tanggal_pernikahan)} />
-            <Field label="Memiliki Anak" value={row.memiliki_anak} />
-            <Field label="Jumlah Anak" value={row.jumlah_anak} />
-          </Section>
+                {/* Keluarga */}
+                <Section title="Keluarga" icon={Users}>
+                  <Field label="Status Pernikahan" value={row.status_pernikahan} />
+                  <Field label="Tanggal Pernikahan" value={fmtDate(row.tanggal_pernikahan)} />
+                  <Field label="Memiliki Anak" value={row.memiliki_anak} />
+                  <Field label="Jumlah Anak" value={row.jumlah_anak} />
+                </Section>
 
-          {/* Sosmed & Karakter */}
-          <Section title="Sosmed & Karakter" icon={AtSign}>
-            <Field label="Instagram" value={row.instagram} />
-            <Field label="TikTok" value={row.tiktok} />
-            <Field label="Karakter" value={row.karakter} />
-            <Field label="Faktor Pemicu Beli" value={row.faktor_pemicu_pembelian} />
-            <Field label="Barang Antusias" value={row.barang_antusias} />
-          </Section>
-        </div>
+                {/* Sosmed & Karakter */}
+                <Section title="Sosmed & Karakter" icon={AtSign}>
+                  <Field label="Instagram" value={row.instagram} />
+                  <Field label="TikTok" value={row.tiktok} />
+                  <Field label="Karakter" value={row.karakter} />
+                  <Field label="Faktor Pemicu Beli" value={row.faktor_pemicu_pembelian} />
+                  <Field label="Barang Antusias" value={row.barang_antusias} />
+                </Section>
+              </div>
+            )}
 
-        {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
-          <p className="text-[10px] text-slate-400">
-            ID #{row.id} · Dibuat {fmtDate(row.created_at)} · Diperbarui {fmtDate(row.updated_at)}
-          </p>
+            {/* ── TAB 2: RIWAYAT KUNJUNGAN TOKO ── */}
+            {modalTab === 'traffic' && (
+              <div>
+                {historyLoading ? (
+                  <div className="py-16 text-center text-slate-400">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
+                    <p className="text-xs font-medium">Memuat riwayat kunjungan toko...</p>
+                  </div>
+                ) : !historyData?.trafficVisits || historyData.trafficVisits.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 max-w-sm mx-auto">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                      <Store className="w-6 h-6 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">Belum Ada Riwayat Kunjungan</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Pelanggan ini belum memiliki catatan kedatangan di database boutique traffic.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <p className="text-xs font-bold text-slate-700">
+                        Total {historyData.trafficVisits.length} Kunjungan Tercatat
+                      </p>
+                      <span className="text-[11px] text-slate-400">Diurutkan dari kunjungan terbaru</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {historyData.trafficVisits.map((visit, vIdx) => (
+                        <div
+                          key={visit.id || vIdx}
+                          className="bg-white border border-slate-200/90 hover:border-blue-300 rounded-2xl p-4 shadow-sm transition-all space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-slate-900">
+                                {fmtDate(visit.tanggal_berkunjung || null)}
+                              </span>
+                              <span className={cn('text-[10px] font-black px-2 py-0.5 rounded-full border', storeBadgeColor(visit.location || ''))}>
+                                {visit.location || 'Store —'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {visit.status && (
+                                <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', getTrafficStatusBadge(visit.status))}>
+                                  {visit.status}
+                                </span>
+                              )}
+                              {visit.prospect_item && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                  {visit.prospect_item}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase">Sales Advisor</p>
+                              <p className="font-semibold text-slate-800">{visit.served_by || visit.customer_advisor || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase">Minat / Koleksi</p>
+                              <p className="font-semibold text-slate-800">{visit.minat_barang || visit.detail_items || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase">Net Sales Closing</p>
+                              <p className={cn(
+                                'font-black',
+                                (visit.net_sales || 0) > 0 ? 'text-emerald-700' : 'text-slate-400'
+                              )}>
+                                {(visit.net_sales || 0) > 0 ? `Rp ${Number(visit.net_sales).toLocaleString('id-ID')}` : 'Rp 0'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {(visit.notes || visit.siapa || visit.bukti_chat) && (
+                            <div className="pt-2 border-t border-slate-100 flex items-start justify-between gap-4 text-xs">
+                              <div className="space-y-1 flex-1">
+                                {visit.notes && (
+                                  <p className="text-slate-600 italic">
+                                    &ldquo;{visit.notes}&rdquo;
+                                  </p>
+                                )}
+                                {visit.siapa && (
+                                  <p className="text-[10px] text-slate-400">
+                                    Berkunjung bersama: <span className="font-medium text-slate-600">{visit.siapa}</span>
+                                  </p>
+                                )}
+                              </div>
+
+                              {visit.bukti_chat && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewImage(visit.bukti_chat || null)}
+                                  className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 shrink-0"
+                                >
+                                  <ImageIcon className="w-3.5 h-3.5" />
+                                  Bukti Chat
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── TAB 3: RIWAYAT TRANSAKSI POS ── */}
+            {modalTab === 'sales' && (
+              <div>
+                {historyLoading ? (
+                  <div className="py-16 text-center text-slate-400">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
+                    <p className="text-xs font-medium">Memuat riwayat transaksi POS...</p>
+                  </div>
+                ) : !historyData?.salesTransactions || historyData.salesTransactions.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 max-w-sm mx-auto">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                      <ShoppingBag className="w-6 h-6 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">Belum Ada Transaksi POS</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Tidak ditemukan riwayat faktur penjualan POS di database clean_master atas nama pelanggan ini.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Top Collections Chips */}
+                    {historyData.summary.topCollections && historyData.summary.topCollections.length > 0 && (
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mr-1">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          Koleksi Favorit:
+                        </span>
+                        {historyData.summary.topCollections.map((col, cIdx) => (
+                          <span
+                            key={cIdx}
+                            className="text-xs font-black px-2.5 py-1 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-xs"
+                          >
+                            {typeof col === 'string' ? col : col.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Sales Table */}
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50 text-slate-500 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
+                            <tr>
+                              <th className="p-3">Tanggal</th>
+                              <th className="p-3">No. Faktur</th>
+                              <th className="p-3">Boutique</th>
+                              <th className="p-3">Koleksi / Line</th>
+                              <th className="p-3">Deskripsi Produk</th>
+                              <th className="p-3 text-center">Qty</th>
+                              <th className="p-3 text-right">Net Sales</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                            {historyData.salesTransactions.map((tx, tIdx) => (
+                              <tr key={tx.id || tIdx} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="p-3 font-semibold text-slate-900 whitespace-nowrap">
+                                  {fmtDate(tx.doc_date || null)}
+                                </td>
+                                <td className="p-3 font-mono text-slate-500 whitespace-nowrap">
+                                  {tx.doc_num || '—'}
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <span className={cn('text-[10px] font-black px-2 py-0.5 rounded-full border', storeBadgeColor(tx.store || ''))}>
+                                    {tx.store || '—'}
+                                  </span>
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <span className="font-bold text-slate-900">{tx.collection || '—'}</span>
+                                  {tx.product_line && (
+                                    <span className="text-[10px] text-slate-400 block">{tx.product_line}</span>
+                                  )}
+                                </td>
+                                <td className="p-3 max-w-[200px] truncate" title={tx.item_name || ''}>
+                                  <span className="text-slate-900 font-semibold block truncate">{tx.item_name || '—'}</span>
+                                  {tx.item_code && <span className="text-[10px] font-mono text-slate-400">{tx.item_code}</span>}
+                                </td>
+                                <td className="p-3 text-center font-bold text-slate-800">
+                                  {tx.qty ?? 1}
+                                </td>
+                                <td className="p-3 text-right font-black text-emerald-700 whitespace-nowrap">
+                                  Rp {(tx.net_sales || 0).toLocaleString('id-ID')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-900 text-xs">
+                            <tr>
+                              <td colSpan={5} className="p-3 text-right uppercase tracking-wider text-[10px] font-black text-slate-500">
+                                Total Lifetime Net Sales:
+                              </td>
+                              <td className="p-3 text-center font-black">
+                                {historyData.salesTransactions.reduce((sum, item) => sum + (item.qty || 1), 0)}
+                              </td>
+                              <td className="p-3 text-right font-black text-emerald-700 text-sm">
+                                Rp {lifetimeSales.toLocaleString('id-ID')}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+            <p className="text-[10px] text-slate-400">
+              ID #{row.id} · Dibuat {fmtDate(row.created_at)} · Diperbarui {fmtDate(row.updated_at)}
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Integrated Bvlgari CRM 360°
+              </span>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[80] flex items-center justify-center p-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-2xl max-h-[85vh] bg-white rounded-2xl overflow-hidden shadow-2xl p-2" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-slate-900/60 text-white flex items-center justify-center hover:bg-slate-900 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img
+              src={previewImage}
+              alt="Bukti Chat"
+              className="w-full h-full object-contain rounded-xl max-h-[80vh]"
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
