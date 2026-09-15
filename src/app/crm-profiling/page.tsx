@@ -24,15 +24,16 @@ const fmtDate = (s: string | null) => {
 
 const val = (v: string | null | undefined) => (v && v.trim() ? v.trim() : '—');
 
-const STORES = ['Pacific Intermark', 'Pacific Superstore', 'Bali'];
+const STORES = ['Plaza Indonesia', 'Plaza Senayan', 'Bali'];
 const PAGE_SIZE = 24;
 
 // Store abbreviation for badges
 const storeBadge = (s: string) => {
   if (!s) return '';
-  if (s.includes('Intermark') || s.toLowerCase() === 'pi') return 'PI';
-  if (s.includes('Superstore') || s.toLowerCase() === 'ps') return 'PS';
-  if (s.toLowerCase().includes('bali')) return 'Bali';
+  const lower = s.toLowerCase();
+  if (lower.includes('indonesia') || lower.includes('intermark') || lower === 'pi') return 'PI';
+  if (lower.includes('senayan') || lower.includes('superstore') || lower === 'ps') return 'PS';
+  if (lower.includes('bali')) return 'Bali';
   return s.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 3);
 };
 

@@ -3,7 +3,7 @@ export const MASTER_DATA = {
   umurOptions: ['<30', '30-35', '35-40', '40-45', '45-50', '>50'],
   tinggiOptions: ['<160', '160 - 170', '170 - 180', '>180'],
   bentukTubuh: ['Kurus', 'Sedang', 'Berisi', 'Gemuk', 'Tinggi'],
-  stores: ['Plaza Indonesia', 'Plaza Senayan', 'Bali', 'Pacific Intermark', 'Pacific Superstore'],
+  stores: ['Plaza Indonesia', 'Plaza Senayan', 'Bali'],
   barangAntusias: ['Jewelry', 'Watches', 'Perfume', 'LLGA', 'Semi HJ'],
   statusPernikahan: ['Belum Kawin', 'Kawin', 'Cerai Hidup', 'Cerai Mati', 'Janda', 'Duda'],
   statusPelangganCRM: ['New', 'Old', 'VIP'],

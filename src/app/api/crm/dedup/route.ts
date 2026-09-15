@@ -631,7 +631,7 @@ export async function POST(req: Request) {
             nama_lengkap: trafficData.customer_name,
             no_hp: trafficData.no_hp || '',
             email: trafficData.email || '',
-            lokasi_store: trafficData.location || 'Pacific Intermark',
+            lokasi_store: trafficData.location || 'Plaza Indonesia',
             customer_advisor: trafficData.served_by || 'System SA',
             status_pelanggan: trafficData.status_pelanggan || 'New Prospect',
             tanggal_input: new Date().toISOString().split('T')[0],
