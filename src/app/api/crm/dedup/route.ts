@@ -197,6 +197,259 @@ export async function GET(req: Request) {
       });
     }
 
+    // 0.1 INTEGRATED TRAFFIC LIST WITH CRM LINKING (FOR OPSI 2)
+    if (action === 'get_integrated_traffic') {
+      const q = (searchParams.get('q') || query || '').trim();
+      const storeFilter = searchParams.get('store') || '';
+      const statusFilter = searchParams.get('status') || '';
+      const prospectFilter = searchParams.get('prospect') || '';
+      const startDate = searchParams.get('startDate') || '';
+      const endDate = searchParams.get('endDate') || '';
+      const limit = Math.min(Number(searchParams.get('limit')) || 60, 100);
+      const page = Math.max(Number(searchParams.get('page')) || 1, 1);
+      const offset = (page - 1) * limit;
+
+      let trafficQuery = supabase
+        .from('mirror_traffic')
+        .select(`
+          id, customer_name, nama_panggilan, no_hp, email,
+          served_by, customer_advisor, location, status, prospect_item,
+          gross_sales, disc_pct, net_sales, siapa, akses_masuk,
+          tanggal_berkunjung, minat_barang, detail_items, notes,
+          bukti_chat, group_size, faktor_pemicu
+        `, { count: 'exact' })
+        .not('customer_name', 'is', null)
+        .order('tanggal_berkunjung', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false });
+
+      if (q) {
+        trafficQuery = trafficQuery.or(
+          `customer_name.ilike.%${q}%,nama_panggilan.ilike.%${q}%,no_hp.ilike.%${q}%,served_by.ilike.%${q}%,minat_barang.ilike.%${q}%`
+        );
+      }
+      if (storeFilter && storeFilter !== 'ALL') {
+        trafficQuery = trafficQuery.eq('location', storeFilter);
+      }
+      if (statusFilter && statusFilter !== 'ALL') {
+        trafficQuery = trafficQuery.ilike('status', `%${statusFilter}%`);
+      }
+      if (prospectFilter && prospectFilter !== 'ALL') {
+        trafficQuery = trafficQuery.ilike('prospect_item', `%${prospectFilter}%`);
+      }
+      if (startDate) {
+        trafficQuery = trafficQuery.gte('tanggal_berkunjung', startDate);
+      }
+      if (endDate) {
+        trafficQuery = trafficQuery.lte('tanggal_berkunjung', endDate);
+      }
+
+      trafficQuery = trafficQuery.range(offset, offset + limit - 1);
+
+      const { data: rawTraffic, count: totalCount, error: tErr } = await trafficQuery;
+      if (tErr) throw tErr;
+
+      const trafficRows = rawTraffic || [];
+
+      // Extract unique customer names and phones to match against crm_profiling
+      const names = Array.from(new Set(trafficRows.map(t => t.customer_name?.trim()).filter(Boolean)));
+
+      const crmMap = new Map<string, any>();
+      if (names.length > 0) {
+        // Query matching CRM profiles in chunks or OR conditions
+        const orConditions = names.slice(0, 35).map(n => `nama_lengkap.ilike.%${n}%`).join(',');
+        if (orConditions) {
+          const { data: crmMatches, error: cErr } = await supabase
+            .from('crm_profiling')
+            .select(`
+              id, nama_lengkap, nama_panggilan, no_hp, email,
+              status_pelanggan, customer_advisor, lokasi_store,
+              pekerjaan, etnis, hobby, warna_favorit, fashion_style,
+              barang_antusias, faktor_pemicu_pembelian, foto_customer,
+              domisili, umur, kewarganegaraan
+            `)
+            .or(orConditions);
+
+          if (!cErr && crmMatches) {
+            crmMatches.forEach(p => {
+              if (p.nama_lengkap) {
+                crmMap.set(p.nama_lengkap.trim().toLowerCase(), p);
+              }
+              const pPhone = cleanPhone(p.no_hp);
+              if (pPhone) {
+                crmMap.set(pPhone, p);
+              }
+            });
+          }
+        }
+      }
+
+      // Enrich traffic rows with CRM profile link
+      let crmLinkedCount = 0;
+      let totalNetSales = 0;
+      let closingCount = 0;
+
+      const enrichedRows = trafficRows.map(t => {
+        const keyName = (t.customer_name || '').trim().toLowerCase();
+        const keyPhone = cleanPhone(t.no_hp);
+        const matchedCrm = crmMap.get(keyName) || (keyPhone ? crmMap.get(keyPhone) : null);
+
+        if (matchedCrm) crmLinkedCount++;
+        const netSalesNum = Number(t.net_sales) || 0;
+        totalNetSales += netSalesNum;
+        if (
+          (t.prospect_item && t.prospect_item.toLowerCase().includes('berhasil')) ||
+          netSalesNum > 0
+        ) {
+          closingCount++;
+        }
+
+        return {
+          ...t,
+          hasCrmProfile: !!matchedCrm,
+          crmProfile: matchedCrm ? {
+            id: matchedCrm.id,
+            nama_lengkap: matchedCrm.nama_lengkap,
+            nama_panggilan: matchedCrm.nama_panggilan,
+            no_hp: matchedCrm.no_hp,
+            email: matchedCrm.email,
+            status_pelanggan: matchedCrm.status_pelanggan,
+            customer_advisor: matchedCrm.customer_advisor,
+            lokasi_store: matchedCrm.lokasi_store,
+            pekerjaan: matchedCrm.pekerjaan,
+            etnis: matchedCrm.etnis,
+            hobby: matchedCrm.hobby,
+            warna_favorit: matchedCrm.warna_favorit,
+            fashion_style: matchedCrm.fashion_style,
+            barang_antusias: matchedCrm.barang_antusias,
+            faktor_pemicu_pembelian: matchedCrm.faktor_pemicu_pembelian,
+            foto_customer: matchedCrm.foto_customer,
+            domisili: matchedCrm.domisili,
+            umur: matchedCrm.umur,
+            kewarganegaraan: matchedCrm.kewarganegaraan,
+          } : null,
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        trafficRows: enrichedRows,
+        totalCount: totalCount || enrichedRows.length,
+        page,
+        limit,
+        metrics: {
+          totalRows: totalCount || enrichedRows.length,
+          totalNetSales,
+          crmLinkedCount,
+          closingCount,
+        },
+      });
+    }
+
+    // 0.2 CUSTOMER 360 HISTORY (FOR OPSI 1 & OPSI 2)
+    if (action === 'get_customer_history') {
+      const name = (searchParams.get('name') || query || '').trim();
+      const phoneParam = searchParams.get('phone') || phone || '';
+      const emailParam = searchParams.get('email') || email || '';
+      const cleanPhoneParam = cleanPhone(phoneParam);
+
+      if (!name && !cleanPhoneParam && !emailParam) {
+        return NextResponse.json({
+          success: true,
+          visits: [],
+          sales: [],
+          summary: { totalVisits: 0, totalLifetimeSales: 0, lastVisitDate: null, lastPurchaseDate: null, topCollections: [] }
+        });
+      }
+
+      // 1. Fetch visits from mirror_traffic
+      let trafficQuery = supabase
+        .from('mirror_traffic')
+        .select(`
+          id, customer_name, nama_panggilan, no_hp, email,
+          served_by, customer_advisor, location, status, prospect_item,
+          gross_sales, disc_pct, net_sales, siapa, akses_masuk,
+          tanggal_berkunjung, minat_barang, detail_items, notes,
+          bukti_chat, group_size, faktor_pemicu
+        `)
+        .order('tanggal_berkunjung', { ascending: false, nullsFirst: false })
+        .limit(30);
+
+      const conditions: string[] = [];
+      if (name) conditions.push(`customer_name.ilike.%${name}%`);
+      if (cleanPhoneParam) conditions.push(`no_hp.ilike.%${cleanPhoneParam}%`);
+      if (emailParam) conditions.push(`email.ilike.%${emailParam}%`);
+
+      trafficQuery = trafficQuery.or(conditions.join(','));
+
+      // 2. Fetch completed POS sales from clean_master
+      let salesQuery = supabase
+        .from('clean_master')
+        .select(`
+          trans_no, transaction_date, customer, location,
+          net_sales, gross_sales, sap_code, collection,
+          main_category, qty, catalogue_code
+        `)
+        .order('transaction_date', { ascending: false })
+        .limit(40);
+
+      if (name) {
+        salesQuery = salesQuery.ilike('customer', `%${name}%`);
+      }
+
+      const [{ data: visits, error: vErr }, { data: sales, error: sErr }] = await Promise.all([
+        trafficQuery,
+        salesQuery,
+      ]);
+
+      if (vErr) console.warn('Error fetching customer visits:', vErr);
+      if (sErr) console.warn('Error fetching customer sales:', sErr);
+
+      const visitList = visits || [];
+      const salesList = (sales || []).map((s: any) => ({
+        ...s,
+        doc_num: s.trans_no || s.doc_num || '—',
+        doc_date: s.transaction_date || s.doc_date,
+        store: s.location || s.store || '—',
+        item_name: s.collection ? `${s.collection} ${s.main_category || ''}`.trim() : (s.sap_code || '—'),
+        product_line: s.main_category || s.product_line,
+        item_code: s.sap_code || s.catalogue_code || s.item_code,
+      }));
+
+      // Calculate summary metrics
+      const totalVisits = visitList.length;
+      const totalLifetimeSales = salesList.reduce((sum, s) => sum + (Number(s.net_sales) || 0), 0);
+      const lastVisitDate = visitList.length > 0 ? visitList[0].tanggal_berkunjung : null;
+      const lastPurchaseDate = salesList.length > 0 ? salesList[0].transaction_date : null;
+
+      // Collections summary
+      const collectionsMap: Record<string, number> = {};
+      salesList.forEach(s => {
+        if (s.collection) {
+          collectionsMap[s.collection] = (collectionsMap[s.collection] || 0) + (Number(s.net_sales) || 0);
+        }
+      });
+      const topCollections = Object.entries(collectionsMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([cName, spend]) => ({ name: cName, spend }));
+
+      return NextResponse.json({
+        success: true,
+        visits: visitList,
+        sales: salesList,
+        trafficVisits: visitList,
+        salesTransactions: salesList,
+        summary: {
+          totalVisits,
+          totalSalesTransactions: salesList.length,
+          totalLifetimeSales,
+          lastVisitDate,
+          lastPurchaseDate,
+          topCollections,
+        },
+      });
+    }
+
     // 1. LIVE CHECKER FOR FORM INPUT
     if (action === 'check') {
       const cleanInputPhone = cleanPhone(phone);
