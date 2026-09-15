@@ -56,7 +56,7 @@ export function useCrmDedup() {
   const [antusias, setAntusias] = useState('');
   const [karakter, setKarakter] = useState('');
   const [notes, setNotes] = useState('');
-  const [lokasiStore, setLokasiStore] = useState('Pacific Intermark');
+  const [lokasiStore, setLokasiStore] = useState('Plaza Indonesia');
   const [customerAdvisor, setCustomerAdvisor] = useState('');
   const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -75,7 +75,7 @@ export function useCrmDedup() {
   const [trFaktorPemicu, setTrFaktorPemicu] = useState('');
   const [trGroupSize, setTrGroupSize] = useState('1');
   const [trServedBy, setTrServedBy] = useState('');
-  const [trLocation, setTrLocation] = useState('Pacific Intermark');
+  const [trLocation, setTrLocation] = useState('Plaza Indonesia');
   const [trNotes, setTrNotes] = useState('');
   const [trDiskonPct, setTrDiskonPct] = useState(0);
   const [trBuktiChatUrl, setTrBuktiChatUrl] = useState('');
