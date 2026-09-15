@@ -3,7 +3,7 @@ export const MASTER_DATA = {
   umurOptions: ['<30', '30-35', '35-40', '40-45', '45-50', '>50'],
   tinggiOptions: ['<160', '160 - 170', '170 - 180', '>180'],
   bentukTubuh: ['Kurus', 'Sedang', 'Berisi', 'Gemuk', 'Tinggi'],
-  stores: ['Pacific Intermark', 'Pacific Superstore', 'Bali'],
+  stores: ['Plaza Indonesia', 'Plaza Senayan', 'Bali', 'Pacific Intermark', 'Pacific Superstore'],
   barangAntusias: ['Jewelry', 'Watches', 'Perfume', 'LLGA', 'Semi HJ'],
   statusPernikahan: ['Belum Kawin', 'Kawin', 'Cerai Hidup', 'Cerai Mati', 'Janda', 'Duda'],
   statusPelangganCRM: ['New', 'Old', 'VIP'],
@@ -95,4 +95,23 @@ export interface TrafficItemRow {
   harga: number;
   kategori: string;
   koleksi: string;
+}
+
+export interface DbCustomerItem {
+  id: number | string;
+  name: string;
+  nickname: string;
+  phone: string;
+  email: string;
+  status: string;
+  advisor: string;
+  store: string;
+  source: 'CRM Profile' | 'Traffic Record';
+  statusVisit?: string;
+  prospectLevel?: string;
+  minatBarang?: string;
+  aksesMasuk?: string;
+  siapa?: string;
+  faktorPemicu?: string;
+  groupSize?: string;
 }

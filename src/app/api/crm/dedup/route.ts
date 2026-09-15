@@ -50,9 +50,152 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action') || 'audit';
-    const query = searchParams.get('query') || '';
+    const query = searchParams.get('query') || searchParams.get('q') || '';
     const phone = searchParams.get('phone') || '';
     const email = searchParams.get('email') || '';
+    const store = searchParams.get('store') || '';
+
+    // 0. SEARCH CUSTOMERS FROM DB FOR AUTOCOMPLETE / PICKER
+    if (action === 'search_customers') {
+      const q = query.trim();
+
+      // Normalization helpers for visit & segmentation fields
+      const normalizeStatusVisit = (val: string | null | undefined): string => {
+        if (!val) return 'Walk-in';
+        const v = val.trim().toLowerCase();
+        if (v.includes('walk')) return 'Walk-in';
+        if (v.includes('follow')) return 'Follow Up';
+        if (v.includes('in house') || v.includes('in house')) return 'Walk-in';
+        if (v.includes('complete') || v.includes('selesai')) return 'Completed';
+        if (v.includes('repair')) return 'Repair / Service';
+        if (v.includes('online')) return 'Online Inquiry';
+        if (v.includes('delivery') || v.includes('showing')) return 'Delivery / Showing';
+        return val.trim();
+      };
+
+      const normalizeMinatBarang = (val: string | null | undefined): string => {
+        if (!val) return 'Jewelry';
+        const parts = val.split(/[,;/]/).map(s => s.trim()).filter(Boolean);
+        return parts[0] || 'Jewelry';
+      };
+
+      const normalizeSiapa = (siapaVal: string | null | undefined, kewarganegaraanVal: string | null | undefined): string => {
+        if (siapaVal && siapaVal.trim()) return siapaVal.trim();
+        if (kewarganegaraanVal) {
+          const k = kewarganegaraanVal.trim().toLowerCase();
+          if (k && k !== 'indonesia' && k !== 'indonesian' && k !== 'wni') {
+            return 'Turis International';
+          }
+          return 'Turis Domestik';
+        }
+        return 'Turis Domestik';
+      };
+
+      let crmQuery = supabase
+        .from('crm_profiling')
+        .select('id, nama_lengkap, nama_panggilan, no_hp, email, status_pelanggan, customer_advisor, lokasi_store, barang_antusias, faktor_pemicu_pembelian, kewarganegaraan, etnis')
+        .not('nama_lengkap', 'is', null);
+
+      let trafficQuery = supabase
+        .from('mirror_traffic')
+        .select('id, customer_name, nama_panggilan, no_hp, email, status_pelanggan, customer_advisor, served_by, location, status, prospect_item, siapa, akses_masuk, faktor_pemicu, group_size, minat_barang')
+        .not('customer_name', 'is', null);
+
+      if (q) {
+        crmQuery = crmQuery.or(`nama_lengkap.ilike.%${q}%,nama_panggilan.ilike.%${q}%,no_hp.ilike.%${q}%,email.ilike.%${q}%`).limit(30);
+        trafficQuery = trafficQuery.or(`customer_name.ilike.%${q}%,nama_panggilan.ilike.%${q}%,no_hp.ilike.%${q}%,email.ilike.%${q}%`).limit(30);
+      } else {
+        crmQuery = crmQuery.order('id', { ascending: false }).limit(25);
+        trafficQuery = trafficQuery.order('id', { ascending: false }).limit(25);
+      }
+
+      if (store && store !== 'ALL') {
+        crmQuery = crmQuery.eq('lokasi_store', store);
+        trafficQuery = trafficQuery.eq('location', store);
+      }
+
+      const [{ data: crmRows, error: crmErr }, { data: trafficRows, error: trafficErr }] = await Promise.all([
+        crmQuery,
+        trafficQuery,
+      ]);
+
+      if (crmErr) console.warn('Error in crmQuery search:', crmErr);
+      if (trafficErr) console.warn('Error in trafficQuery search:', trafficErr);
+
+      const map = new Map<string, any>();
+
+      // 1. First insert traffic records (which have rich visit segmentation history)
+      (trafficRows || []).forEach(t => {
+        if (!t.customer_name) return;
+        const key = t.customer_name.trim().toLowerCase();
+        map.set(key, {
+          id: t.id,
+          name: t.customer_name.trim(),
+          nickname: t.nama_panggilan?.trim() || '',
+          phone: t.no_hp?.trim() || '',
+          email: t.email?.trim() || '',
+          status: t.status_pelanggan?.trim() || 'Existing Customer',
+          advisor: t.customer_advisor?.trim() || t.served_by?.trim() || '',
+          store: t.location?.trim() || '',
+          source: 'Traffic Record',
+          // Visit & Segmentation details
+          statusVisit: normalizeStatusVisit(t.status),
+          prospectLevel: t.prospect_item?.trim() || 'Potensial Pelanggan Baru',
+          minatBarang: normalizeMinatBarang(t.minat_barang),
+          aksesMasuk: t.akses_masuk?.trim() || 'Tamu butik Bulgari',
+          siapa: normalizeSiapa(t.siapa, null),
+          faktorPemicu: t.faktor_pemicu?.trim() || 'Masih Dalam Prospek',
+          groupSize: t.group_size ? String(t.group_size) : '1',
+        });
+      });
+
+      // 2. Then merge or insert CRM Profiles (profiles take precedence for master details, and enrich segmentation)
+      (crmRows || []).forEach(c => {
+        if (!c.nama_lengkap) return;
+        const key = c.nama_lengkap.trim().toLowerCase();
+        const existing = map.get(key);
+
+        if (existing) {
+          map.set(key, {
+            ...existing,
+            nickname: c.nama_panggilan?.trim() || existing.nickname,
+            phone: c.no_hp?.trim() || existing.phone,
+            email: c.email?.trim() || existing.email,
+            status: c.status_pelanggan?.trim() || existing.status,
+            advisor: c.customer_advisor?.trim() || existing.advisor,
+            store: c.lokasi_store?.trim() || existing.store,
+            source: 'CRM Profile',
+            minatBarang: existing.minatBarang || normalizeMinatBarang(c.barang_antusias),
+            faktorPemicu: existing.faktorPemicu || c.faktor_pemicu_pembelian?.trim() || 'Masih Dalam Prospek',
+            siapa: existing.siapa || normalizeSiapa(null, c.kewarganegaraan),
+          });
+        } else {
+          map.set(key, {
+            id: c.id,
+            name: c.nama_lengkap.trim(),
+            nickname: c.nama_panggilan?.trim() || '',
+            phone: c.no_hp?.trim() || '',
+            email: c.email?.trim() || '',
+            status: c.status_pelanggan?.trim() || 'Existing Customer',
+            advisor: c.customer_advisor?.trim() || '',
+            store: c.lokasi_store?.trim() || '',
+            source: 'CRM Profile',
+            statusVisit: 'Walk-in',
+            prospectLevel: 'Potensial Pelanggan Baru',
+            minatBarang: normalizeMinatBarang(c.barang_antusias),
+            aksesMasuk: 'Tamu butik Bulgari',
+            siapa: normalizeSiapa(null, c.kewarganegaraan),
+            faktorPemicu: c.faktor_pemicu_pembelian?.trim() || 'Masih Dalam Prospek',
+            groupSize: '1',
+          });
+        }
+      });
+
+      return NextResponse.json({
+        success: true,
+        customers: Array.from(map.values()),
+      });
+    }
 
     // 1. LIVE CHECKER FOR FORM INPUT
     if (action === 'check') {

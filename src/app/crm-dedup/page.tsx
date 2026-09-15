@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import BvlgariLoader from '@/components/BvlgariLoader';
 import { MASTER_DATA } from './masterData';
 import { useCrmDedup } from './useCrmDedup';
+import { CustomerPickerCombobox } from './components/CustomerPickerCombobox';
 
 export default function CrmDedupPage() {
   const [activeTab, setActiveTab] = useState<'check' | 'traffic' | 'audit'>('check');
@@ -588,9 +589,14 @@ export default function CrmDedupPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nama Pengunjung <span className="text-red-500">*</span></label>
-                  <input type="text" placeholder="Nama lengkap..." value={crm.trCustomerName} onChange={e => crm.setTrCustomerName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
+                  <CustomerPickerCombobox
+                    value={crm.trCustomerName}
+                    onChange={crm.setTrCustomerName}
+                    onSelectCustomer={crm.selectCustomerFromDb}
+                    onClearCustomer={crm.clearSelectedCustomer}
+                    selectedCustomer={crm.selectedDbCustomer}
+                    advisorsList={crm.advisorsList}
+                  />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nama Panggilan</label>
@@ -614,6 +620,9 @@ export default function CrmDedupPage() {
                   <select value={crm.trStatusPelanggan} onChange={e => crm.setTrStatusPelanggan(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     {MASTER_DATA.statusPelangganTraffic.map(s => <option key={s} value={s}>{s}</option>)}
+                    {crm.trStatusPelanggan && !MASTER_DATA.statusPelangganTraffic.includes(crm.trStatusPelanggan) && (
+                      <option value={crm.trStatusPelanggan}>{crm.trStatusPelanggan}</option>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -621,6 +630,9 @@ export default function CrmDedupPage() {
                   <select value={crm.trStatus} onChange={e => crm.setTrStatus(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold">
                     {MASTER_DATA.prospekStatus.map(s => <option key={s} value={s}>{s}</option>)}
+                    {crm.trStatus && !MASTER_DATA.prospekStatus.includes(crm.trStatus) && (
+                      <option value={crm.trStatus}>{crm.trStatus}</option>
+                    )}
                   </select>
                 </div>
               </div>
@@ -635,6 +647,9 @@ export default function CrmDedupPage() {
                   <select value={crm.trProspectLevel} onChange={e => crm.setTrProspectLevel(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     {MASTER_DATA.prospekLevel.map(p => <option key={p} value={p}>{p}</option>)}
+                    {crm.trProspectLevel && !MASTER_DATA.prospekLevel.includes(crm.trProspectLevel) && (
+                      <option value={crm.trProspectLevel}>{crm.trProspectLevel}</option>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -642,6 +657,9 @@ export default function CrmDedupPage() {
                   <select value={crm.trMinatBarang} onChange={e => crm.setTrMinatBarang(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     {MASTER_DATA.minatBarang.map(m => <option key={m} value={m}>{m}</option>)}
+                    {crm.trMinatBarang && !MASTER_DATA.minatBarang.includes(crm.trMinatBarang) && (
+                      <option value={crm.trMinatBarang}>{crm.trMinatBarang}</option>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -650,16 +668,22 @@ export default function CrmDedupPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     <option value="">Pilih Akses...</option>
                     {MASTER_DATA.aksesMasuk.map(a => <option key={a} value={a}>{a}</option>)}
+                    {crm.trAksesMasuk && !MASTER_DATA.aksesMasuk.includes(crm.trAksesMasuk) && (
+                      <option value={crm.trAksesMasuk}>{crm.trAksesMasuk}</option>
+                    )}
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Pengunjung</label>
                   <select value={crm.trSiapa} onChange={e => crm.setTrSiapa(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     <option value="">Pilih Kategori...</option>
                     {MASTER_DATA.siapa.map(s => <option key={s} value={s}>{s}</option>)}
+                    {crm.trSiapa && !MASTER_DATA.siapa.includes(crm.trSiapa) && (
+                      <option value={crm.trSiapa}>{crm.trSiapa}</option>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -668,6 +692,9 @@ export default function CrmDedupPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     <option value="">Pilih Pemicu...</option>
                     {MASTER_DATA.faktorPemicu.map(f => <option key={f} value={f}>{f}</option>)}
+                    {crm.trFaktorPemicu && !MASTER_DATA.faktorPemicu.includes(crm.trFaktorPemicu) && (
+                      <option value={crm.trFaktorPemicu}>{crm.trFaktorPemicu}</option>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -675,6 +702,19 @@ export default function CrmDedupPage() {
                   <select value={crm.trGroupSize} onChange={e => crm.setTrGroupSize(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     {MASTER_DATA.groupSize.map(g => <option key={g} value={g}>{g} orang</option>)}
+                    {crm.trGroupSize && !MASTER_DATA.groupSize.includes(crm.trGroupSize) && (
+                      <option value={crm.trGroupSize}>{crm.trGroupSize} orang</option>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Lokasi Store</label>
+                  <select value={crm.trLocation} onChange={e => crm.setTrLocation(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
+                    {MASTER_DATA.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                    {crm.trLocation && !MASTER_DATA.stores.includes(crm.trLocation) && (
+                      <option value={crm.trLocation}>{crm.trLocation}</option>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -683,6 +723,9 @@ export default function CrmDedupPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     <option value="">Pilih SA...</option>
                     {crm.advisorsList.map(adv => <option key={adv} value={adv}>{adv}</option>)}
+                    {crm.trServedBy && !crm.advisorsList.includes(crm.trServedBy) && (
+                      <option value={crm.trServedBy}>{crm.trServedBy}</option>
+                    )}
                   </select>
                 </div>
               </div>
