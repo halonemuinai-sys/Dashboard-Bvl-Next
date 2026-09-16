@@ -197,6 +197,135 @@ export async function GET(req: Request) {
       });
     }
 
+    // 0.05 SEARCH INVENTORY & MASTER PRODUCTS FOR TRAFFIC ITEM AUTOFILL
+    if (action === 'search_inventory') {
+      const q = (searchParams.get('q') || query || '').trim();
+      const location = searchParams.get('location') || '';
+      const limit = Math.min(Number(searchParams.get('limit')) || 30, 60);
+
+      // 1. Search in inventory_valuation (current stock at boutiques)
+      let invQuery = supabase
+        .from('inventory_valuation')
+        .select(`
+          item_code, item_sku, description, item_name,
+          item_price, main_category, collection_name, location_name, qoh
+        `)
+        .gt('item_price', 0);
+
+      if (location && location !== 'ALL') {
+        invQuery = invQuery.ilike('location_name', `%${location}%`);
+      }
+
+      if (q) {
+        invQuery = invQuery.or(
+          `description.ilike.%${q}%,item_code.ilike.%${q}%,item_sku.ilike.%${q}%,collection_name.ilike.%${q}%`
+        );
+      }
+
+      invQuery = invQuery.order('qoh', { ascending: false }).limit(limit);
+
+      // 2. Search in clean_master for catalogue codes and historical master catalog
+      let cmQuery = supabase
+        .from('clean_master')
+        .select(`
+          catalogue_code, sap_code, collection, main_category, gross_sales, location
+        `)
+        .not('catalogue_code', 'is', null)
+        .gt('gross_sales', 0);
+
+      if (location && location !== 'ALL') {
+        cmQuery = cmQuery.ilike('location', `%${location}%`);
+      }
+
+      if (q) {
+        cmQuery = cmQuery.or(
+          `catalogue_code.ilike.%${q}%,sap_code.ilike.%${q}%,collection.ilike.%${q}%`
+        );
+      }
+
+      cmQuery = cmQuery.order('gross_sales', { ascending: false }).limit(limit);
+
+      const [{ data: invData, error: invErr }, { data: cmData, error: cmErr }] = await Promise.all([
+        invQuery,
+        cmQuery,
+      ]);
+
+      if (invErr) console.warn('Error fetching inventory_valuation:', invErr);
+      if (cmErr) console.warn('Error fetching clean_master products:', cmErr);
+
+      const map = new Map<string, any>();
+
+      // First add inventory items (priority because they have current QOH)
+      (invData || []).forEach(item => {
+        const itemCode = (item.item_code || item.item_sku || '').trim();
+        const sku = (item.item_sku || item.item_code || '').trim();
+        const key = `${itemCode}-${sku}-${item.location_name}`.toLowerCase();
+
+        let cat = item.main_category;
+        let coll = item.collection_name;
+        const desc = (item.description || item.item_name || '').toUpperCase();
+
+        if (!coll) {
+          if (desc.includes('B.ZERO1') || desc.includes('B ZERO') || desc.includes('B.ZERO')) coll = 'B.zero1';
+          else if (desc.includes('SERPENTI')) coll = 'Serpenti';
+          else if (desc.includes('DIVA')) coll = "Divas' Dream";
+          else if (desc.includes('OCTO')) coll = 'Octo';
+          else if (desc.includes('BVLGARI BVLGARI') || desc.includes('BB')) coll = 'Bulgari Bulgari';
+          else if (desc.includes('ALUMINIUM')) coll = 'Bulgari Aluminium';
+          else if (desc.includes('FIOREVER')) coll = 'Fiorever';
+          else if (desc.includes('TUBOGAS')) coll = 'Tubogas';
+        }
+
+        if (!cat) {
+          if (desc.includes('RING') || desc.includes('BRAC') || desc.includes('NECK') || desc.includes('EARR') || desc.includes('PEND')) cat = 'Jewelry';
+          else if (desc.includes('WATCH') || desc.includes('OCTO') || desc.includes('CHRONO')) cat = 'Watches';
+          else if (desc.includes('SUNG') || desc.includes('GLASS') || desc.includes('ACC') || desc.includes('BAG') || desc.includes('WALLET') || desc.includes('BELT') || desc.includes('SILK')) cat = 'Accessories';
+          else if (desc.includes('EDP') || desc.includes('EDT') || desc.includes('PERFUME')) cat = 'Perfume';
+          else cat = 'Jewelry';
+        }
+
+        if (!map.has(key)) {
+          map.set(key, {
+            item_code: itemCode,
+            sap_code: sku,
+            deskripsi: item.description || item.item_name || itemCode,
+            kategori: cat || 'Jewelry',
+            koleksi: coll || 'Bulgari Master',
+            harga: Number(item.item_price) || 0,
+            location: item.location_name || 'All Store',
+            qoh: item.qoh ?? 1,
+            source: 'inventory',
+          });
+        }
+      });
+
+      // Second add clean_master items if not already present
+      (cmData || []).forEach(cm => {
+        const itemCode = (cm.catalogue_code || '').trim();
+        const sku = (cm.sap_code || '').trim();
+        const key = `${itemCode}-${sku}`.toLowerCase();
+
+        if (!map.has(key)) {
+          map.set(key, {
+            item_code: itemCode,
+            sap_code: sku,
+            deskripsi: `${cm.collection || 'Bvlgari'} ${cm.main_category || ''} (${itemCode})`.trim(),
+            kategori: cm.main_category || 'Jewelry',
+            koleksi: cm.collection || 'Bvlgari Master',
+            harga: Number(cm.gross_sales) || 0,
+            location: cm.location || 'All Store',
+            qoh: 0,
+            source: 'catalog',
+          });
+        }
+      });
+
+      return NextResponse.json({
+        success: true,
+        items: Array.from(map.values()).slice(0, limit),
+      });
+    }
+
     // 0.1 INTEGRATED TRAFFIC LIST WITH CRM LINKING (FOR OPSI 2)
     if (action === 'get_integrated_traffic') {
       const q = (searchParams.get('q') || query || '').trim();

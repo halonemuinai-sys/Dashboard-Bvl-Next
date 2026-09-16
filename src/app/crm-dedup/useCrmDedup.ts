@@ -215,6 +215,41 @@ export function useCrmDedup() {
     setNewItemCode(''); setNewSapCode(''); setNewDeskripsi(''); setNewHarga(0); setNewKoleksi('');
   };
 
+  const handleSelectInventoryItem = (item: {
+    item_code?: string;
+    sap_code?: string;
+    deskripsi?: string;
+    kategori?: string;
+    koleksi?: string;
+    harga?: number;
+  }) => {
+    setNewItemCode(item.item_code || '');
+    setNewSapCode(item.sap_code || '');
+    setNewDeskripsi(item.deskripsi || '');
+    if (item.kategori) setNewKategori(item.kategori);
+    if (item.koleksi) setNewKoleksi(item.koleksi);
+    setNewHarga(Number(item.harga) || 0);
+  };
+
+  const handleDirectAddTrafficItem = (item: {
+    item_code?: string;
+    sap_code?: string;
+    deskripsi?: string;
+    kategori?: string;
+    koleksi?: string;
+    harga?: number;
+  }) => {
+    if (!item.deskripsi || !item.harga || item.harga <= 0) return;
+    setTrItems(prev => [...prev, {
+      item_code: item.item_code || `ITEM-${Date.now().toString().slice(-4)}`,
+      sap_code: item.sap_code || '',
+      deskripsi: item.deskripsi || '',
+      harga: Number(item.harga),
+      kategori: item.kategori || 'Jewelry',
+      koleksi: item.koleksi || 'Bulgari',
+    }]);
+  };
+
   const handleRemoveTrafficItem = (index: number) => {
     setTrItems(prev => prev.filter((_, idx) => idx !== index));
   };
@@ -416,6 +451,7 @@ export function useCrmDedup() {
     newKategori, setNewKategori,
     newKoleksi, setNewKoleksi,
     handleAddTrafficItem, handleRemoveTrafficItem,
+    handleSelectInventoryItem, handleDirectAddTrafficItem,
     trMessage, handleCreateTraffic,
     handleUploadImage,
   };
