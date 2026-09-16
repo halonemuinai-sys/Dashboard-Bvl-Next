@@ -13,10 +13,36 @@ import { MASTER_DATA } from './masterData';
 import { useCrmDedup } from './useCrmDedup';
 import { CustomerPickerCombobox } from './components/CustomerPickerCombobox';
 import { TrafficHistoryTable } from './components/TrafficHistoryTable';
+import { InventorySearchModal, type InventoryItem } from './components/InventorySearchModal';
 
 export default function CrmDedupPage() {
   const [activeTab, setActiveTab] = useState<'check' | 'traffic' | 'audit' | 'history'>('check');
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [invSuggestions, setInvSuggestions] = useState<InventoryItem[]>([]);
+  const [invSuggestLoading, setInvSuggestLoading] = useState(false);
+  const [showSuggestDropdown, setShowSuggestDropdown] = useState(false);
   const crm = useCrmDedup();
+
+  const handleFetchSuggestions = async (val: string) => {
+    if (!val || val.trim().length < 2) {
+      setInvSuggestions([]);
+      setShowSuggestDropdown(false);
+      return;
+    }
+    setInvSuggestLoading(true);
+    setShowSuggestDropdown(true);
+    try {
+      const res = await fetch(`/api/crm/dedup?action=search_inventory&q=${encodeURIComponent(val.trim())}&location=${encodeURIComponent(crm.trLocation || '')}&limit=5`);
+      const data = await res.json();
+      if (data.success) {
+        setInvSuggestions(data.items || []);
+      }
+    } catch {
+      setInvSuggestions([]);
+    } finally {
+      setInvSuggestLoading(false);
+    }
+  };
 
   if (crm.loading) {
     return (
@@ -735,33 +761,126 @@ export default function CrmDedupPage() {
 
             {/* C. Barang Diminati */}
             <div className="space-y-4 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                  C. BARANG DIMINATI (MULTI-ROW)
-                </h4>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                    <ShoppingBag className="w-4 h-4 text-emerald-600" />
+                    C. BARANG DIMINATI (MULTI-ROW)
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowInventoryModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-xs"
+                  >
+                    <Search className="w-3.5 h-3.5 text-emerald-600" />
+                    Cari dari Inventory
+                  </button>
+                </div>
                 <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
                   Total: Rp {crm.trNetSales.toLocaleString('id-ID')}
                 </span>
               </div>
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 relative">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kode Item</label>
-                    <input type="text" placeholder="e.g. AN855420" value={crm.newItemCode} onChange={e => crm.setNewItemCode(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none" />
+                    <input
+                      type="text"
+                      placeholder="e.g. AN855420"
+                      value={crm.newItemCode}
+                      onChange={e => {
+                        crm.setNewItemCode(e.target.value);
+                        handleFetchSuggestions(e.target.value);
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">SAP Code</label>
-                    <input type="text" placeholder="e.g. 100234" value={crm.newSapCode} onChange={e => crm.setNewSapCode(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none" />
+                    <input
+                      type="text"
+                      placeholder="e.g. 100234"
+                      value={crm.newSapCode}
+                      onChange={e => {
+                        crm.setNewSapCode(e.target.value);
+                        handleFetchSuggestions(e.target.value);
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
+                    />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Deskripsi Barang</label>
-                    <input type="text" placeholder="B.zero1 4-Band Ring 18kt Rose Gold..." value={crm.newDeskripsi} onChange={e => crm.setNewDeskripsi(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none" />
+                    <input
+                      type="text"
+                      placeholder="B.zero1 4-Band Ring 18kt Rose Gold..."
+                      value={crm.newDeskripsi}
+                      onChange={e => {
+                        crm.setNewDeskripsi(e.target.value);
+                        handleFetchSuggestions(e.target.value);
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
+                    />
                   </div>
                 </div>
+
+                {/* Autocomplete Quick Suggestions Dropdown */}
+                {showSuggestDropdown && (
+                  <div className="absolute left-4 right-4 top-[72px] z-30 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      <span>Rekomendasi Inventory ({crm.trLocation || 'Semua Store'})</span>
+                      <button type="button" onClick={() => setShowSuggestDropdown(false)} className="text-slate-400 hover:text-slate-600">
+                        ✕ Tutup
+                      </button>
+                    </div>
+                    {invSuggestLoading ? (
+                      <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                        <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent animate-spin rounded-full inline-block" />
+                        Mencari stok inventory...
+                      </div>
+                    ) : invSuggestions.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-slate-500">
+                        Tidak ditemukan barang cocok di inventory.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto custom-scrollbar">
+                        {invSuggestions.map((sug, sIdx) => (
+                          <div
+                            key={sIdx}
+                            onClick={() => {
+                              crm.handleSelectInventoryItem(sug);
+                              setShowSuggestDropdown(false);
+                            }}
+                            className="p-2.5 hover:bg-slate-50 rounded-xl cursor-pointer flex items-center justify-between text-xs transition-colors"
+                          >
+                            <div className="min-w-0 pr-3">
+                              <p className="font-bold text-slate-900 truncate">{sug.deskripsi}</p>
+                              <p className="text-[11px] text-slate-400 font-mono">
+                                Kode: {sug.item_code} · SAP: {sug.sap_code || '—'} · {sug.kategori} ({sug.koleksi})
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-black text-emerald-700">Rp {sug.harga.toLocaleString('id-ID')}</p>
+                              {sug.qoh !== undefined && (
+                                <p className="text-[10px] text-slate-400">Stok: {sug.qoh} unit</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSuggestDropdown(false);
+                        setShowInventoryModal(true);
+                      }}
+                      className="w-full mt-1.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[11px] font-bold text-center border border-slate-200 transition-colors"
+                    >
+                      Buka Katalog Lengkap Inventory (16.628+ Item) &rarr;
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kategori</label>
@@ -992,6 +1111,19 @@ export default function CrmDedupPage() {
           }}
         />
       )}
+
+      {/* ── MODAL KATALOG INVENTORY & PRODUK BVLGARI ── */}
+      <InventorySearchModal
+        isOpen={showInventoryModal}
+        onClose={() => setShowInventoryModal(false)}
+        currentStore={crm.trLocation}
+        onSelectItem={(item) => {
+          crm.handleSelectInventoryItem(item);
+        }}
+        onDirectAddItem={(item) => {
+          crm.handleDirectAddTrafficItem(item);
+        }}
+      />
     </div>
   );
 }
