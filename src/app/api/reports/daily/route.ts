@@ -10,7 +10,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Date parameter is required" }, { status: 400 });
     }
 
-    const result = await reportService.sendDailyReport(date);
+    const { emailTo, pdfBase64, excelBase64, pdfFilename, excelFilename } = body;
+
+    const result = await reportService.sendDailyReport(date, {
+      emailTo,
+      pdfBase64,
+      excelBase64,
+      pdfFilename,
+      excelFilename,
+    });
 
     return NextResponse.json(result);
   } catch (error: any) {

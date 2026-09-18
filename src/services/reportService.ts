@@ -6,11 +6,28 @@ import ExcelJS from 'exceljs';
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const ID_MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
+export interface DailyReportEmailOptions {
+  emailTo?: string;
+  pdfBase64?: string;
+  excelBase64?: string;
+  pdfFilename?: string;
+  excelFilename?: string;
+}
+
 export const reportService = {
   /**
    * Generates and sends the daily sales report email exactly matching the GAS format.
+   * Supports optional PDF and Excel attachments.
    */
-  async sendDailyReport(dateStr: string, emailTo?: string) {
+  async sendDailyReport(dateStr: string, optionsOrEmailTo?: string | DailyReportEmailOptions) {
+    const options: DailyReportEmailOptions = typeof optionsOrEmailTo === 'string'
+      ? { emailTo: optionsOrEmailTo }
+      : (optionsOrEmailTo || {});
+
+    const { emailTo, pdfBase64, excelBase64 } = options;
+    const pdfFilename = options.pdfFilename || `Daily_Sales_Report_${dateStr}.pdf`;
+    const excelFilename = options.excelFilename || `Daily_Sales_Report_${dateStr}.xlsx`;
+
     const formatCurrency = (val: number) => 
       new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
 
@@ -261,6 +278,21 @@ export const reportService = {
                   </td>
                 </tr>
 
+                <!-- Attachments Info -->
+                ${(pdfBase64 || excelBase64) ? `
+                <tr>
+                  <td style="padding: 16px 40px; background-color: #f8fafc; border-top: 1px solid #e5e7eb;">
+                    <div style="font-size: 12px; color: #1e293b; font-weight: 700; margin-bottom: 6px;">
+                      📎 Lampiran Dokumen (${(pdfBase64 && excelBase64) ? '2 Berkas' : '1 Berkas'}):
+                    </div>
+                    <div style="font-size: 12px; color: #475569; line-height: 1.6;">
+                      ${pdfBase64 ? `<div style="margin-bottom: 4px;">• <b style="color: #b91c1c;">PDF:</b> ${pdfFilename} <span style="color: #64748b;">(Executive Summary)</span></div>` : ''}
+                      ${excelBase64 ? `<div>• <b style="color: #15803d;">Excel:</b> ${excelFilename} <span style="color: #64748b;">(Overview & Boutique Category Details)</span></div>` : ''}
+                    </div>
+                  </td>
+                </tr>
+                ` : ''}
+
                 <!-- Footer -->
                 <tr>
                   <td style="padding: 20px 40px 30px 40px; font-size: 13px; color: #4b5563; border-top: 1px solid #f3f4f6; background-color: #ffffff; border-radius: 0 0 8px 8px;">
@@ -290,15 +322,48 @@ export const reportService = {
 
     const targetEmail = emailTo || process.env.SMTP_USER;
 
-    const mailOptions = {
+    const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
+
+    if (pdfBase64) {
+      const cleanPdf = pdfBase64.replace(/^data:[^;]+;base64,/, '').trim();
+      if (cleanPdf) {
+        attachments.push({
+          filename: pdfFilename,
+          content: Buffer.from(cleanPdf, 'base64'),
+          contentType: 'application/pdf',
+        });
+      }
+    }
+
+    if (excelBase64) {
+      const cleanExcel = excelBase64.replace(/^data:[^;]+;base64,/, '').trim();
+      if (cleanExcel) {
+        attachments.push({
+          filename: excelFilename,
+          content: Buffer.from(cleanExcel, 'base64'),
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+      }
+    }
+
+    const mailOptions: nodemailer.SendMailOptions = {
       from: `"Bvlgari Dashboard" <${process.env.SMTP_USER}>`,
       to: targetEmail,
       subject: `Laporan Penjualan Harian Bulgari Indonesia : ${displayDate}`,
       html: html,
     };
 
+    if (attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
+
     const info = await transporter.sendMail(mailOptions);
-    return { success: true, messageId: info.messageId };
+    return { 
+      success: true, 
+      messageId: info.messageId,
+      attachmentsCount: attachments.length,
+      attachedFiles: attachments.map(a => a.filename)
+    };
   },
 
   /**
