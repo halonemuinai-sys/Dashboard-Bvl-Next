@@ -30,90 +30,140 @@ const getLocalDateString = (d: Date) => {
   return `${y}-${m}-${dd}`;
 };
 
+function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | any): string {
+  const bytes = buffer instanceof Uint8Array 
+    ? buffer 
+    : (buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : new Uint8Array(buffer?.buffer || buffer));
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return window.btoa(binary);
+}
+
 export default function DailyReportPage() {
   const [date, setDate] = useState(getLocalDateString(new Date()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [sending, setSending] = useState(false);
+  const [sendingStatus, setSendingStatus] = useState<string>('');
   const [showCalendar, setShowCalendar] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
 
-  const handleSendEmail = async () => {
-    if (!confirm(`Are you sure you want to send the Daily Report for ${date}?`)) return;
-    
-    setSending(true);
-    try {
-      const res = await fetch('/api/reports/daily', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date })
-      });
-      
-      const result = await res.json();
-      if (result.success) {
-        alert("Email sent successfully!");
-      } else {
-        alert("Failed to send email: " + (result.error || "Unknown error"));
-      }
-    } catch (err: any) {
-      alert("Error sending email: " + err.message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleDownloadPDF = async () => {
-    // Dynamically import to avoid SSR issues
+  const generateDailyPDF = async () => {
     const html2canvas = (await import('html2canvas-pro')).default;
     const { jsPDF } = await import('jspdf');
     
-    // Target the professional off-screen document
     const element = document.getElementById('pdf-document');
-    if (!element) return;
+    if (!element) return null;
     
-    // Briefly make it visible but absolute to avoid layout shift, so html2canvas can capture it properly
     element.style.left = '0';
     element.style.top = '0';
     element.style.position = 'absolute';
     element.style.zIndex = '-100';
 
-    // Capture the element
-    const canvas = await html2canvas(element, {
-      scale: 2.0,
-      useCORS: true,
-      windowWidth: 794 // A4 width
-    });
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2.0,
+        useCORS: true,
+        windowWidth: 794 // A4 width
+      });
 
-    // Re-hide the element
-    element.style.left = '-9999px';
-    
-    const imgData = canvas.toDataURL('image/jpeg', 0.85);
-    
-    // Create PDF
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    
-    // Calculate dimensions to maintain aspect ratio
-    let drawWidth = pdfWidth;
-    let drawHeight = (canvas.height * pdfWidth) / canvas.width;
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      let drawWidth = pdfWidth;
+      let drawHeight = (canvas.height * pdfWidth) / canvas.width;
 
-    // Force fit onto 1 single page if it's too tall
-    if (drawHeight > pdfHeight) {
-      drawHeight = pdfHeight;
-      drawWidth = (canvas.width * pdfHeight) / canvas.height;
+      if (drawHeight > pdfHeight) {
+        drawHeight = pdfHeight;
+        drawWidth = (canvas.width * pdfHeight) / canvas.height;
+      }
+
+      const xPos = (pdfWidth - drawWidth) / 2;
+      pdf.addImage(imgData, 'JPEG', xPos, 0, drawWidth, drawHeight);
+      
+      return pdf;
+    } finally {
+      element.style.left = '-9999px';
     }
-
-    // Center horizontally if scaled down
-    const xPos = (pdfWidth - drawWidth) / 2;
-
-    pdf.addImage(imgData, 'JPEG', xPos, 0, drawWidth, drawHeight);
-    
-    pdf.save(`Daily Sales Report - ${date}.pdf`);
   };
 
-  const handleDownloadExcel = async () => {
-    setExportingExcel(true);
+  const handleDownloadPDF = async () => {
+    try {
+      const pdf = await generateDailyPDF();
+      if (pdf) {
+        pdf.save(`Daily Sales Report - ${date}.pdf`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Error exporting PDF: ' + err.message);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!confirm(`Apakah Anda yakin ingin mengirim Daily Sales Report tanggal ${date} dengan lampiran PDF & Excel?`)) return;
+    
+    setSending(true);
+    try {
+      // 1. Generate attachments
+      setSendingStatus("Menyiapkan dokumen PDF & Excel...");
+
+      let pdfBase64: string | undefined;
+      try {
+        const pdf = await generateDailyPDF();
+        if (pdf) {
+          const pdfBuffer = pdf.output('arraybuffer');
+          pdfBase64 = arrayBufferToBase64(pdfBuffer);
+        }
+      } catch (pdfErr) {
+        console.error("Gagal membuat lampiran PDF:", pdfErr);
+      }
+
+      let excelBase64: string | undefined;
+      try {
+        const wb = await generateDailyExcelWorkbook();
+        const excelBuffer = await wb.xlsx.writeBuffer();
+        excelBase64 = arrayBufferToBase64(excelBuffer);
+      } catch (excelErr) {
+        console.error("Gagal membuat lampiran Excel:", excelErr);
+      }
+
+      setSendingStatus("Mengirim email laporan...");
+
+      const res = await fetch('/api/reports/daily', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          date,
+          pdfBase64,
+          excelBase64,
+          pdfFilename: `Daily Sales Report - ${date}.pdf`,
+          excelFilename: `Daily_Sales_Report_${date}.xlsx`,
+        })
+      });
+      
+      const result = await res.json();
+      if (result.success) {
+        const count = result.attachmentsCount ?? ((pdfBase64 && excelBase64) ? 2 : 1);
+        alert(`Email laporan harian berhasil dikirim! (${count} berkas PDF & Excel terlampir)`);
+      } else {
+        alert("Gagal mengirim email: " + (result.error || "Unknown error"));
+      }
+    } catch (err: any) {
+      console.error("Error sending daily report:", err);
+      alert("Error sending email: " + err.message);
+    } finally {
+      setSending(false);
+      setSendingStatus("");
+    }
+  };
+
+  const generateDailyExcelWorkbook = async () => {
     try {
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
@@ -508,6 +558,17 @@ export default function DailyReportPage() {
         wsDetails.addRow([]);
       });
 
+      return wb;
+    } catch (err: any) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const handleDownloadExcel = async () => {
+    setExportingExcel(true);
+    try {
+      const wb = await generateDailyExcelWorkbook();
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
@@ -673,7 +734,7 @@ export default function DailyReportPage() {
             className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-md shadow-slate-200 transition-all text-sm font-bold"
           >
             {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {sending ? 'Sending...' : 'Send Report'}
+            {sending ? (sendingStatus || 'Sending...') : 'Send Report'}
           </button>
         </div>
       </div>
