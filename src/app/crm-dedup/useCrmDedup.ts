@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ProfileItem, DuplicateGroup, TrafficItemRow, DbCustomerItem } from './masterData';
+import { ProfileItem, DuplicateGroup, TrafficItemRow, DbCustomerItem, applyCountryPhoneCode } from './masterData';
 
 export function useCrmDedup() {
   const [loading, setLoading] = useState(true);
@@ -22,7 +22,12 @@ export function useCrmDedup() {
   const [fotoCustomerUrl, setFotoCustomerUrl] = useState('');
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [kewarganegaraan, setKewarganegaraan] = useState('Indonesia');
-  const [noHp, setNoHp] = useState('');
+  const [noHp, setNoHp] = useState('+62');
+
+  const handleKewarganegaraanChange = useCallback((newCountry: string) => {
+    setKewarganegaraan(newCountry);
+    setNoHp(prev => applyCountryPhoneCode(prev, newCountry));
+  }, []);
   const [email, setEmail] = useState('');
   const [ktpPassport, setKtpPassport] = useState('');
   const [tglLahir, setTglLahir] = useState('');
@@ -154,7 +159,9 @@ export function useCrmDedup() {
   useEffect(() => { fetchAuditData(); }, [fetchAuditData]);
 
   const runCheck = useCallback(async () => {
-    if (!noHp && !email && !fullName) {
+    const cleanDigits = noHp.replace(/[^0-9]/g, '');
+    const hasValidPhone = cleanDigits.length >= 6;
+    if (!hasValidPhone && !email && !fullName) {
       setExactPhoneMatches([]);
       setExactEmailMatches([]);
       setFuzzyMatches([]);
@@ -162,7 +169,7 @@ export function useCrmDedup() {
     }
     setCheckLoading(true);
     try {
-      const params = new URLSearchParams({ action: 'check', phone: noHp, email, query: fullName });
+      const params = new URLSearchParams({ action: 'check', phone: hasValidPhone ? noHp : '', email, query: fullName });
       const res = await fetch(`/api/crm/dedup?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
@@ -274,7 +281,11 @@ export function useCrmDedup() {
   };
 
   const handleCreateProfile = async () => {
-    if (!namaDepan || !noHp) { setSubmitMessage({ type: 'error', text: 'Nama Depan dan Nomor HP wajib diisi!' }); return; }
+    const cleanDigits = noHp.replace(/[^0-9]/g, '');
+    if (!namaDepan || cleanDigits.length < 5) { 
+      setSubmitMessage({ type: 'error', text: 'Nama Depan dan Nomor HP valid wajib diisi!' }); 
+      return; 
+    }
     setCheckLoading(true);
     setSubmitMessage(null);
     try {
@@ -313,7 +324,7 @@ export function useCrmDedup() {
       if (data.success) {
         setSubmitMessage({ type: 'success', text: 'Profil Pelanggan baru berhasil didaftarkan tanpa duplikasi!' });
         setNamaDepan(''); setNamaBelakang(''); setNamaPanggilan('');
-        setNoHp(''); setEmail(''); setFotoCustomerUrl(''); setNotes('');
+        setNoHp('+62'); setEmail(''); setFotoCustomerUrl(''); setNotes('');
         fetchAuditData();
       } else {
         setSubmitMessage({ type: 'error', text: 'Gagal menyimpan: ' + data.error });
@@ -380,7 +391,7 @@ export function useCrmDedup() {
     namaBelakang, setNamaBelakang,
     namaPanggilan, setNamaPanggilan,
     fotoCustomerUrl, uploadingFoto,
-    kewarganegaraan, setKewarganegaraan,
+    kewarganegaraan, setKewarganegaraan, handleKewarganegaraanChange,
     noHp, setNoHp,
     email, setEmail,
     ktpPassport, setKtpPassport,

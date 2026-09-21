@@ -74,10 +74,75 @@ export const MASTER_DATA = {
     'Others': ['Others'],
   } as Record<string, string[]>,
   phoneCodes: {
-    'Indonesia': '62', 'Singapore': '65', 'Malaysia': '60', 'Australia': '61', 'United States': '1',
-    'China': '86', 'Japan': '81', 'South Korea': '82', 'United Kingdom': '44', 'France': '33', 'Germany': '49',
+    'Indonesia': '62',
+    'Singapore': '65',
+    'Malaysia': '60',
+    'Thailand': '66',
+    'Vietnam': '84',
+    'Philippines': '63',
+    'Australia': '61',
+    'United States': '1',
+    'United Kingdom': '44',
+    'China': '86',
+    'Hong Kong': '852',
+    'Taiwan': '886',
+    'Japan': '81',
+    'South Korea': '82',
+    'India': '91',
+    'United Arab Emirates': '971',
+    'Saudi Arabia': '966',
+    'Italy': '39',
+    'France': '33',
+    'Germany': '49',
+    'Switzerland': '41',
+    'Netherlands': '31',
+    'Russia': '7',
+    'Canada': '1',
+    'New Zealand': '64',
   } as Record<string, string>,
 };
+
+/**
+ * Otomatis mengganti atau menambahkan kode negara pada nomor HP
+ * Contoh: "0812345678" + "Singapore" -> "+65812345678"
+ *         "+62812345678" + "Malaysia" -> "+60812345678"
+ */
+export function applyCountryPhoneCode(phone: string, country: string): string {
+  const code = MASTER_DATA.phoneCodes[country] || '62';
+  const newPrefix = `+${code}`;
+
+  const trimmed = (phone || '').trim();
+  if (!trimmed) {
+    return newPrefix;
+  }
+
+  // Jika nomor hanya "+" atau prefix lama (misal "+62", "+65")
+  if (/^\+\d{1,4}$/.test(trimmed)) {
+    return newPrefix;
+  }
+
+  // Jika sudah berawalan +, buang kode negara lama (+1 s.d +999)
+  if (trimmed.startsWith('+')) {
+    const digitsOnly = trimmed.replace(/^\+\d{1,4}\s*/, '').replace(/^0+/, '');
+    return `${newPrefix}${digitsOnly}`;
+  }
+
+  // Jika berawalan 0 (format lokal Indonesia: 0812...)
+  if (trimmed.startsWith('0')) {
+    const digitsOnly = trimmed.replace(/^0+/, '');
+    return `${newPrefix}${digitsOnly}`;
+  }
+
+  // Jika berawalan kode negara tanpa tanda plus (misal 62812...)
+  for (const c of Object.values(MASTER_DATA.phoneCodes)) {
+    if (trimmed.startsWith(c)) {
+      const remaining = trimmed.slice(c.length).replace(/^0+/, '');
+      return `${newPrefix}${remaining}`;
+    }
+  }
+
+  return `${newPrefix}${trimmed}`;
+}
 
 export interface ProfileItem {
   id: number;
