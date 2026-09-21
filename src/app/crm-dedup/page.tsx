@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import BvlgariLoader from '@/components/BvlgariLoader';
-import { MASTER_DATA } from './masterData';
+import { MASTER_DATA, applyCountryPhoneCode } from './masterData';
 import { useCrmDedup } from './useCrmDedup';
 import { CustomerPickerCombobox } from './components/CustomerPickerCombobox';
 import { TrafficHistoryTable } from './components/TrafficHistoryTable';
@@ -228,16 +228,44 @@ export default function CrmDedupPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kewarganegaraan</label>
-                  <select value={crm.kewarganegaraan} onChange={e => crm.setKewarganegaraan(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    {Object.keys(MASTER_DATA.phoneCodes).map(k => <option key={k} value={k}>{k}</option>)}
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase">Kewarganegaraan</label>
+                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      Kode: +{MASTER_DATA.phoneCodes[crm.kewarganegaraan] || '62'}
+                    </span>
+                  </div>
+                  <select 
+                    value={crm.kewarganegaraan} 
+                    onChange={e => crm.handleKewarganegaraanChange(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium cursor-pointer hover:border-slate-300 transition-colors"
+                  >
+                    {Object.entries(MASTER_DATA.phoneCodes).map(([k, code]) => (
+                      <option key={k} value={k}>{k} (+{code})</option>
+                    ))}
+                    {crm.kewarganegaraan && !MASTER_DATA.phoneCodes[crm.kewarganegaraan] && (
+                      <option value={crm.kewarganegaraan}>{crm.kewarganegaraan}</option>
+                    )}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nomor HP <span className="text-red-500">*</span></label>
-                  <input type="text" placeholder="081234567890" value={crm.noHp} onChange={e => crm.setNoHp(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                    Nomor HP <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder={`+${MASTER_DATA.phoneCodes[crm.kewarganegaraan] || '62'} 812 3456 7890`} 
+                    value={crm.noHp} 
+                    onChange={e => crm.setNoHp(e.target.value)}
+                    onBlur={() => {
+                      if (crm.noHp && !crm.noHp.startsWith('+')) {
+                        crm.setNoHp(applyCountryPhoneCode(crm.noHp, crm.kewarganegaraan));
+                      }
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium hover:border-slate-300 focus:border-slate-800 transition-colors" 
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Kode negara otomatis: <span className="font-bold text-slate-700">+{MASTER_DATA.phoneCodes[crm.kewarganegaraan] || '62'}</span>
+                  </p>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Email</label>
