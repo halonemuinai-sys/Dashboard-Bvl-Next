@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import BvlgariLoader from '@/components/BvlgariLoader';
-import { MASTER_DATA, applyCountryPhoneCode } from './masterData';
+import { MASTER_DATA, applyCountryPhoneCode, COUNTRY_REGIONS, INTERNATIONAL_CITIES, QUICK_DOMISILI_COUNTRIES } from './masterData';
 import { useCrmDedup } from './useCrmDedup';
 import { CustomerPickerCombobox } from './components/CustomerPickerCombobox';
 import { TrafficHistoryTable } from './components/TrafficHistoryTable';
@@ -239,8 +239,12 @@ export default function CrmDedupPage() {
                     onChange={e => crm.handleKewarganegaraanChange(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium cursor-pointer hover:border-slate-300 transition-colors"
                   >
-                    {Object.entries(MASTER_DATA.phoneCodes).map(([k, code]) => (
-                      <option key={k} value={k}>{k} (+{code})</option>
+                    {Object.entries(COUNTRY_REGIONS).map(([region, countries]) => (
+                      <optgroup key={region} label={`── ${region} ──`}>
+                        {countries.map(k => (
+                          <option key={k} value={k}>{k} (+{MASTER_DATA.phoneCodes[k] || ''})</option>
+                        ))}
+                      </optgroup>
                     ))}
                     {crm.kewarganegaraan && !MASTER_DATA.phoneCodes[crm.kewarganegaraan] && (
                       <option value={crm.kewarganegaraan}>{crm.kewarganegaraan}</option>
@@ -347,29 +351,155 @@ export default function CrmDedupPage() {
                 )}
               </div>
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                <label className="block text-[11px] font-bold text-slate-600 uppercase">Tipe Domisili</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase">Tipe Domisili</label>
+                  {crm.domisiliType === 'Luar Negeri' && (
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-blue-600" />
+                      Mode Luar Negeri Terotomasi
+                    </span>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-4">
                   {(['Dalam Negeri', 'Luar Negeri'] as const).map(type => (
                     <label key={type} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                      <input type="radio" name="domType" checked={crm.domisiliType === type} onChange={() => crm.setDomisiliType(type)} />
+                      <input 
+                        type="radio" 
+                        name="domType" 
+                        checked={crm.domisiliType === type} 
+                        onChange={() => crm.handleDomisiliTypeChange(type)} 
+                      />
                       {type === 'Dalam Negeri' ? 'Dalam Negeri (Indonesia)' : 'Luar Negeri (International)'}
                     </label>
                   ))}
                 </div>
+
                 {crm.domisiliType === 'Dalam Negeri' ? (
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Provinsi Domisili</label>
-                    <select value={crm.domisiliProvinsi} onChange={e => crm.setDomisiliProvinsi(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
+                    <select 
+                      value={crm.domisiliProvinsi} 
+                      onChange={e => crm.setDomisiliProvinsi(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium hover:border-slate-300 transition-colors"
+                    >
                       <option value="">Pilih Provinsi...</option>
                       {MASTER_DATA.provinsi.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                 ) : (
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Negara / Kota Domisili</label>
-                    <input type="text" placeholder="e.g. Singapore, London..." value={crm.domisiliLuarNegeri} onChange={e => crm.setDomisiliLuarNegeri(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
+                  <div className="space-y-3 pt-1">
+                    {/* Quick Chips Negara Terpopuler */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          Pilih Cepat Negara (Asia, Oseania, Eropa, Afrika, Timur Tengah, Amerika):
+                        </span>
+                        {crm.kewarganegaraan && crm.kewarganegaraan !== 'Indonesia' && crm.domisiliNegara !== crm.kewarganegaraan && (
+                          <button
+                            type="button"
+                            onClick={() => crm.handleSelectDomisiliNegara(crm.kewarganegaraan)}
+                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                          >
+                            Sama dg Kewarganegaraan ({crm.kewarganegaraan})
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {QUICK_DOMISILI_COUNTRIES.map(item => (
+                          <button
+                            key={item.name}
+                            type="button"
+                            onClick={() => crm.handleSelectDomisiliNegara(item.name)}
+                            className={cn(
+                              "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer",
+                              crm.domisiliNegara === item.name
+                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                                : "bg-white text-slate-700 border-slate-200 hover:border-slate-400 hover:bg-slate-100"
+                            )}
+                          >
+                            <span>{item.flag}</span>
+                            <span>{item.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Form Grid 2 Kolom: Negara & Kota */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                          Negara Domisili <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={crm.domisiliNegara}
+                          onChange={e => crm.handleSelectDomisiliNegara(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium hover:border-slate-300 transition-colors cursor-pointer"
+                        >
+                          <option value="">Pilih Negara...</option>
+                          {Object.entries(COUNTRY_REGIONS).map(([region, countries]) => (
+                            <optgroup key={region} label={`── ${region} ──`}>
+                              {countries.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                          Kota Domisili (Pilihan / Ketik)
+                        </label>
+                        <input
+                          type="text"
+                          list="international-cities-list"
+                          placeholder={crm.domisiliNegara ? `Kota di ${crm.domisiliNegara} (misal: London, Paris, Sydney...)` : "Pilih negara atau ketik nama kota..."}
+                          value={crm.domisiliKota}
+                          onChange={e => crm.handleSelectDomisiliKota(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium hover:border-slate-300 focus:border-slate-800 transition-colors"
+                        />
+                        <datalist id="international-cities-list">
+                          {(INTERNATIONAL_CITIES[crm.domisiliNegara] || []).map(city => (
+                            <option key={city} value={city} />
+                          ))}
+                        </datalist>
+                      </div>
+                    </div>
+
+                    {/* Quick City Suggestions (Pill Buttons) */}
+                    {crm.domisiliNegara && INTERNATIONAL_CITIES[crm.domisiliNegara] && INTERNATIONAL_CITIES[crm.domisiliNegara].length > 1 && (
+                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Saran Kota:</span>
+                        {INTERNATIONAL_CITIES[crm.domisiliNegara].map(city => (
+                          <button
+                            key={city}
+                            type="button"
+                            onClick={() => crm.handleSelectDomisiliKota(city)}
+                            className={cn(
+                              "text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors border cursor-pointer",
+                              crm.domisiliKota === city
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-blue-400 hover:text-blue-700"
+                            )}
+                          >
+                            {city}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Status Format Data Tersimpan di Database */}
+                    <div className="p-2.5 bg-blue-50/70 border border-blue-100 rounded-xl flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Format Data Tersimpan:</span>
+                        <span className="font-bold text-slate-800">
+                          {crm.domisiliLuarNegeri || <span className="text-slate-400 italic font-normal">Belum ada negara dipilih</span>}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-blue-500 font-medium">Otomatis Terstandarisasi</span>
+                    </div>
                   </div>
                 )}
               </div>

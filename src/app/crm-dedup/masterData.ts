@@ -45,7 +45,7 @@ export const MASTER_DATA = {
   etnis: [
     'Jawa', 'Sunda', 'Batak', 'Minangkabau', 'Betawi', 'Bugis', 'Aceh', 'Dayak', 'Madura', 'Ambon', 'Sasak',
     'Toraja', 'Papua', 'Flores', 'Minahasa', 'Tionghoa', 'Korea', 'India', 'Western', 'Japanese', 'Middle East',
-    'Arabic', 'Filipina', 'European', 'Australian', 'American', 'Asian', 'Thai', 'Vietnamese', 'Malay',
+    'Arabic', 'Filipina', 'European', 'Australian', 'American', 'Asian', 'Thai', 'Vietnamese', 'Malay', 'African',
   ],
   pekerjaan: [
     'Wirausaha', 'ASN', 'TNI/Polri', 'IRT', 'Karyawan', 'Mahasiswa/i',
@@ -74,33 +74,190 @@ export const MASTER_DATA = {
     'Others': ['Others'],
   } as Record<string, string[]>,
   phoneCodes: {
+    // Asia & Oseania
     'Indonesia': '62',
     'Singapore': '65',
     'Malaysia': '60',
     'Thailand': '66',
     'Vietnam': '84',
     'Philippines': '63',
-    'Australia': '61',
-    'United States': '1',
-    'United Kingdom': '44',
     'China': '86',
     'Hong Kong': '852',
     'Taiwan': '886',
     'Japan': '81',
     'South Korea': '82',
     'India': '91',
-    'United Arab Emirates': '971',
-    'Saudi Arabia': '966',
-    'Italy': '39',
+    'Australia': '61',
+    'New Zealand': '64',
+    // Eropa
+    'United Kingdom': '44',
     'France': '33',
+    'Italy': '39',
     'Germany': '49',
     'Switzerland': '41',
     'Netherlands': '31',
+    'Spain': '34',
+    'Monaco': '377',
+    'Belgium': '32',
+    'Austria': '43',
+    'Sweden': '46',
+    'Norway': '47',
+    'Denmark': '45',
+    'Ireland': '353',
+    'Portugal': '351',
+    'Greece': '30',
+    'Turkey': '90',
     'Russia': '7',
+    'Poland': '48',
+    'Czech Republic': '420',
+    'Hungary': '36',
+    'Finland': '358',
+    // Afrika
+    'South Africa': '27',
+    'Egypt': '20',
+    'Morocco': '212',
+    'Nigeria': '234',
+    'Kenya': '254',
+    'Mauritius': '230',
+    'Seychelles': '248',
+    'Ghana': '233',
+    'Tunisia': '216',
+    'Algeria': '213',
+    'Tanzania': '255',
+    'Ethiopia': '251',
+    // Timur Tengah
+    'United Arab Emirates': '971',
+    'Saudi Arabia': '966',
+    'Qatar': '974',
+    'Kuwait': '965',
+    'Bahrain': '973',
+    'Oman': '968',
+    // Amerika
+    'United States': '1',
     'Canada': '1',
-    'New Zealand': '64',
+    'Brazil': '55',
+    'Mexico': '52',
+    'Argentina': '54',
   } as Record<string, string>,
 };
+
+export const COUNTRY_REGIONS: Record<string, string[]> = {
+  'Asia & Oseania': [
+    'Indonesia', 'Singapore', 'Malaysia', 'Thailand', 'Vietnam', 'Philippines',
+    'China', 'Hong Kong', 'Taiwan', 'Japan', 'South Korea', 'India',
+    'Australia', 'New Zealand',
+  ],
+  'Eropa': [
+    'United Kingdom', 'France', 'Italy', 'Germany', 'Switzerland', 'Netherlands',
+    'Spain', 'Monaco', 'Belgium', 'Austria', 'Sweden', 'Norway', 'Denmark',
+    'Ireland', 'Portugal', 'Greece', 'Turkey', 'Russia', 'Poland', 'Czech Republic',
+    'Hungary', 'Finland',
+  ],
+  'Afrika': [
+    'South Africa', 'Egypt', 'Morocco', 'Nigeria', 'Kenya', 'Mauritius',
+    'Seychelles', 'Ghana', 'Tunisia', 'Algeria', 'Tanzania', 'Ethiopia',
+  ],
+  'Timur Tengah': [
+    'United Arab Emirates', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman',
+  ],
+  'Amerika': [
+    'United States', 'Canada', 'Brazil', 'Mexico', 'Argentina',
+  ],
+};
+
+export const INTERNATIONAL_CITIES: Record<string, string[]> = {
+  'Singapore': ['Singapore'],
+  'Malaysia': ['Kuala Lumpur', 'Penang', 'Johor Bahru', 'Kota Kinabalu'],
+  'Thailand': ['Bangkok', 'Phuket', 'Chiang Mai', 'Pattaya'],
+  'Vietnam': ['Ho Chi Minh City', 'Hanoi', 'Da Nang'],
+  'Philippines': ['Manila', 'Cebu', 'Davao'],
+  'China': ['Shanghai', 'Beijing', 'Guangzhou', 'Shenzhen', 'Hangzhou', 'Chengdu'],
+  'Hong Kong': ['Hong Kong'],
+  'Taiwan': ['Taipei', 'Kaohsiung', 'Taichung'],
+  'Japan': ['Tokyo', 'Osaka', 'Kyoto', 'Yokohama', 'Nagoya', 'Fukuoka', 'Sapporo'],
+  'South Korea': ['Seoul', 'Busan', 'Incheon', 'Jeju'],
+  'India': ['Mumbai', 'New Delhi', 'Bangalore', 'Chennai', 'Kolkata'],
+  'Australia': ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Gold Coast'],
+  'New Zealand': ['Auckland', 'Wellington', 'Christchurch', 'Queenstown'],
+  'United Kingdom': ['London', 'Manchester', 'Edinburgh', 'Birmingham', 'Glasgow'],
+  'France': ['Paris', 'Nice', 'Lyon', 'Cannes', 'Marseille', 'Bordeaux'],
+  'Italy': ['Rome', 'Milan', 'Florence', 'Venice', 'Naples', 'Turin'],
+  'Germany': ['Berlin', 'Munich', 'Frankfurt', 'Hamburg', 'Cologne', 'Dusseldorf'],
+  'Switzerland': ['Zurich', 'Geneva', 'Basel', 'Lugano', 'Bern', 'Lucerne', 'St. Moritz'],
+  'Netherlands': ['Amsterdam', 'Rotterdam', 'The Hague', 'Utrecht'],
+  'Spain': ['Madrid', 'Barcelona', 'Marbella', 'Valencia', 'Seville', 'Ibiza', 'Mallorca'],
+  'Monaco': ['Monaco', 'Monte Carlo'],
+  'Belgium': ['Brussels', 'Antwerp', 'Bruges', 'Ghent'],
+  'Austria': ['Vienna', 'Salzburg', 'Innsbruck'],
+  'Sweden': ['Stockholm', 'Gothenburg', 'Malmo'],
+  'Norway': ['Oslo', 'Bergen', 'Trondheim'],
+  'Denmark': ['Copenhagen', 'Aarhus'],
+  'Ireland': ['Dublin', 'Cork', 'Galway'],
+  'Portugal': ['Lisbon', 'Porto', 'Faro'],
+  'Greece': ['Athens', 'Mykonos', 'Santorini', 'Thessaloniki'],
+  'Turkey': ['Istanbul', 'Antalya', 'Ankara', 'Bodrum', 'Izmir'],
+  'Russia': ['Moscow', 'Saint Petersburg'],
+  'Poland': ['Warsaw', 'Krakow', 'Gdansk'],
+  'Czech Republic': ['Prague', 'Brno'],
+  'Hungary': ['Budapest'],
+  'Finland': ['Helsinki', 'Espoo'],
+  'South Africa': ['Cape Town', 'Johannesburg', 'Durban', 'Pretoria'],
+  'Egypt': ['Cairo', 'Alexandria', 'Giza', 'Sharm El Sheikh', 'Hurghada'],
+  'Morocco': ['Casablanca', 'Marrakech', 'Rabat', 'Tangier'],
+  'Nigeria': ['Lagos', 'Abuja'],
+  'Kenya': ['Nairobi', 'Mombasa'],
+  'Mauritius': ['Port Louis', 'Grand Baie'],
+  'Seychelles': ['Victoria', 'Praslin'],
+  'Ghana': ['Accra', 'Kumasi'],
+  'Tunisia': ['Tunis', 'Sousse'],
+  'Algeria': ['Algiers', 'Oran'],
+  'Tanzania': ['Dar es Salaam', 'Zanzibar', 'Arusha'],
+  'Ethiopia': ['Addis Ababa'],
+  'United Arab Emirates': ['Dubai', 'Abu Dhabi', 'Sharjah'],
+  'Saudi Arabia': ['Riyadh', 'Jeddah', 'Mecca', 'Medina', 'Dammam'],
+  'Qatar': ['Doha'],
+  'Kuwait': ['Kuwait City'],
+  'Bahrain': ['Manama'],
+  'Oman': ['Muscat'],
+  'United States': ['New York', 'Los Angeles', 'San Francisco', 'Miami', 'Chicago', 'Las Vegas', 'Honolulu'],
+  'Canada': ['Toronto', 'Vancouver', 'Montreal', 'Calgary'],
+  'Brazil': ['Sao Paulo', 'Rio de Janeiro'],
+  'Mexico': ['Mexico City', 'Cancun', 'Guadalajara'],
+  'Argentina': ['Buenos Aires'],
+};
+
+export const QUICK_DOMISILI_COUNTRIES = [
+  // Asia & Oseania
+  { name: 'Singapore', flag: '🇸🇬', label: 'Singapore' },
+  { name: 'Malaysia', flag: '🇲🇾', label: 'Malaysia' },
+  { name: 'Australia', flag: '🇦🇺', label: 'Australia' },
+  { name: 'China', flag: '🇨🇳', label: 'China' },
+  { name: 'Japan', flag: '🇯🇵', label: 'Japan' },
+  // Eropa
+  { name: 'United Kingdom', flag: '🇬🇧', label: 'UK' },
+  { name: 'France', flag: '🇫🇷', label: 'France' },
+  { name: 'Italy', flag: '🇮🇹', label: 'Italy' },
+  { name: 'Switzerland', flag: '🇨🇭', label: 'Swiss' },
+  { name: 'Germany', flag: '🇩🇪', label: 'Germany' },
+  { name: 'Netherlands', flag: '🇳🇱', label: 'Holland' },
+  // Afrika
+  { name: 'South Africa', flag: '🇿🇦', label: 'S. Africa' },
+  { name: 'Egypt', flag: '🇪🇬', label: 'Egypt' },
+  { name: 'Morocco', flag: '🇲🇦', label: 'Morocco' },
+  // Timur Tengah & Amerika
+  { name: 'United Arab Emirates', flag: '🇦🇪', label: 'UAE (Dubai)' },
+  { name: 'United States', flag: '🇺🇸', label: 'USA' },
+];
+
+export function formatDomisiliLN(country: string, city?: string): string {
+  const c = (country || '').trim();
+  const k = (city || '').trim();
+  if (!c && !k) return '';
+  if (!c) return k;
+  if (!k) return c;
+  if (c.toLowerCase() === k.toLowerCase()) return c;
+  return `${c} - ${k}`;
+}
 
 /**
  * Otomatis mengganti atau menambahkan kode negara pada nomor HP

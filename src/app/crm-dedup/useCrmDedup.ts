@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ProfileItem, DuplicateGroup, TrafficItemRow, DbCustomerItem, applyCountryPhoneCode } from './masterData';
+import { ProfileItem, DuplicateGroup, TrafficItemRow, DbCustomerItem, applyCountryPhoneCode, formatDomisiliLN, INTERNATIONAL_CITIES } from './masterData';
 
 export function useCrmDedup() {
   const [loading, setLoading] = useState(true);
@@ -13,7 +13,7 @@ export function useCrmDedup() {
   const [trafficRows, setTrafficRows] = useState<any[]>([]);
   const [advisorsList, setAdvisorsList] = useState<string[]>([]);
 
-  // Profiling form state
+  // CRM Profiling form state
   const [statusPelanggan, setStatusPelanggan] = useState('New');
   const [title, setTitle] = useState('Mr');
   const [namaDepan, setNamaDepan] = useState('');
@@ -24,10 +24,59 @@ export function useCrmDedup() {
   const [kewarganegaraan, setKewarganegaraan] = useState('Indonesia');
   const [noHp, setNoHp] = useState('+62');
 
+  const [domisiliType, setDomisiliType] = useState<'Dalam Negeri' | 'Luar Negeri'>('Dalam Negeri');
+  const [domisiliProvinsi, setDomisiliProvinsi] = useState('');
+  const [domisiliNegara, setDomisiliNegara] = useState('');
+  const [domisiliKota, setDomisiliKota] = useState('');
+  const [domisiliLuarNegeri, setDomisiliLuarNegeri] = useState('');
+
   const handleKewarganegaraanChange = useCallback((newCountry: string) => {
     setKewarganegaraan(newCountry);
     setNoHp(prev => applyCountryPhoneCode(prev, newCountry));
+
+    // Smart sync ke Domisili
+    if (newCountry === 'Indonesia') {
+      setDomisiliType('Dalam Negeri');
+      setDomisiliNegara('');
+      setDomisiliKota('');
+      setDomisiliLuarNegeri('');
+    } else {
+      setDomisiliType('Luar Negeri');
+      setDomisiliNegara(newCountry);
+      const cities = INTERNATIONAL_CITIES[newCountry] || [];
+      const defaultCity = cities.length === 1 ? cities[0] : '';
+      setDomisiliKota(defaultCity);
+      setDomisiliLuarNegeri(formatDomisiliLN(newCountry, defaultCity));
+    }
   }, []);
+
+  const handleSelectDomisiliNegara = useCallback((country: string) => {
+    setDomisiliNegara(country);
+    const cities = INTERNATIONAL_CITIES[country] || [];
+    const defaultCity = cities.length === 1 ? cities[0] : '';
+    setDomisiliKota(defaultCity);
+    setDomisiliLuarNegeri(formatDomisiliLN(country, defaultCity));
+  }, []);
+
+  const handleSelectDomisiliKota = useCallback((city: string) => {
+    setDomisiliKota(city);
+    setDomisiliLuarNegeri(formatDomisiliLN(domisiliNegara, city));
+  }, [domisiliNegara]);
+
+  const handleDomisiliTypeChange = useCallback((type: 'Dalam Negeri' | 'Luar Negeri') => {
+    setDomisiliType(type);
+    if (type === 'Luar Negeri') {
+      if (!domisiliNegara) {
+        const country = kewarganegaraan && kewarganegaraan !== 'Indonesia' ? kewarganegaraan : 'Singapore';
+        setDomisiliNegara(country);
+        const cities = INTERNATIONAL_CITIES[country] || [];
+        const defaultCity = cities.length === 1 ? cities[0] : '';
+        setDomisiliKota(defaultCity);
+        setDomisiliLuarNegeri(formatDomisiliLN(country, defaultCity));
+      }
+    }
+  }, [domisiliNegara, kewarganegaraan]);
+
   const [email, setEmail] = useState('');
   const [ktpPassport, setKtpPassport] = useState('');
   const [tglLahir, setTglLahir] = useState('');
@@ -38,9 +87,6 @@ export function useCrmDedup() {
   const [tglPernikahan, setTglPernikahan] = useState('');
   const [memilikiAnak, setMemilikiAnak] = useState('TIDAK');
   const [jumlahAnak, setJumlahAnak] = useState('0');
-  const [domisiliType, setDomisiliType] = useState<'Dalam Negeri' | 'Luar Negeri'>('Dalam Negeri');
-  const [domisiliProvinsi, setDomisiliProvinsi] = useState('');
-  const [domisiliLuarNegeri, setDomisiliLuarNegeri] = useState('');
   const [pekerjaan, setPekerjaan] = useState('');
   const [tinggiBadan, setTinggiBadan] = useState('');
   const [bentukTubuh, setBentukTubuh] = useState('');
@@ -324,7 +370,8 @@ export function useCrmDedup() {
       if (data.success) {
         setSubmitMessage({ type: 'success', text: 'Profil Pelanggan baru berhasil didaftarkan tanpa duplikasi!' });
         setNamaDepan(''); setNamaBelakang(''); setNamaPanggilan('');
-        setNoHp('+62'); setEmail(''); setFotoCustomerUrl(''); setNotes('');
+        setKewarganegaraan('Indonesia'); setNoHp('+62'); setEmail(''); setFotoCustomerUrl(''); setNotes('');
+        setDomisiliType('Dalam Negeri'); setDomisiliProvinsi(''); setDomisiliLuarNegeri(''); setDomisiliNegara(''); setDomisiliKota('');
         fetchAuditData();
       } else {
         setSubmitMessage({ type: 'error', text: 'Gagal menyimpan: ' + data.error });
@@ -403,8 +450,10 @@ export function useCrmDedup() {
     tglPernikahan, setTglPernikahan,
     memilikiAnak, setMemilikiAnak,
     jumlahAnak, setJumlahAnak,
-    domisiliType, setDomisiliType,
+    domisiliType, setDomisiliType, handleDomisiliTypeChange,
     domisiliProvinsi, setDomisiliProvinsi,
+    domisiliNegara, setDomisiliNegara, handleSelectDomisiliNegara,
+    domisiliKota, setDomisiliKota, handleSelectDomisiliKota,
     domisiliLuarNegeri, setDomisiliLuarNegeri,
     pekerjaan, setPekerjaan,
     tinggiBadan, setTinggiBadan,
