@@ -14,6 +14,7 @@ import { useCrmDedup } from './useCrmDedup';
 import { CustomerPickerCombobox } from './components/CustomerPickerCombobox';
 import { TrafficHistoryTable } from './components/TrafficHistoryTable';
 import { InventorySearchModal, type InventoryItem } from './components/InventorySearchModal';
+import { DatePicker } from '@/components/DatePicker';
 
 export default function CrmDedupPage() {
   const [activeTab, setActiveTab] = useState<'check' | 'traffic' | 'audit' | 'history'>('check');
@@ -260,8 +261,14 @@ export default function CrmDedupPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tanggal Lahir</label>
-                  <input type="date" value={crm.tglLahir} onChange={e => crm.setTglLahir(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
+                  <DatePicker
+                    value={crm.tglLahir}
+                    onChange={crm.setTglLahir}
+                    placeholder="Pilih tgl lahir..."
+                    fromYear={1920}
+                    toYear={new Date().getFullYear()}
+                    showShortcuts={false}
+                  />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Umur</label>
@@ -283,8 +290,15 @@ export default function CrmDedupPage() {
                 {crm.pernikahan === 'Kawin' && (
                   <div>
                     <label className="block text-[11px] font-bold text-violet-700 uppercase mb-1">Tanggal Pernikahan</label>
-                    <input type="date" value={crm.tglPernikahan} onChange={e => crm.setTglPernikahan(e.target.value)}
-                      className="w-full bg-white border border-violet-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
+                    <DatePicker
+                      value={crm.tglPernikahan}
+                      onChange={crm.setTglPernikahan}
+                      placeholder="Pilih tgl pernikahan..."
+                      buttonClassName="bg-white border-violet-300"
+                      fromYear={1950}
+                      toYear={new Date().getFullYear()}
+                      showShortcuts={false}
+                    />
                   </div>
                 )}
                 <div>
@@ -613,8 +627,15 @@ export default function CrmDedupPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tanggal Kunjungan</label>
-                  <input type="date" value={crm.trTanggal} onChange={e => crm.setTrTanggal(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
+                  <DatePicker
+                    value={crm.trTanggal}
+                    onChange={crm.setTrTanggal}
+                    placeholder="Pilih tgl kunjungan..."
+                    fromYear={2020}
+                    toYear={new Date().getFullYear() + 1}
+                    showShortcuts={true}
+                    allowClear={false}
+                  />
                 </div>
                 <div>
                   <CustomerPickerCombobox

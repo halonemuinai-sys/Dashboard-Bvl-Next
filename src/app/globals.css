@@ -166,4 +166,109 @@ body {
   animation: border-beam-norm 3.2s linear infinite;
 }
 
+/* ── Bvlgari Luxury DatePicker (react-day-picker) Styling ───────────────── */
+.rdp-root {
+  --rdp-accent-color: #0f172a;
+  --rdp-accent-background-color: #f1f5f9;
+  --rdp-day_button-border-radius: 10px;
+  --rdp-day_button-width: 36px;
+  --rdp-day_button-height: 36px;
+  --rdp-day-font: inherit;
+  font-family: inherit;
+}
+
+.rdp-caption_label {
+  font-weight: 800;
+  font-size: 0.875rem;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.rdp-dropdowns {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.rdp-dropdown {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.625rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0f172a;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rdp-dropdown:hover {
+  background-color: #ffffff;
+  border-color: #94a3b8;
+}
+
+.rdp-dropdown:focus {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.08);
+}
+
+.rdp-button_previous,
+.rdp-button_next {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.rdp-button_previous:hover,
+.rdp-button_next:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.rdp-weekday {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-bottom: 0.35rem;
+}
+
+.rdp-day {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.rdp-day_button {
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  transition: all 0.15s ease;
+}
+
+.rdp-day_button:hover:not([disabled]) {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.rdp-selected .rdp-day_button {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  font-weight: 800;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
+}
+
+.rdp-today:not(.rdp-selected) .rdp-day_button {
+  border: 2px solid #3b82f6;
+  font-weight: 800;
+  color: #2563eb;
+}
+
+
 
