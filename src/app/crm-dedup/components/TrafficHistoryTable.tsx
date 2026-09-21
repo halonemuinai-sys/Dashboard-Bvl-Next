@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MASTER_DATA } from '../masterData';
+import { DatePicker } from '@/components/DatePicker';
 
 export interface IntegratedTrafficItem {
   id: number | string;
@@ -316,11 +317,15 @@ export function TrafficHistoryTable({ onSelectCustomerForProfiling }: TrafficHis
           {/* Dari Tanggal */}
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Dari Tanggal</label>
-            <input
-              type="date"
+            <DatePicker
               value={startDate}
-              onChange={e => { setStartDate(e.target.value); setCurrentPage(1); }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-medium text-slate-800 outline-none"
+              onChange={val => { setStartDate(val); setCurrentPage(1); }}
+              placeholder="Dari tgl..."
+              buttonClassName="p-2 text-xs"
+              fromYear={2020}
+              toYear={new Date().getFullYear() + 1}
+              showShortcuts={true}
+              align="left"
             />
           </div>
 
@@ -328,11 +333,15 @@ export function TrafficHistoryTable({ onSelectCustomerForProfiling }: TrafficHis
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Sampai Tanggal</label>
-              <input
-                type="date"
+              <DatePicker
                 value={endDate}
-                onChange={e => { setEndDate(e.target.value); setCurrentPage(1); }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-medium text-slate-800 outline-none"
+                onChange={val => { setEndDate(val); setCurrentPage(1); }}
+                placeholder="Sampai tgl..."
+                buttonClassName="p-2 text-xs"
+                fromYear={2020}
+                toYear={new Date().getFullYear() + 1}
+                showShortcuts={true}
+                align="right"
               />
             </div>
             {(searchQuery || selectedStore !== 'ALL' || selectedStatus !== 'ALL' || selectedProspect !== 'ALL' || startDate || endDate) && (
