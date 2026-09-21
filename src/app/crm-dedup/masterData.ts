@@ -51,6 +51,15 @@ export const MASTER_DATA = {
     'Wirausaha', 'ASN', 'TNI/Polri', 'IRT', 'Karyawan', 'Mahasiswa/i',
     'Direktur', 'Dokter', 'Artis / Model', 'Pramugari', 'Lainnya',
   ],
+  agama: [
+    'Islam',
+    'Kristen',
+    'Katolik',
+    'Hindu',
+    'Buddha',
+    'Konghucu',
+    'Lainnya',
+  ],
   warnaFavorit: [
     'Merah', 'Biru', 'Hijau', 'Kuning', 'Jingga', 'Ungu', 'Violet', 'Merah Jambu', 'Coklat', 'Abu-abu',
     'Putih', 'Hitam', 'Cyan', 'Magenta', 'Krem', 'Marun', 'Lavender', 'Peach', 'Mint', 'Turquoise', 'All Color',
