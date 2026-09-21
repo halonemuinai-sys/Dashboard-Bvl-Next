@@ -356,8 +356,14 @@ export default function CrmDedupPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Agama</label>
-                  <input type="text" placeholder="Agama..." value={crm.agama} onChange={e => crm.setAgama(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
+                  <select value={crm.agama} onChange={e => crm.setAgama(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
+                    <option value="">Pilih Agama...</option>
+                    {MASTER_DATA.agama.map(a => <option key={a} value={a}>{a}</option>)}
+                    {crm.agama && !MASTER_DATA.agama.includes(crm.agama) && (
+                      <option value={crm.agama}>{crm.agama}</option>
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Pekerjaan</label>
