@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw, Download, Calendar as CalendarIcon, Database,
-  CheckCircle2, AlertCircle, Loader2, ArrowRightLeft
+  CheckCircle2, AlertCircle, Loader2, ArrowRightLeft, Store
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { syncService } from '@/services/syncService';
@@ -31,8 +31,10 @@ interface TransactionRow {
 export default function SalesDataPage() {
   const [month, setMonth] = useState(new Date().getMonth() + 1); // 1-12
   const [year, setYear] = useState(new Date().getFullYear());
+  const [store, setStore] = useState('Plaza Indonesia');
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [rows, setRows] = useState<TransactionRow[]>([]);
@@ -92,19 +94,59 @@ export default function SalesDataPage() {
     }
   };
 
+  // Handle Export Daily Sales Report (Excel)
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/sales/export-daily-report?month=${month}&year=${year}&store=${encodeURIComponent(store)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Gagal membuat file export');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `DAILY SALES REPORT BVLGARI ${store.toUpperCase()} ${monthName.toUpperCase()} ${year}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      alert('Gagal export: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const monthName = MONTHS[month - 1];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-10">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex flex-wrap items-center gap-2">
             <Database className="w-6 h-6 text-blue-600" />
             Sales Data Manager
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Store Selector */}
+          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
+            <Store className="w-4 h-4 text-emerald-600" />
+            <select
+              aria-label="Select store"
+              value={store}
+              onChange={e => setStore(e.target.value)}
+              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
+            >
+              <option value="Plaza Indonesia">Plaza Indonesia</option>
+              <option value="Plaza Senayan">Plaza Senayan</option>
+              <option value="Bali">Bali</option>
+            </select>
+          </div>
+
           {/* Month/Year Selector */}
           <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
             <CalendarIcon className="w-4 h-4 text-blue-600" />
@@ -146,6 +188,25 @@ export default function SalesDataPage() {
               <ArrowRightLeft className="w-4 h-4" />
             )}
             {syncing ? 'Syncing...' : 'Sync from API'}
+          </button>
+
+          {/* Export Daily Report Button */}
+          <button
+            onClick={handleExportExcel}
+            disabled={exporting}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all cursor-pointer",
+              exporting
+                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                : "bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
+            )}
+          >
+            {exporting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            {exporting ? 'Generating Excel...' : 'Export Daily Report (Excel)'}
           </button>
         </div>
       </div>
