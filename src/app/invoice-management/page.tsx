@@ -34,6 +34,7 @@ import {
 } from '@/services/dashboard/invoiceService';
 import InvoiceTable from './InvoiceTable';
 import InvoiceMetaModal from './InvoiceMetaModal';
+import SalesInvoiceModal from './SalesInvoiceModal';
 import { exportInvoiceExecutiveReport } from './reports';
 
 const MONTHS = [
@@ -70,6 +71,9 @@ export default function InvoiceManagementPage() {
 
   // Modal Meta state
   const [metaModalInvoice, setMetaModalInvoice] = useState<InvoiceHeader | null>(null);
+
+  // Sales Invoice View/Print Modal state
+  const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<InvoiceHeader | null>(null);
 
   // Lock/unlock state — persisted per month+year in localStorage
   const lockKey = `invoice_locked_${month}_${year}`;
@@ -759,6 +763,7 @@ export default function InvoiceManagementPage() {
           isUnlocked={isUnlocked}
           isAdmin={isAdmin}
           onEditMeta={inv => setMetaModalInvoice(inv)}
+          onViewInvoice={inv => setSelectedInvoiceForView(inv)}
           onQuickSaveCashBill={handleQuickSaveCashBill}
           onLocationChange={handleLocationChange}
           onItemCommEdit={(itemId, val) => setCommEdits(prev => ({ ...prev, [itemId]: val }))}
@@ -811,6 +816,13 @@ export default function InvoiceManagementPage() {
         onClose={() => setMetaModalInvoice(null)}
         onSave={handleSaveMeta}
         userEmail={userEmail}
+      />
+
+      {/* Sales Invoice Printable Modal */}
+      <SalesInvoiceModal
+        invoice={selectedInvoiceForView}
+        isOpen={Boolean(selectedInvoiceForView)}
+        onClose={() => setSelectedInvoiceForView(null)}
       />
 
       {/* Unlock Confirmation Modal */}

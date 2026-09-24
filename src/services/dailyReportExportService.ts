@@ -271,6 +271,15 @@ export async function generateDailySalesReportExcel(options: ExportReportOptions
     }
   }
 
+  // Remove unnecessary sheets as requested by user: 'Sales Support' and 'Data'
+  const sheetsToRemove = ['Sales Support', 'Data'];
+  for (const sheetName of sheetsToRemove) {
+    const targetWs = workbook.getWorksheet(sheetName);
+    if (targetWs) {
+      workbook.removeWorksheet(targetWs.id);
+    }
+  }
+
   // Write workbook to buffer
   const buffer = await workbook.xlsx.writeBuffer();
 

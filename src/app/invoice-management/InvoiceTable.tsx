@@ -28,6 +28,7 @@ interface Props {
   isUnlocked: boolean;
   isAdmin: boolean;
   onEditMeta: (invoice: InvoiceHeader) => void;
+  onViewInvoice: (invoice: InvoiceHeader) => void;
   onQuickSaveCashBill: (transNo: string, val: string) => void;
   onLocationChange: (transNo: string, newLocation: string) => void;
   onItemCommEdit: (itemId: number, val: string) => void;
@@ -59,6 +60,7 @@ export default function InvoiceTable({
   isUnlocked,
   isAdmin,
   onEditMeta,
+  onViewInvoice,
   onQuickSaveCashBill,
   onLocationChange,
   onItemCommEdit,
@@ -168,18 +170,33 @@ export default function InvoiceTable({
 
                     {/* Trans No */}
                     <td className="py-3 px-4">
-                      <button
-                        type="button"
-                        onClick={() => toggleExpand(inv.trans_no)}
-                        className="font-mono text-xs font-bold text-blue-600 hover:underline flex items-center gap-1.5"
-                      >
-                        {inv.trans_no}
-                        {inv.item_count > 1 && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-blue-100 text-blue-800 font-extrabold">
-                            {inv.item_count} items
-                          </span>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(inv.trans_no)}
+                          className="font-mono text-xs font-bold text-blue-600 hover:underline flex items-center gap-1.5"
+                          title="Klik untuk membuka/menutup rincian item"
+                        >
+                          {inv.trans_no}
+                          {inv.item_count > 1 && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-blue-100 text-blue-800 font-extrabold">
+                              {inv.item_count} items
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onViewInvoice(inv);
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                          title="Tampilkan Sales Invoice / Faktur Penjualan"
+                        >
+                          <FileText className="w-3 h-3 text-amber-700" />
+                          <span>Faktur</span>
+                        </button>
+                      </div>
                     </td>
 
                     {/* Cash Bill No (Inline editable / quick input) */}
@@ -336,8 +353,19 @@ export default function InvoiceTable({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-400 font-mono">
-                              Subtotal Nota: <strong className="text-blue-700"><Amt value={inv.total_net} /></strong> · Total Comm: <strong className="text-emerald-700"><Amt value={inv.total_comm} /></strong>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div className="text-[11px] text-slate-400 font-mono">
+                                Subtotal Nota: <strong className="text-blue-700"><Amt value={inv.total_net} /></strong> · Total Comm: <strong className="text-emerald-700"><Amt value={inv.total_comm} /></strong>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => onViewInvoice(inv)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-2xs transition-all cursor-pointer"
+                                title="Lihat & Cetak Faktur Penjualan"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>Lihat Faktur Invoice</span>
+                              </button>
                             </div>
                           </div>
 
