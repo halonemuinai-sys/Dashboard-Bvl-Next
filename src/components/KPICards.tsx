@@ -1,8 +1,9 @@
 "use client";
 
-import { 
-  TrendingUp, TrendingDown, Target, CreditCard, 
-  Percent, DollarSign, BarChart2, Info, Package, ReceiptText, Calendar, FileText 
+import { useState } from 'react';
+import {
+  TrendingUp, TrendingDown, Target, CreditCard,
+  Percent, DollarSign, BarChart2, Info, Package, ReceiptText, Calendar, FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
@@ -15,6 +16,10 @@ interface KPIProps {
   totalCost: number;
   avgDiscountPercentage: number;
   totalValDisc: number;
+  annualCostPercentage: number;
+  annualTotalCost: number;
+  annualAvgDiscountPercentage: number;
+  annualTotalValDisc: number;
   mtdGrowthPct: number;
   storeNetExcHO: number;
   annualSalesExcHO: number;
@@ -38,11 +43,20 @@ const fmtPct = (n: number) => n.toFixed(1) + '%';
 export default function KPICards(props: KPIProps) {
   const {
     totalNet, achievement, costPercentage, totalCost,
-    avgDiscountPercentage, totalValDisc, mtdGrowthPct,
+    avgDiscountPercentage, totalValDisc,
+    annualCostPercentage, annualTotalCost, annualAvgDiscountPercentage, annualTotalValDisc,
+    mtdGrowthPct,
     storeNetExcHO, annualSalesExcHO, annualTarget, annualAchievement, year, momGrowthPct,
     ytdQtyCurrent, ytdQtyPrevYear, ytdTxCurrent, ytdTxPrevYear,
     mtdQtyCurrent, mtdQtyPrevMonth, mtdTxCurrent, mtdTxPrevMonth
   } = props;
+
+  // Toggle period for Cost % / Avg Disc % cards — Bulan (MTD) vs Tahun (YTD, Jan-Dec)
+  const [costPeriod, setCostPeriod] = useState<'month' | 'year'>('month');
+  const displayCostPct = costPeriod === 'month' ? costPercentage : annualCostPercentage;
+  const displayCostAmt = costPeriod === 'month' ? totalCost : annualTotalCost;
+  const displayDiscPct = costPeriod === 'month' ? avgDiscountPercentage : annualAvgDiscountPercentage;
+  const displayDiscAmt = costPeriod === 'month' ? totalValDisc : annualTotalValDisc;
 
   return (
     <div className="space-y-4">
@@ -267,25 +281,39 @@ export default function KPICards(props: KPIProps) {
         </div>
 
         <div className="chart-reveal" style={{ animationDelay: '400ms' }}>
-          <CompactCard 
-            label="Cost %" 
-            value={fmtPct(costPercentage)}
-            subLabel={<Amt value={totalCost} compact />}
+          <CompactCard
+            label={costPeriod === 'month' ? "Cost % (Bulan)" : "Cost % (Tahun)"}
+            value={fmtPct(displayCostPct)}
+            subLabel={<Amt value={displayCostAmt} compact />}
             icon={<Percent className="w-3.5 h-3.5" />}
-            color={costPercentage > 15 ? "rose" : "slate"}
+            color={displayCostPct > 15 ? "rose" : "slate"}
             info="Cost % = (Disc + Comm) / Gross"
           />
         </div>
 
         <div className="chart-reveal" style={{ animationDelay: '500ms' }}>
-          <CompactCard 
-            label="Avg Disc %" 
-            value={fmtPct(avgDiscountPercentage)}
-            subLabel={<Amt value={totalValDisc} compact />}
+          <CompactCard
+            label={costPeriod === 'month' ? "Avg Disc % (Bulan)" : "Avg Disc % (Tahun)"}
+            value={fmtPct(displayDiscPct)}
+            subLabel={<Amt value={displayDiscAmt} compact />}
             icon={<CreditCard className="w-3.5 h-3.5" />}
-            color={avgDiscountPercentage > 12 ? "amber" : "slate"}
+            color={displayDiscPct > 12 ? "amber" : "slate"}
             info="Total Disc / Total Gross"
           />
+        </div>
+      </div>
+
+      {/* Period toggle for Cost % / Avg Disc % */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Periode Cost % &amp; Disc %:</span>
+        <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 gap-0.5">
+          {(['month', 'year'] as const).map(p => (
+            <button key={p} type="button" onClick={() => setCostPeriod(p)}
+              className={cn('px-2.5 py-1 rounded-md text-[10px] font-bold transition-all',
+                costPeriod === p ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+              {p === 'month' ? 'Bulan Ini' : 'Tahun Ini'}
+            </button>
+          ))}
         </div>
       </div>
     </div>

@@ -143,6 +143,7 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
   const mtdTxSetCurrent = new Set<string>();
   const mtdTxSetPrevMonth = new Set<string>();
   let totalNet = 0, totalGross = 0, totalCost = 0, totalValDisc = 0, totalQty = 0;
+  let annualTotalGross = 0, annualTotalCost = 0, annualTotalValDisc = 0;
   const storeStats: Record<string, { net: number; cost: number; qty: number }> = {};
   const catStats: Record<string, { qty: number; net: number }> = {};
   const dailyStats = Array.from({length: 31}, () => ({ net: 0, qty: 0 }));
@@ -169,6 +170,11 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
 
     // C: Annual Sales Exc HO
     if (!isHO) annualSalesExcHO += net;
+
+    // C2: Annual Cost % / Avg Disc % — same methodology as monthly (incl. HO), full selected year
+    annualTotalGross += (row.gross_sales || 0);
+    annualTotalCost += (row.cost || 0) + (row.comm || 0);
+    annualTotalValDisc += (row.val_disc || 0);
 
     // D: Category Trend
     if (!categoryTrend[cat]) categoryTrend[cat] = { net: new Array(12).fill(0), qty: new Array(12).fill(0) };
@@ -330,6 +336,10 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
       costPercentage: totalGross > 0 ? (totalCost / totalGross) * 100 : 0,
       totalValDisc,
       avgDiscountPercentage: totalGross > 0 ? (totalValDisc / totalGross) * 100 : 0,
+      annualTotalCost,
+      annualCostPercentage: annualTotalGross > 0 ? (annualTotalCost / annualTotalGross) * 100 : 0,
+      annualTotalValDisc,
+      annualAvgDiscountPercentage: annualTotalGross > 0 ? (annualTotalValDisc / annualTotalGross) * 100 : 0,
       mtdSalesCurrent: currentMtd,
       mtdSalesPrevYear: prevYearMtd,
       mtdGrowthPct: prevYearMtd > 0 ? ((currentMtd - prevYearMtd) / prevYearMtd) * 100 : 0,
