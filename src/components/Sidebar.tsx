@@ -35,6 +35,7 @@ import {
   Award,
   Receipt,
   NotebookPen,
+  Percent,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -62,6 +63,7 @@ const menuGroups = [
       { name: 'Quarterly Budget',    icon: BarChart,        href: '/quarterly-budget' },
       { name: 'Annual Net Sales',    icon: TrendingUp,      href: '/annual-sales' },
       { name: 'Store Performance',   icon: Store,           href: '/store-performance' },
+      { name: 'Margin Intelligence', icon: Percent,         href: '/cost-disc-analysis', badge: 'NEW', badgeColor: 'bg-rose-500' },
       { name: 'Forecasting',         icon: Sparkles,        href: '/forecasting' },
     ]
   },
