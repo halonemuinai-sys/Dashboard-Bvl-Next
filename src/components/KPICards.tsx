@@ -287,7 +287,7 @@ export default function KPICards(props: KPIProps) {
             subLabel={<Amt value={displayCostAmt} compact />}
             icon={<Percent className="w-3.5 h-3.5" />}
             color={displayCostPct > 15 ? "rose" : "slate"}
-            info="Cost % = (Disc + Comm) / Gross, exc. Head Office"
+            info="Cost % = (Disc + Comm) / Gross, exc. Head Office. Data raw DSR, belum divalidasi Finance."
           />
         </div>
 
@@ -298,7 +298,7 @@ export default function KPICards(props: KPIProps) {
             subLabel={<Amt value={displayDiscAmt} compact />}
             icon={<CreditCard className="w-3.5 h-3.5" />}
             color={displayDiscPct > 12 ? "amber" : "slate"}
-            info="Total Disc / Total Gross, exc. Head Office"
+            info="Total Disc / Total Gross, exc. Head Office. Data raw DSR, belum divalidasi Finance."
           />
         </div>
       </div>
@@ -344,7 +344,7 @@ function CompactCard({ label, value, subLabel, icon, color, badge, valueClassNam
         {info && (
           <div className="group/info relative flex justify-center">
             <Info className="w-3.5 h-3.5 text-slate-300 cursor-help" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 bg-slate-800 text-white text-[9px] px-2.5 py-2 rounded-lg shadow-2xl invisible opacity-0 group-hover/info:visible group-hover/info:opacity-100 transition-all duration-300 z-[100] text-center pointer-events-none">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-44 bg-slate-800 text-white text-[9px] px-2.5 py-2 rounded-lg shadow-2xl invisible opacity-0 group-hover/info:visible group-hover/info:opacity-100 transition-all duration-300 z-[100] text-center pointer-events-none leading-relaxed">
               {info}
               {/* Tooltip Arrow */}
               <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-slate-800" />
