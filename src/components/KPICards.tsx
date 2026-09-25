@@ -287,7 +287,7 @@ export default function KPICards(props: KPIProps) {
             subLabel={<Amt value={displayCostAmt} compact />}
             icon={<Percent className="w-3.5 h-3.5" />}
             color={displayCostPct > 15 ? "rose" : "slate"}
-            info="Cost % = (Disc + Comm) / Gross"
+            info="Cost % = (Disc + Comm) / Gross, exc. Head Office"
           />
         </div>
 
@@ -298,7 +298,7 @@ export default function KPICards(props: KPIProps) {
             subLabel={<Amt value={displayDiscAmt} compact />}
             icon={<CreditCard className="w-3.5 h-3.5" />}
             color={displayDiscPct > 12 ? "amber" : "slate"}
-            info="Total Disc / Total Gross"
+            info="Total Disc / Total Gross, exc. Head Office"
           />
         </div>
       </div>
