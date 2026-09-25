@@ -16,10 +16,14 @@ export interface MonthlyKpi {
   totalTarget: number;     // Sum of all store targets for the month
   totalQty: number;
   achievement: number;     // totalNet(exc HO) / totalTarget * 100
-  totalCost: number;       // Nominal cost value
-  costPercentage: number;  // totalCost / totalGross * 100
-  totalValDisc: number;    // Nominal discount value
-  avgDiscountPercentage: number; // totalValDisc / totalGross * 100
+  totalCost: number;       // Nominal cost value (selected month)
+  costPercentage: number;  // totalCost / totalGross * 100 (selected month)
+  totalValDisc: number;    // Nominal discount value (selected month)
+  avgDiscountPercentage: number; // totalValDisc / totalGross * 100 (selected month)
+  annualTotalCost: number;       // Nominal cost value (selected year, Jan-Dec)
+  annualCostPercentage: number;  // annualTotalCost / annualTotalGross * 100
+  annualTotalValDisc: number;       // Nominal discount value (selected year, Jan-Dec)
+  annualAvgDiscountPercentage: number; // annualTotalValDisc / annualTotalGross * 100
   mtdSalesCurrent: number;   // MTD store sales (exc HO)
   mtdSalesPrevYear: number;  // Same period last year
   mtdGrowthPct: number;      // YoY growth
