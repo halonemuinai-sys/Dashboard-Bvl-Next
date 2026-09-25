@@ -171,10 +171,12 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
     // C: Annual Sales Exc HO
     if (!isHO) annualSalesExcHO += net;
 
-    // C2: Annual Cost % / Avg Disc % — same methodology as monthly (incl. HO), full selected year
-    annualTotalGross += (row.gross_sales || 0);
-    annualTotalCost += (row.cost || 0) + (row.comm || 0);
-    annualTotalValDisc += (row.val_disc || 0);
+    // C2: Annual Cost % / Avg Disc % — Exc HO, full selected year (Jan-Dec)
+    if (!isHO) {
+      annualTotalGross += (row.gross_sales || 0);
+      annualTotalCost += (row.cost || 0) + (row.comm || 0);
+      annualTotalValDisc += (row.val_disc || 0);
+    }
 
     // D: Category Trend
     if (!categoryTrend[cat]) categoryTrend[cat] = { net: new Array(12).fill(0), qty: new Array(12).fill(0) };
@@ -218,10 +220,12 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
       }
 
       monthlyRows.push(row);
-      totalNet += net;
-      totalGross += (row.gross_sales || 0);
-      totalCost += (row.cost || 0) + (row.comm || 0);
-      totalValDisc += (row.val_disc || 0);
+      totalNet += net; // Total Sales Inc. HO — HO breakdown shown separately in the UI
+      if (!isHO) {
+        totalGross += (row.gross_sales || 0);
+        totalCost += (row.cost || 0) + (row.comm || 0);
+        totalValDisc += (row.val_disc || 0);
+      }
       totalQty += qty;
 
       if (!storeStats[loc]) storeStats[loc] = { net: 0, cost: 0, qty: 0 };
