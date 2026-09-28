@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
-type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | null;
+type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | 'finance' | null;
 
 interface UserAccessState {
   role: Role;
@@ -104,6 +104,9 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     if (role === 'super_admin' || role === 'management_it') return true;
     if (allowedPaths.has('*')) return true;
 
+    // Panduan cicilan & MDR terbuka sebagai referensi operasional bagi operations_sales
+    if (path === '/installment-guide' && role === 'operations_sales') return true;
+
     // Jika permissions sudah ada (baik dari cache localStorage maupun fetch), periksa path
     if (allowedPaths.size > 0) {
       return allowedPaths.has(path);
@@ -112,8 +115,9 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     // Jika masih loading dan belum ada cache permissions sama sekali,
     // JANGAN tampilkan menu yang dilarang (cegah flash of unauthorized menus)
     if (loading) {
-      if (role === 'operations_sales') return path === '/operations-sales';
+      if (role === 'operations_sales') return path === '/operations-sales' || path === '/installment-guide';
       if (role === 'crm') return path === '/crm-profiling';
+      if (role === 'finance') return path === '/finance-reconciliation';
       return path === '/';
     }
 
