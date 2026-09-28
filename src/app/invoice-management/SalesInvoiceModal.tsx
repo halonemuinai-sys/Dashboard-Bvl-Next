@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Printer,
@@ -14,15 +14,22 @@ import {
   Sparkles,
   ShieldCheck,
   Tag,
-  Phone
+  Phone,
+  CreditCard
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { InvoiceHeader } from '@/services/dashboard/invoiceService';
+import { extractPaymentAndVerification } from '@/services/dashboard/paymentEngine';
+import { supabase } from '@/lib/supabase';
+import { useUserAccess } from '@/lib/user-access-context';
+import InvoicePaymentSection from './components/InvoicePaymentSection';
+import PosPaymentModal from './PosPaymentModal';
 
 interface Props {
   invoice: InvoiceHeader | null;
   isOpen: boolean;
   onClose: () => void;
+  onInvoiceUpdated?: (updatedTransNo: string, newTotalComm: number) => void;
 }
 
 const STORE_INFO: Record<string, { title: string; subtitle: string; address: string[]; phone: string }> = {
@@ -79,28 +86,67 @@ const formatDateLong = (iso: string) => {
   });
 };
 
-export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
+export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceUpdated }: Props) {
   const [copied, setCopied] = useState(false);
+  const [activeInvoice, setActiveInvoice] = useState<InvoiceHeader | null>(invoice);
+  const [isPosModalOpen, setIsPosModalOpen] = useState(false);
+  const { userEmail } = useUserAccess();
 
-  if (!isOpen || !invoice) return null;
+  useEffect(() => {
+    setActiveInvoice(invoice);
+  }, [invoice]);
 
-  const store = STORE_INFO[invoice.location] || STORE_INFO['Plaza Indonesia'];
+  if (!isOpen || !activeInvoice) return null;
+
+  const store = STORE_INFO[activeInvoice.location] || STORE_INFO['Plaza Indonesia'];
 
   // Look for any customer phone in items
-  const clientPhone = invoice.items.find(i => i.phone_no)?.phone_no || '';
+  const clientPhone = activeInvoice.items.find(i => i.phone_no)?.phone_no || '';
 
   // Calculation for Tax (PPN 11% inclusive standard in Indonesian luxury retail)
-  const dpp = Math.round(invoice.total_net / 1.11);
-  const ppn = invoice.total_net - dpp;
+  const dpp = Math.round(activeInvoice.total_net / 1.11);
+  const ppn = activeInvoice.total_net - dpp;
+
+  // Extract payment splits and clean user notes
+  const rawRemarks = activeInvoice.meta?.other_remarks || '';
+  const { splits } = extractPaymentAndVerification(rawRemarks);
+  const userNote = rawRemarks
+    ? rawRemarks.split('[PAYMENT_SPLITS]:')[0].split('[FINANCE_VERIFY]:')[0].trim()
+    : '';
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleCopyNo = () => {
-    navigator.clipboard.writeText(invoice.trans_no);
+    navigator.clipboard.writeText(activeInvoice.trans_no);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handlePosSuccess = async (transNo: string, newTotalComm: number) => {
+    try {
+      const { data: metaRow } = await supabase
+        .from('transaction_records_meta')
+        .select('*')
+        .eq('trans_no', transNo)
+        .maybeSingle();
+
+      if (metaRow && activeInvoice) {
+        setActiveInvoice({
+          ...activeInvoice,
+          total_comm: newTotalComm,
+          meta: {
+            ...activeInvoice.meta,
+            other_remarks: metaRow.other_remarks,
+          },
+        });
+      }
+    } catch {}
+
+    if (onInvoiceUpdated) {
+      onInvoiceUpdated(transNo, newTotalComm);
+    }
   };
 
   return (
@@ -150,7 +196,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
             <div>
               <div className="text-xs font-bold tracking-wide flex items-center gap-2">
                 <span>Preview Faktur Penjualan</span>
-                <span className="font-mono text-amber-400 font-extrabold">{invoice.trans_no}</span>
+                <span className="font-mono text-amber-400 font-extrabold">{activeInvoice.trans_no}</span>
               </div>
               <div className="text-[10px] text-slate-400">
                 Official BVLGARI Luxury Sales Invoice
@@ -159,6 +205,16 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsPosModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              title={splits && splits.length > 0 ? "Edit Rincian Pembayaran POS" : "Input Rincian Pembayaran POS"}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>{splits && splits.length > 0 ? 'Edit Pembayaran' : 'Input Pembayaran POS'}</span>
+            </button>
+
             <button
               type="button"
               onClick={handleCopyNo}
@@ -233,26 +289,26 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
                 <tbody>
                   <tr>
                     <td className="py-1 text-slate-500 w-32 font-medium">No. Invoice:</td>
-                    <td className="py-1 font-mono font-bold text-slate-900">{invoice.trans_no}</td>
+                    <td className="py-1 font-mono font-bold text-slate-900">{activeInvoice.trans_no}</td>
                   </tr>
                   <tr>
                     <td className="py-1 text-slate-500 font-medium">No. Cash Bill (CB):</td>
                     <td className="py-1 font-mono font-bold text-emerald-800">
-                      {invoice.meta.cash_bill_no || '—'}
+                      {activeInvoice.meta.cash_bill_no || '—'}
                     </td>
                   </tr>
                   <tr>
                     <td className="py-1 text-slate-500 font-medium">Tanggal Transaksi:</td>
-                    <td className="py-1 font-semibold text-slate-800">{formatDateLong(invoice.transaction_date)}</td>
+                    <td className="py-1 font-semibold text-slate-800">{formatDateLong(activeInvoice.transaction_date)}</td>
                   </tr>
                   <tr>
                     <td className="py-1 text-slate-500 font-medium">Lokasi Boutique:</td>
-                    <td className="py-1 font-bold text-slate-900">{invoice.location || '—'}</td>
+                    <td className="py-1 font-bold text-slate-900">{activeInvoice.location || '—'}</td>
                   </tr>
-                  {invoice.meta.dwa_no && (
+                  {activeInvoice.meta.dwa_no && (
                     <tr>
                       <td className="py-1 text-slate-500 font-medium">No. Approval DWA:</td>
-                      <td className="py-1 font-mono font-bold text-purple-700">{invoice.meta.dwa_no}</td>
+                      <td className="py-1 font-mono font-bold text-purple-700">{activeInvoice.meta.dwa_no}</td>
                     </tr>
                   )}
                 </tbody>
@@ -268,7 +324,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
                 <tbody>
                   <tr>
                     <td className="py-1 text-slate-500 w-32 font-medium">Nama Customer:</td>
-                    <td className="py-1 font-bold text-slate-900">{invoice.customer || 'Walk-in Guest'}</td>
+                    <td className="py-1 font-bold text-slate-900">{activeInvoice.customer || 'Walk-in Guest'}</td>
                   </tr>
                   <tr>
                     <td className="py-1 text-slate-500 font-medium">No. Kontak / Phone:</td>
@@ -276,7 +332,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
                   </tr>
                   <tr>
                     <td className="py-1 text-slate-500 font-medium">Sales Advisor:</td>
-                    <td className="py-1 font-bold text-slate-900">{invoice.salesman || '—'}</td>
+                    <td className="py-1 font-bold text-slate-900">{activeInvoice.salesman || '—'}</td>
                   </tr>
                   <tr>
                     <td className="py-1 text-slate-500 font-medium">Mata Uang:</td>
@@ -291,7 +347,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
           <div className="space-y-2">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
               <span>Rincian Barang / Purchased Items</span>
-              <span>{invoice.items.length} Barang ({invoice.total_qty} pcs)</span>
+              <span>{activeInvoice.items.length} Barang ({activeInvoice.total_qty} pcs)</span>
             </div>
 
             <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -308,7 +364,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {invoice.items.map((item, idx) => {
+                  {activeInvoice.items.map((item, idx) => {
                     const unitPrice = item.qty > 0 ? Math.round(item.gross_sales / item.qty) : item.gross_sales;
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/50">
@@ -371,19 +427,19 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
                 <div>
                   <span className="font-semibold text-slate-600">Alasan Diskon: </span>
                   <span className="text-slate-800">
-                    {invoice.meta.discount_given_reason || '—'}
+                    {activeInvoice.meta.discount_given_reason || '—'}
                   </span>
                 </div>
                 <div>
                   <span className="font-semibold text-slate-600">Layanan After Sales: </span>
                   <span className="text-slate-800">
-                    {invoice.meta.after_sales_support || 'Standar Garansi Resmi Bvlgari'}
+                    {activeInvoice.meta.after_sales_support || 'Standar Garansi Resmi Bvlgari'}
                   </span>
                 </div>
-                {invoice.meta.other_remarks && (
+                {userNote && (
                   <div>
                     <span className="font-semibold text-slate-600">Catatan Lain: </span>
-                    <span className="text-slate-800">{invoice.meta.other_remarks}</span>
+                    <span className="text-slate-800">{userNote}</span>
                   </div>
                 )}
               </div>
@@ -393,12 +449,12 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
               <div className="flex justify-between py-1 text-slate-600">
                 <span>Subtotal Bruto (Gross):</span>
-                <span className="font-mono">Rp {formatCurrency(invoice.total_gross)}</span>
+                <span className="font-mono">Rp {formatCurrency(activeInvoice.total_gross)}</span>
               </div>
-              {invoice.total_disc > 0 && (
+              {activeInvoice.total_disc > 0 && (
                 <div className="flex justify-between py-1 text-rose-600 font-medium">
                   <span>Total Potongan Diskon:</span>
-                  <span className="font-mono">-Rp {formatCurrency(invoice.total_disc)}</span>
+                  <span className="font-mono">-Rp {formatCurrency(activeInvoice.total_disc)}</span>
                 </div>
               )}
               <div className="flex justify-between py-1 border-t border-slate-200 text-slate-600">
@@ -411,40 +467,17 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
               </div>
               <div className="flex justify-between py-2 border-t-2 border-slate-900 text-slate-900 font-extrabold text-sm sm:text-base">
                 <span>GRAND TOTAL:</span>
-                <span className="font-mono text-blue-900">Rp {formatCurrency(invoice.total_net)}</span>
+                <span className="font-mono text-slate-900">Rp {formatCurrency(activeInvoice.total_net)}</span>
               </div>
             </div>
           </div>
 
-          {/* Footer Terms & Signatures */}
-          <div className="border-t border-slate-200 pt-6 space-y-8">
-            <div className="text-[10px] text-slate-500 leading-relaxed italic text-center sm:text-left">
-              * Terima kasih atas kunjungan dan kepercayaan Anda berbelanja di BVLGARI.
-              Barang yang sudah dibeli telah melalui proses inspeksi kualitas tertinggi dan disertai sertifikat keaslian resmi BVLGARI.
-            </div>
-
-            {/* Signature Columns */}
-            <div className="grid grid-cols-3 gap-4 text-center pt-2">
-              <div>
-                <div className="text-[11px] font-bold text-slate-600 mb-14">Customer / Pelanggan</div>
-                <div className="border-t border-dashed border-slate-400 mx-auto w-3/4 pt-1 text-[10px] text-slate-500 font-medium">
-                  ({invoice.customer || 'Tanda Tangan Pelanggan'})
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-600 mb-14">Sales Advisor</div>
-                <div className="border-t border-dashed border-slate-400 mx-auto w-3/4 pt-1 text-[10px] text-slate-500 font-medium">
-                  ({invoice.salesman || 'Sales Advisor'})
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-600 mb-14">Store Manager / Kasir</div>
-                <div className="border-t border-dashed border-slate-400 mx-auto w-3/4 pt-1 text-[10px] text-slate-500 font-medium">
-                  (Official Store Verification)
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Payment & Card Commission Settlement Section */}
+          <InvoicePaymentSection
+            invoice={activeInvoice}
+            splits={splits}
+            onOpenPosPayment={() => setIsPosModalOpen(true)}
+          />
 
         </div>
 
@@ -464,14 +497,25 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose }: Props) {
             <button
               type="button"
               onClick={handlePrint}
-              className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-sm flex items-center gap-2 cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak Faktur Penjualan</span>
+              <span>Cetak Ringkasan Transaksi</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* POS Payment Breakdown & Card Comm Modal */}
+      {isPosModalOpen && activeInvoice && (
+        <PosPaymentModal
+          invoice={activeInvoice}
+          isOpen={isPosModalOpen}
+          onClose={() => setIsPosModalOpen(false)}
+          onSuccess={handlePosSuccess}
+          userEmail={userEmail}
+        />
+      )}
     </div>
   );
 }

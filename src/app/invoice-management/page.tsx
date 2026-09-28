@@ -35,6 +35,7 @@ import {
 import InvoiceTable from './InvoiceTable';
 import InvoiceMetaModal from './InvoiceMetaModal';
 import SalesInvoiceModal from './SalesInvoiceModal';
+import PosPaymentModal from './PosPaymentModal';
 import { exportInvoiceExecutiveReport } from './reports';
 
 const MONTHS = [
@@ -74,6 +75,9 @@ export default function InvoiceManagementPage() {
 
   // Sales Invoice View/Print Modal state
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<InvoiceHeader | null>(null);
+
+  // POS Payment Breakdown Modal state
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceHeader | null>(null);
 
   // Lock/unlock state — persisted per month+year in localStorage
   const lockKey = `invoice_locked_${month}_${year}`;
@@ -764,6 +768,7 @@ export default function InvoiceManagementPage() {
           isAdmin={isAdmin}
           onEditMeta={inv => setMetaModalInvoice(inv)}
           onViewInvoice={inv => setSelectedInvoiceForView(inv)}
+          onOpenPayment={inv => setSelectedInvoiceForPayment(inv)}
           onQuickSaveCashBill={handleQuickSaveCashBill}
           onLocationChange={handleLocationChange}
           onItemCommEdit={(itemId, val) => setCommEdits(prev => ({ ...prev, [itemId]: val }))}
@@ -823,6 +828,61 @@ export default function InvoiceManagementPage() {
         invoice={selectedInvoiceForView}
         isOpen={Boolean(selectedInvoiceForView)}
         onClose={() => setSelectedInvoiceForView(null)}
+        onInvoiceUpdated={(updatedTransNo, newTotalComm) => {
+          setInvoices(prev => prev.map(inv => {
+            if (inv.trans_no === updatedTransNo) {
+              const totalNet = inv.total_net || 1;
+              const updatedItems = inv.items.map((it, idx) => {
+                const isLast = idx === inv.items.length - 1;
+                if (isLast) {
+                  const allocatedSoFar = inv.items.slice(0, idx).reduce((acc, curr) => {
+                    return acc + Math.round(newTotalComm * ((curr.net_sales || 0) / totalNet));
+                  }, 0);
+                  return { ...it, comm: newTotalComm - allocatedSoFar };
+                }
+                return { ...it, comm: Math.round(newTotalComm * ((it.net_sales || 0) / totalNet)) };
+              });
+              return {
+                ...inv,
+                total_comm: newTotalComm,
+                items: updatedItems,
+              };
+            }
+            return inv;
+          }));
+        }}
+      />
+
+      {/* POS Payment Breakdown & Card Comm Modal */}
+      <PosPaymentModal
+        invoice={selectedInvoiceForPayment}
+        isOpen={Boolean(selectedInvoiceForPayment)}
+        onClose={() => setSelectedInvoiceForPayment(null)}
+        onSuccess={(updatedTransNo, newTotalComm) => {
+          // Update local invoices state with new comm immediately
+          setInvoices(prev => prev.map(inv => {
+            if (inv.trans_no === updatedTransNo) {
+              const totalNet = inv.total_net || 1;
+              const updatedItems = inv.items.map((it, idx) => {
+                const isLast = idx === inv.items.length - 1;
+                if (isLast) {
+                  const allocatedSoFar = inv.items.slice(0, idx).reduce((acc, curr) => {
+                    return acc + Math.round(newTotalComm * ((curr.net_sales || 0) / totalNet));
+                  }, 0);
+                  return { ...it, comm: newTotalComm - allocatedSoFar };
+                }
+                return { ...it, comm: Math.round(newTotalComm * ((it.net_sales || 0) / totalNet)) };
+              });
+              return {
+                ...inv,
+                total_comm: newTotalComm,
+                items: updatedItems,
+              };
+            }
+            return inv;
+          }));
+        }}
+        userEmail={userEmail}
       />
 
       {/* Unlock Confirmation Modal */}

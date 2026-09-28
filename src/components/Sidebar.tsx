@@ -36,6 +36,7 @@ import {
   Receipt,
   NotebookPen,
   Percent,
+  CreditCard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -45,12 +46,14 @@ const ROLE_LABEL: Record<string, string> = {
   management_it:    'Management & IT',
   operations_sales: 'Operations Sales',
   crm:              'CRM',
+  finance:          'Finance',
 };
 const ROLE_COLOR: Record<string, string> = {
   super_admin:      'bg-rose-100 text-rose-700',
   management_it:    'bg-indigo-100 text-indigo-700',
   operations_sales: 'bg-amber-100 text-amber-700',
   crm:              'bg-emerald-100 text-emerald-700',
+  finance:          'bg-teal-100 text-teal-700',
 };
 
 const menuGroups = [
@@ -72,7 +75,8 @@ const menuGroups = [
     items: [
       { name: 'Daily Report',        icon: Calendar,        href: '/daily-report' },
       { name: 'Daily Breakdown',     icon: Table,           href: '/daily-breakdown' },
-      { name: 'Invoice Management',  icon: Receipt,         href: '/invoice-management', badge: 'NEW', badgeColor: 'bg-emerald-600' },
+      { name: 'Invoice Management',  icon: Receipt,         href: '/invoice-management', badge: 'POS', badgeColor: 'bg-blue-600' },
+      { name: 'Installment & MDR Guide', icon: CreditCard,  href: '/installment-guide', badge: 'GUIDE', badgeColor: 'bg-emerald-600' },
       { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions', badge: 'INPUT', badgeColor: 'bg-blue-600' },
       { name: 'DP & SVC Trans.',     icon: ClipboardList,   href: '/monthly-dps-svc', badge: 'NEW', badgeColor: 'bg-violet-500' },
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
@@ -81,6 +85,14 @@ const menuGroups = [
       { name: 'Sales Data',          icon: Database,        href: '/sales', badge: 'SYNC', badgeColor: 'bg-emerald-500' },
       { name: 'Sales Data (DP/SVC)', icon: Database,        href: '/sales-dps-svc', badge: 'SYNC', badgeColor: 'bg-violet-500' },
       { name: 'Inventory Val.',      icon: Boxes,           href: '/inventory', badge: 'NEW', badgeColor: 'bg-blue-500' },
+    ]
+  },
+  {
+    title: "FINANCE",
+    items: [
+      { name: 'Reconciliation & Audit', icon: ShieldCheck,     href: '/finance-reconciliation', badge: 'AUDIT', badgeColor: 'bg-emerald-600' },
+      { name: 'Bank Performance & MDR', icon: BarChart,        href: '/finance-payment-analytics', badge: 'ANALYTICS', badgeColor: 'bg-emerald-600' },
+      { name: 'Bank MDR Setup',         icon: Percent,         href: '/finance-mdr-setup', badge: 'CONFIG', badgeColor: 'bg-emerald-600' },
     ]
   },
   {
@@ -261,7 +273,7 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
         <button
           type="button"
           onClick={toggle}
-          title={isActuallyOpen ? undefined : (hidden ? "Tampilkan Angka" : "Sembunyikan Angka")}
+          title={isActuallyOpen ? undefined : (hidden ? "Show Amounts" : "Hide Amounts")}
           className={cn(
             "flex items-center justify-center transition-all border",
             isActuallyOpen ? "w-full gap-2 px-3 py-2 rounded-xl text-xs font-bold" : "w-10 h-10 rounded-xl",
@@ -271,7 +283,7 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
           )}
         >
           {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          {isActuallyOpen && (hidden ? "Angka Tersembunyi" : "Sembunyikan Angka")}
+          {isActuallyOpen && (hidden ? "Amounts Hidden" : "Hide Amounts")}
         </button>
 
         <button

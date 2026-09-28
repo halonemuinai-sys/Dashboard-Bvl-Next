@@ -9,7 +9,7 @@ import { useUserAccess } from '@/lib/user-access-context';
 import { createUserAction, resetUserPasswordAction } from './actions';
 
 // ── Types ──────────────────────────────────────────────────────────────────
-type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm';
+type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | 'finance';
 type PermRole = Exclude<Role, 'super_admin'>;
 
 interface DashboardUser {
@@ -33,6 +33,7 @@ const ALL_ROLES: { value: Role; label: string; color: string; bg: string }[] = [
   { value: 'management_it',    label: 'Management & IT All', color: 'text-indigo-700',  bg: 'bg-indigo-50 border-indigo-200' },
   { value: 'operations_sales', label: 'Operations Sales',    color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200' },
   { value: 'crm',              label: 'CRM',                 color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
+  { value: 'finance',          label: 'Finance',             color: 'text-teal-700',    bg: 'bg-teal-50 border-teal-200' },
 ];
 
 const PERM_ROLES = ALL_ROLES.filter(r => r.value !== 'super_admin') as { value: PermRole; label: string; color: string; bg: string }[];
@@ -42,6 +43,7 @@ const ROLE_LABEL: Record<Role, string> = {
   management_it:    'Management & IT All',
   operations_sales: 'Operations Sales',
   crm:              'CRM',
+  finance:          'Finance',
 };
 
 const ROLE_BADGE: Record<Role, string> = {
@@ -49,6 +51,7 @@ const ROLE_BADGE: Record<Role, string> = {
   management_it:    'bg-indigo-100 text-indigo-700',
   operations_sales: 'bg-amber-100 text-amber-700',
   crm:              'bg-emerald-100 text-emerald-700',
+  finance:          'bg-teal-100 text-teal-700',
 };
 
 const STORE_LOCATIONS = [
@@ -91,12 +94,21 @@ const MENU_GROUPS = [
       { path: '/daily-report',         label: 'Daily Report' },
       { path: '/daily-breakdown',      label: 'Daily Breakdown' },
       { path: '/invoice-management',   label: 'Invoice Management' },
+      { path: '/installment-guide',    label: 'Installment & MDR Guide' },
       { path: '/monthly-transactions', label: 'Monthly Transactions' },
       { path: '/monthly-dps-svc',      label: 'DP & SVC Transactions' },
       { path: '/heatmap-calendar',     label: 'Heatmap Calendar' },
       { path: '/crossing-sales',       label: 'Crossing Sales' },
       { path: '/sales',                label: 'Sales Data' },
       { path: '/sales-dps-svc',        label: 'Sales Data (DP/SVC)' },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { path: '/finance-reconciliation',     label: 'Reconciliation & Audit' },
+      { path: '/finance-payment-analytics',  label: 'Bank Performance & MDR' },
+      { path: '/finance-mdr-setup',          label: 'Bank MDR Setup' },
     ],
   },
   {
