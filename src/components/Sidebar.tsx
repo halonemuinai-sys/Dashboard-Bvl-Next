@@ -93,6 +93,7 @@ const menuGroups = [
       { name: 'Reconciliation & Audit', icon: ShieldCheck,     href: '/finance-reconciliation', badge: 'AUDIT', badgeColor: 'bg-emerald-600' },
       { name: 'Bank Performance & MDR', icon: BarChart,        href: '/finance-payment-analytics', badge: 'ANALYTICS', badgeColor: 'bg-emerald-600' },
       { name: 'Bank MDR Setup',         icon: Percent,         href: '/finance-mdr-setup', badge: 'CONFIG', badgeColor: 'bg-emerald-600' },
+      { name: 'Installment & MDR Guide', icon: CreditCard,     href: '/installment-guide', badge: 'GUIDE', badgeColor: 'bg-emerald-600' },
     ]
   },
   {
@@ -182,7 +183,15 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
       {/* Navigation */}
       <nav className="flex-1 px-3 space-y-5 overflow-y-auto custom-scrollbar py-4">
         {menuGroups.map((group) => {
-          const visibleItems = group.items.filter(item => canAccess(item.href));
+          const visibleItems = group.items.filter(item => {
+            // Untuk role finance: HANYA tampilkan Operations Sales di OVERVIEW, dan modul FINANCE. Grup lainnya disembunyikan.
+            if (role === 'finance') {
+              if (group.title === 'FINANCE') return canAccess(item.href);
+              if (group.title === 'OVERVIEW' && item.href === '/operations-sales') return canAccess(item.href);
+              return false;
+            }
+            return canAccess(item.href);
+          });
           if (visibleItems.length === 0) return null;
           return (
           <div key={group.title}>

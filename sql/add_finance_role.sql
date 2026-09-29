@@ -9,23 +9,12 @@ ALTER TABLE role_menu_access DROP CONSTRAINT IF EXISTS role_menu_access_role_che
 ALTER TABLE role_menu_access ADD CONSTRAINT role_menu_access_role_check
   CHECK (role IN ('management_it', 'operations_sales', 'crm', 'finance'));
 
--- Seed default menu access for the finance role (Finance modules + Store Manager dashboards)
+-- Seed default menu access for the finance role (Finance modules + Operations Sales Dashboard ONLY)
+DELETE FROM role_menu_access WHERE role = 'finance';
 INSERT INTO role_menu_access (role, menu_path, allowed) VALUES
-  ('finance', '/', true),
   ('finance', '/operations-sales', true),
-  ('finance', '/store-performance', true),
-  ('finance', '/annual-sales', true),
-  ('finance', '/quarterly-standard', true),
-  ('finance', '/quarterly-budget', true),
-  ('finance', '/daily-report', true),
-  ('finance', '/daily-breakdown', true),
-  ('finance', '/invoice-management', true),
-  ('finance', '/installment-guide', true),
-  ('finance', '/monthly-transactions', true),
-  ('finance', '/sales-journal', true),
-  ('finance', '/sales', true),
-  ('finance', '/crossing-sales', true),
   ('finance', '/finance-reconciliation', true),
   ('finance', '/finance-payment-analytics', true),
-  ('finance', '/finance-mdr-setup', true)
+  ('finance', '/finance-mdr-setup', true),
+  ('finance', '/installment-guide', true)
 ON CONFLICT (role, menu_path) DO UPDATE SET allowed = EXCLUDED.allowed;

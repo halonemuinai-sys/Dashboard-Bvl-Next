@@ -17,32 +17,23 @@ envContent.split('\n').forEach(line => {
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 const paths = [
-  '/',
   '/operations-sales',
-  '/store-performance',
-  '/annual-sales',
-  '/quarterly-standard',
-  '/quarterly-budget',
-  '/daily-report',
-  '/daily-breakdown',
-  '/invoice-management',
-  '/installment-guide',
-  '/monthly-transactions',
-  '/sales-journal',
-  '/sales',
-  '/crossing-sales',
   '/finance-reconciliation',
   '/finance-payment-analytics',
-  '/finance-mdr-setup'
+  '/finance-mdr-setup',
+  '/installment-guide'
 ];
 
 async function run() {
+  // Clear any extra paths for role 'finance'
+  await supabase.from('role_menu_access').delete().eq('role', 'finance');
+
   const rows = paths.map(p => ({ role: 'finance', menu_path: p, allowed: true }));
   const { data, error } = await supabase.from('role_menu_access').upsert(rows, { onConflict: 'role,menu_path' });
   if (error) {
     console.error('Error upserting role_menu_access:', error);
   } else {
-    console.log('Successfully synced', rows.length, 'menu paths for role finance to Supabase!');
+    console.log('Successfully synced', rows.length, 'strictly allowed menu paths for role finance to Supabase!');
   }
 }
 run();

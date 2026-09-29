@@ -60,37 +60,16 @@ export async function GET() {
       .filter((r: { allowed: boolean }) => r.allowed)
       .map((r: { menu_path: string }) => r.menu_path);
 
-    // Default permissions jika role finance mengakses dashboard Store Manager & Finance
+    // Permissions khusus role finance: HANYA dashboard Operations Sales dan modul Finance
     if (dbUser.role === 'finance') {
-      const defaultFinanceStoreManagerPaths = [
+      allowedPaths = [
         '/',
         '/operations-sales',
-        '/store-performance',
-        '/daily-report',
-        '/daily-breakdown',
-        '/invoice-management',
-        '/installment-guide',
-        '/monthly-transactions',
-        '/sales-journal',
-        '/sales',
-        '/crossing-sales',
-        '/annual-sales',
-        '/quarterly-standard',
-        '/quarterly-budget',
         '/finance-reconciliation',
         '/finance-payment-analytics',
         '/finance-mdr-setup',
+        '/installment-guide',
       ];
-
-      const allowedSet = new Set(allowedPaths);
-      // Tambahkan path default jika belum secara eksplisit di-disallow (false) di database
-      defaultFinanceStoreManagerPaths.forEach(p => {
-        const row = accessRows?.find((r: { menu_path: string; allowed: boolean }) => r.menu_path === p);
-        if (!row || row.allowed) {
-          allowedSet.add(p);
-        }
-      });
-      allowedPaths = Array.from(allowedSet);
     }
 
     return NextResponse.json({
