@@ -51,6 +51,7 @@ import {
   BankMdrRule,
   getMergedBankMdrRules,
   DebitConfig,
+  CreditConfig,
   FinanceVerificationInfo,
   extractPaymentAndVerification,
   verifyOrOverrideInvoiceFinance
@@ -85,6 +86,7 @@ export default function FinanceReconciliationPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeRules, setActiveRules] = useState<Record<string, BankMdrRule> | undefined>();
   const [debitConfig, setDebitConfig] = useState<DebitConfig | undefined>();
+  const [creditConfig, setCreditConfig] = useState<CreditConfig | undefined>();
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SUBMITTED' | 'VERIFIED' | 'OVERRIDDEN' | 'PENDING_INPUT'>('ALL');
@@ -112,6 +114,7 @@ export default function FinanceReconciliationPage() {
     getMergedBankMdrRules().then(res => {
       setActiveRules(res.rules);
       setDebitConfig(res.debitConfig);
+      setCreditConfig(res.creditConfig);
     });
   }, []);
 
@@ -235,7 +238,7 @@ export default function FinanceReconciliationPage() {
       let splitsCopy = JSON.parse(JSON.stringify(inv.parsedSplits));
       if (splitsCopy.length === 1 && splitsCopy[0].amount === netTarget && grossTarget !== netTarget) {
         splitsCopy[0].amount = grossTarget;
-        const recomputed = computePaymentMdr(splitsCopy[0], activeRules, debitConfig);
+        const recomputed = computePaymentMdr(splitsCopy[0], activeRules, debitConfig, creditConfig);
         splitsCopy[0].mdrPct = recomputed.mdrPct;
         splitsCopy[0].cardComm = recomputed.cardComm;
       }
@@ -294,7 +297,7 @@ export default function FinanceReconciliationPage() {
       }
 
       // Recompute MDR and Comm with rule engine
-      const res = computePaymentMdr(row, activeRules, debitConfig);
+      const res = computePaymentMdr(row, activeRules, debitConfig, creditConfig);
       row.mdrPct = res.mdrPct;
       row.cardComm = res.cardComm;
       row.processMethod = res.processMethod;

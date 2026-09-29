@@ -33,6 +33,7 @@ import {
   BankMdrRule,
   getMergedBankMdrRules,
   DebitConfig,
+  CreditConfig,
 } from '@/services/dashboard/paymentEngine';
 
 interface Props {
@@ -53,6 +54,7 @@ export default function PosPaymentModal({
   const [rows, setRows] = useState<PaymentSplitRow[]>([]);
   const [activeRules, setActiveRules] = useState<Record<string, BankMdrRule> | undefined>();
   const [debitConfig, setDebitConfig] = useState<DebitConfig | undefined>();
+  const [creditConfig, setCreditConfig] = useState<CreditConfig | undefined>();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -65,6 +67,7 @@ export default function PosPaymentModal({
     getMergedBankMdrRules().then(ruleRes => {
       setActiveRules(ruleRes.rules);
       setDebitConfig(ruleRes.debitConfig);
+      setCreditConfig(ruleRes.creditConfig);
 
       // Check if there are already saved payment splits in other_remarks or meta
       let existingSplits: PaymentSplitRow[] | null = null;
@@ -99,7 +102,7 @@ export default function PosPaymentModal({
 
         // Recompute MDRs in case rules updated
         const recomputed = adjustedSplits.map(s => {
-          const res = computePaymentMdr(s, ruleRes.rules, ruleRes.debitConfig);
+          const res = computePaymentMdr(s, ruleRes.rules, ruleRes.debitConfig, ruleRes.creditConfig);
           return {
             ...s,
             mdrPct: res.mdrPct,
@@ -180,7 +183,7 @@ export default function PosPaymentModal({
       }
 
       // Recompute MDR and Comm
-      const res = computePaymentMdr(row, activeRules, debitConfig);
+      const res = computePaymentMdr(row, activeRules, debitConfig, creditConfig);
       row.mdrPct = res.mdrPct;
       row.cardComm = res.cardComm;
       row.processMethod = res.processMethod;
