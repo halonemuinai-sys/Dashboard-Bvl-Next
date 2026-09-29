@@ -459,6 +459,7 @@ export default function PosPaymentModal({
                             min="0"
                             step="1000"
                             value={row.amount || ''}
+                            onFocus={e => e.target.select()}
                             onChange={e => handleRowChange(idx, 'amount', Number(e.target.value || 0))}
                             placeholder="0"
                             className="w-full min-w-[150px] text-right font-mono font-bold text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
