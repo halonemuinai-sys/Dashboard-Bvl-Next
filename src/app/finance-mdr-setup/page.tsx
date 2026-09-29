@@ -47,8 +47,67 @@ import {
   DEFAULT_CREDIT_CONFIG,
   EdcCreditRate,
   DEFAULT_CREDIT_EDC_RATES,
+  DEFAULT_CARD_TYPE_RATES,
+  CARD_TYPES,
 } from '@/services/dashboard/paymentEngine';
 import { BANK_BRAND_DETAILS } from '../installment-guide/BankDirectorySection';
+
+const CARD_TYPE_DISPLAY_INFO: Record<string, { fullName: string; description: string; badge: string; badgeColor: string }> = {
+  'AMEX': {
+    fullName: 'American Express (AMEX)',
+    description: 'Tarif khusus transaksi AMEX kartu BCA / Internasional. Standar perbankan ritel 5.00%.',
+    badge: '⭐ AMEX Special Rate',
+    badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
+  },
+  'ALIPAY': {
+    fullName: 'Alipay (Alipay+ / Ant Financial)',
+    description: 'Dompet digital valas & cross-border turis via EDC BCA / Acquirer.',
+    badge: 'Cross-Border E-Wallet',
+    badgeColor: 'bg-sky-100 text-sky-800 border-sky-300',
+  },
+  'WECHAT': {
+    fullName: 'WeChat Pay (Tenpay)',
+    description: 'Dompet digital valas & cross-border turis via EDC BCA / Acquirer.',
+    badge: 'Cross-Border E-Wallet',
+    badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+  },
+  'UNIONPAY': {
+    fullName: 'China UnionPay (CUP)',
+    description: 'Jaringan kartu debit & kredit China UnionPay internasional & domestik.',
+    badge: 'Jaringan Kartu',
+    badgeColor: 'bg-rose-100 text-rose-800 border-rose-300',
+  },
+  'JCB': {
+    fullName: 'Japan Credit Bureau (JCB)',
+    description: 'Jaringan kartu kredit JCB Precious & Ultimate internasional.',
+    badge: 'Jaringan Kartu',
+    badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+  },
+  'BCA CARD': {
+    fullName: 'BCA Card (Everyday / Platinum)',
+    description: 'Kartu kredit proprietary domestik terbitan BCA.',
+    badge: 'Proprietary BCA',
+    badgeColor: 'bg-blue-100 text-blue-800 border-blue-300',
+  },
+  'VISA': {
+    fullName: 'Visa International',
+    description: 'Kartu kredit jaringan Visa (jika tidak dioverride, mengikuti tarif On-Us/Off-Us EDC).',
+    badge: 'Jaringan Utama',
+    badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+  },
+  'MASTER': {
+    fullName: 'Mastercard International',
+    description: 'Kartu kredit jaringan Mastercard (jika tidak dioverride, mengikuti tarif On-Us/Off-Us EDC).',
+    badge: 'Jaringan Utama',
+    badgeColor: 'bg-orange-100 text-orange-800 border-orange-300',
+  },
+  'Other': {
+    fullName: 'Kartu Lainnya / Fallback',
+    description: 'Tarif fallback default jika tipe kartu tidak teridentifikasi.',
+    badge: 'Fallback',
+    badgeColor: 'bg-slate-100 text-slate-600 border-slate-300',
+  },
+};
 
 const DEBIT_BANK_DISPLAY_INFO: Record<string, { fullName: string; tag: string }> = {
   'BCA': { fullName: 'Bank Central Asia (BCA)', tag: 'EDC Utama Butik' },
@@ -113,6 +172,10 @@ export default function FinanceMdrSetupPage() {
   const [batchCreditOnUsInput, setBatchCreditOnUsInput] = useState<string>('1.70');
   const [batchCreditOffUsInput, setBatchCreditOffUsInput] = useState<string>('2.00');
 
+  // Card Type specific rates (AMEX: 5.0%, Alipay: 2.0%, WeChat: 2.0%, UnionPay: 2.0%, JCB: 2.0%, dll)
+  const [cardTypeRates, setCardTypeRates] = useState<Record<string, number>>({ ...DEFAULT_CARD_TYPE_RATES });
+  const [originalCardTypeRates, setOriginalCardTypeRates] = useState<Record<string, number>>({ ...DEFAULT_CARD_TYPE_RATES });
+
   // Debit Card setup state (BCA On-Us: 0.50%, BCA Off-Us: 1.00%, plus per-bank rates)
   const [bcaOnUsRate, setBcaOnUsRate] = useState<number>(0.005); // 0.50%
   const [bcaOffUsRate, setBcaOffUsRate] = useState<number>(0.010); // 1.00%
@@ -145,6 +208,9 @@ export default function FinanceMdrSetupPage() {
         const cRates = res.creditConfig.edcRates || DEFAULT_CREDIT_EDC_RATES;
         setCreditEdcRates(JSON.parse(JSON.stringify(cRates)));
         setOriginalCreditEdcRates(JSON.parse(JSON.stringify(cRates)));
+        const ctRates = res.creditConfig.cardTypeRates || DEFAULT_CARD_TYPE_RATES;
+        setCardTypeRates(JSON.parse(JSON.stringify(ctRates)));
+        setOriginalCardTypeRates(JSON.parse(JSON.stringify(ctRates)));
         setOriginalCreditConfig(JSON.parse(JSON.stringify(res.creditConfig)));
       }
       if (res.debitConfig) {
@@ -177,8 +243,9 @@ export default function FinanceMdrSetupPage() {
     const onUsDiff = defaultCreditOnUs !== (originalCreditConfig.defaultOnUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOnUsRate);
     const offUsDiff = defaultCreditOffUs !== (originalCreditConfig.defaultOffUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOffUsRate);
     const edcRatesDiff = JSON.stringify(creditEdcRates) !== JSON.stringify(originalCreditEdcRates);
-    return rulesDiff || onUsDiff || offUsDiff || edcRatesDiff;
-  }, [rulesState, originalState, defaultCreditOnUs, defaultCreditOffUs, creditEdcRates, originalCreditEdcRates, originalCreditConfig]);
+    const cardTypesDiff = JSON.stringify(cardTypeRates) !== JSON.stringify(originalCardTypeRates);
+    return rulesDiff || onUsDiff || offUsDiff || edcRatesDiff || cardTypesDiff;
+  }, [rulesState, originalState, defaultCreditOnUs, defaultCreditOffUs, creditEdcRates, originalCreditEdcRates, cardTypeRates, originalCardTypeRates, originalCreditConfig]);
 
   const hasDebitChanges = useMemo(() => {
     const bcaOnUsDiff = bcaOnUsRate !== (originalDebitConfig.bcaOnUsRate ?? DEFAULT_DEBIT_CONFIG.bcaOnUsRate);
@@ -374,6 +441,28 @@ export default function FinanceMdrSetupPage() {
     showToast(`Tarif Off-Us seluruh mesin EDC diset ke ${batchCreditOffUsInput}%`);
   };
 
+  // Handler update individual card type rate
+  const handleCardTypeRateChange = (cardKey: string, valStr: string) => {
+    if (isLocked) return;
+    const num = parseFloat(valStr);
+    const rateVal = isNaN(num) ? 0 : Math.max(0, num) / 100;
+    setCardTypeRates(prev => ({
+      ...prev,
+      [cardKey]: rateVal,
+    }));
+  };
+
+  // Handler reset a single card type's rate
+  const handleResetCardType = (cardKey: string) => {
+    if (isLocked) return;
+    const def = DEFAULT_CARD_TYPE_RATES[cardKey] ?? 0.017;
+    setCardTypeRates(prev => ({
+      ...prev,
+      [cardKey]: def,
+    }));
+    showToast(`Tarif Card Type ${cardKey} dikembalikan ke default.`);
+  };
+
   // Verification PIN unlock handler
   const handleVerifyUnlock = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -415,6 +504,7 @@ export default function FinanceMdrSetupPage() {
       defaultOnUsRate: defaultCreditOnUs,
       defaultOffUsRate: defaultCreditOffUs,
       edcRates: creditEdcRates,
+      cardTypeRates,
     };
     const res = await saveCustomBankMdrRules(
       rulesState,
@@ -435,6 +525,7 @@ export default function FinanceMdrSetupPage() {
     if (res.success) {
       setOriginalState(JSON.parse(JSON.stringify(rulesState)));
       setOriginalCreditEdcRates(JSON.parse(JSON.stringify(creditEdcRates)));
+      setOriginalCardTypeRates(JSON.parse(JSON.stringify(cardTypeRates)));
       setOriginalCreditConfig(JSON.parse(JSON.stringify(creditConfigToSave)));
       setOriginalDebitBankRates(JSON.parse(JSON.stringify(debitBankRates)));
       setOriginalDebitConfig({
@@ -482,6 +573,8 @@ export default function FinanceMdrSetupPage() {
       setDefaultCreditOffUs(DEFAULT_CREDIT_CONFIG.defaultOffUsRate);
       setCreditEdcRates({ ...DEFAULT_CREDIT_EDC_RATES });
       setOriginalCreditEdcRates({ ...DEFAULT_CREDIT_EDC_RATES });
+      setCardTypeRates({ ...DEFAULT_CARD_TYPE_RATES });
+      setOriginalCardTypeRates({ ...DEFAULT_CARD_TYPE_RATES });
       setOriginalCreditConfig(JSON.parse(JSON.stringify(DEFAULT_CREDIT_CONFIG)));
       setBcaOnUsRate(DEFAULT_DEBIT_CONFIG.bcaOnUsRate);
       setBcaOffUsRate(DEFAULT_DEBIT_CONFIG.bcaOffUsRate);
@@ -1165,6 +1258,219 @@ export default function FinanceMdrSetupPage() {
               Pilih bank dari daftar di sebelah kiri untuk melihat dan mengedit konfigurasinya.
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Section: Tarif MDR per Card Type / Jaringan Kartu (Terutama AMEX, Alipay, WeChat, UnionPay, JCB) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden space-y-5 p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider bg-amber-50 text-amber-900 border border-amber-200 uppercase">
+                CARD TYPE MDR SETUP
+              </span>
+              <span className="text-xs text-slate-400 font-medium">Khusus AMEX, Cross-Border E-Wallets & Jaringan Kartu</span>
+            </div>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-1">
+              <CreditCard className="w-5 h-5 text-amber-600" />
+              <span>Tarif MDR per Card Type (Terutama AMEX, Alipay, WeChat Pay)</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Konfigurasi persentase komisi MDR untuk masing-masing jenis kartu. AMEX memiliki tarif jaringan mandiri (standar 5.00%), serta dompet digital Alipay dan WeChat Pay (cross-border) yang dapat diatur secara dinamis.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !hasChanges || isLocked}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs",
+                isLocked
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                  : hasChanges
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 cursor-pointer"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+              )}
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isLocked ? 'Terkunci' : saving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Priority Callout for AMEX, Alipay & WeChat */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3 text-xs">
+            <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <strong className="block text-amber-950 font-bold">Ketentuan Khusus Kartu AMEX (BCA / Global)</strong>
+              <span className="text-amber-800 text-[11px] leading-relaxed">
+                Kartu American Express (AMEX) wajib diproses pada mesin EDC BCA. Persentase komisi standar adalah <strong>{((cardTypeRates['AMEX'] ?? 0.05) * 100).toFixed(2)}%</strong> (berlaku untuk transaksi reguler maupun cicilan).
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-3.5 flex items-start gap-3 text-xs">
+            <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+            <div>
+              <strong className="block text-sky-950 font-bold">Transaksi Alipay & WeChat Pay (Cross-Border)</strong>
+              <span className="text-sky-800 text-[11px] leading-relaxed">
+                Dompet digital turis mancanegara (Alipay & WeChat) diproses melalui terminal EDC BCA dengan settlement valas ke IDR. Persentase MDR standar saat ini adalah <strong>{((cardTypeRates['ALIPAY'] ?? 0.02) * 100).toFixed(2)}%</strong>.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card Type Rates Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th className="py-3 px-4 min-w-[220px]">Card Type / Jaringan</th>
+                <th className="py-3 px-4 min-w-[150px]">Kategori & Tag</th>
+                <th className="py-3 px-4 min-w-[160px]">
+                  <div className="flex items-center gap-1">
+                    <span>Tarif MDR (%)</span>
+                    <span className="text-[10px] text-emerald-700 font-bold lowercase">(komisi)</span>
+                  </div>
+                </th>
+                <th className="py-3 px-4 min-w-[180px]">Simulasi per Rp 50 Jt</th>
+                <th className="py-3 px-4 min-w-[110px]">Status</th>
+                <th className="py-3 px-4 text-right min-w-[90px]">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {Object.keys(cardTypeRates).map(cardKey => {
+                const rate = cardTypeRates[cardKey] ?? DEFAULT_CARD_TYPE_RATES[cardKey] ?? 0.017;
+                const defaultRate = DEFAULT_CARD_TYPE_RATES[cardKey] ?? 0.017;
+                const isCustom = rate !== defaultRate;
+                const info = CARD_TYPE_DISPLAY_INFO[cardKey] || {
+                  fullName: `Kartu ${cardKey}`,
+                  description: 'Tarif komisi kartu.',
+                  badge: 'Jaringan',
+                  badgeColor: 'bg-slate-100 text-slate-800 border-slate-200',
+                };
+                const isAmex = cardKey === 'AMEX';
+                const isAlipay = cardKey === 'ALIPAY';
+                const isWechat = cardKey === 'WECHAT';
+
+                const feeSim = Math.round(50000000 * rate);
+
+                return (
+                  <tr
+                    key={cardKey}
+                    className={cn(
+                      "transition-colors",
+                      isAmex
+                        ? "bg-amber-50/40 hover:bg-amber-50/70"
+                        : isAlipay
+                          ? "bg-sky-50/20 hover:bg-sky-50/40"
+                          : isWechat
+                            ? "bg-emerald-50/20 hover:bg-emerald-50/40"
+                            : "hover:bg-slate-50/70"
+                    )}
+                  >
+                    {/* Card Info */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs shrink-0 border",
+                          isAmex
+                            ? "bg-amber-100 text-amber-900 border-amber-300"
+                            : isAlipay
+                              ? "bg-sky-100 text-sky-800 border-sky-300"
+                              : isWechat
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                : "bg-slate-100 text-slate-800 border-slate-200"
+                        )}>
+                          {cardKey.slice(0, 3).toUpperCase()}
+                        </span>
+                        <div>
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>{cardKey}</span>
+                            {isAmex && <span className="text-[10px] text-amber-600 font-bold">★ Prioritas</span>}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {info.fullName}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Tag & Description */}
+                    <td className="py-3.5 px-4">
+                      <span className={cn("inline-block px-2 py-0.5 rounded text-[10px] font-bold border", info.badgeColor)}>
+                        {info.badge}
+                      </span>
+                      <div className="text-[10px] text-slate-500 mt-1 max-w-xs truncate" title={info.description}>
+                        {info.description}
+                      </div>
+                    </td>
+
+                    {/* MDR % Input */}
+                    <td className="py-3.5 px-4">
+                      <div className="relative w-32">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          disabled={isLocked}
+                          value={(rate * 100).toFixed(2)}
+                          onChange={e => handleCardTypeRateChange(cardKey, e.target.value)}
+                          className={cn(
+                            "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-right pr-6 focus:outline-none transition-colors",
+                            isLocked
+                              ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed select-none"
+                              : isAmex
+                                ? "bg-white text-amber-950 border-amber-300 focus:ring-1 focus:ring-amber-500"
+                                : "bg-white text-slate-900 border-slate-300 focus:ring-1 focus:ring-emerald-500"
+                          )}
+                        />
+                        <span className="absolute right-2 top-1.5 font-mono text-xs text-slate-400">%</span>
+                      </div>
+                    </td>
+
+                    {/* Simulation Column */}
+                    <td className="py-3.5 px-4">
+                      <div className="font-mono text-xs font-bold text-slate-800">
+                        {formatCurrency(feeSim)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-sans">
+                        per Rp 50.000.000
+                      </div>
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3.5 px-4">
+                      <span className={cn(
+                        "inline-block px-2 py-0.5 rounded text-[10px] font-mono font-bold border",
+                        isCustom
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : "bg-slate-50 text-slate-500 border-slate-200"
+                      )}>
+                        {isCustom ? 'Kustom' : 'Standar'}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleResetCardType(cardKey)}
+                        disabled={isLocked || !isCustom}
+                        className="px-2 py-1 rounded text-[10px] font-bold text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 

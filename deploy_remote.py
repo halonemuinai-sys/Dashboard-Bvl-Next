@@ -63,6 +63,8 @@ def main():
     
     try:
         client.connect(SSH_HOST, username=SSH_USER, password=SSH_PASS, timeout=15)
+        if client.get_transport():
+            client.get_transport().set_keepalive(15)
         print("Koneksi SSH Sukses!\n")
         
         # 1. Check Git & Docker
