@@ -39,6 +39,18 @@ def run_ssh_command(client, command, stdin_input=None):
         
     return exit_status, "".join(output_lines), err
 
+def connect_ssh_with_retry(client, host, user, password, retries=5, delay=3):
+    for i in range(retries):
+        try:
+            client.connect(host, username=user, password=password, timeout=20, banner_timeout=30)
+            if client.get_transport():
+                client.get_transport().set_keepalive(15)
+            return True
+        except Exception as e:
+            print(f"Percobaan koneksi {i+1}/{retries} gagal ({e}). Menunggu {delay} detik...")
+            time.sleep(delay)
+    raise Exception(f"Gagal menghubungkan ke {host} setelah {retries} percobaan.")
+
 def main():
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -62,9 +74,7 @@ def main():
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     
     try:
-        client.connect(SSH_HOST, username=SSH_USER, password=SSH_PASS, timeout=15)
-        if client.get_transport():
-            client.get_transport().set_keepalive(15)
+        connect_ssh_with_retry(client, SSH_HOST, SSH_USER, SSH_PASS)
         print("Koneksi SSH Sukses!\n")
         
         # 1. Check Git & Docker
@@ -98,11 +108,20 @@ def main():
         
         # 4. Run Docker Compose build and start
         print("\n--- Membuild dan Menjalankan Docker Container ---")
-        run_ssh_command(client, f"cd {PROJECT_DIR} && sudo -S docker compose --env-file .env.local up -d --build", stdin_input=SSH_PASS)
+        run_ssh_command(client, f"cd {PROJECT_DIR} && sudo -S docker compose --progress=plain --env-file .env.local up -d --build", stdin_input=SSH_PASS)
         
         # 5. Verification and diagnostics
         print("\n--- Menunggu container startup (5 detik) ---")
         time.sleep(5)
+        
+        # Re-verify SSH connection is active
+        try:
+            if not client.get_transport() or not client.get_transport().is_active():
+                print("Reconnecting SSH session for status verification...")
+                client.connect(SSH_HOST, username=SSH_USER, password=SSH_PASS, timeout=15)
+        except Exception:
+            client.connect(SSH_HOST, username=SSH_USER, password=SSH_PASS, timeout=15)
+
         print("\n--- Status Kontainer di Server Proxmox ---")
         run_ssh_command(client, f"cd {PROJECT_DIR} && sudo -S docker compose ps", stdin_input=SSH_PASS)
         
