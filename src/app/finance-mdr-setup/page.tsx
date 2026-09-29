@@ -43,6 +43,10 @@ import {
   BankDebitRate,
   DEBIT_SUPPORTED_BANKS,
   DEFAULT_DEBIT_BANK_RATES,
+  CreditConfig,
+  DEFAULT_CREDIT_CONFIG,
+  EdcCreditRate,
+  DEFAULT_CREDIT_EDC_RATES,
 } from '@/services/dashboard/paymentEngine';
 import { BANK_BRAND_DETAILS } from '../installment-guide/BankDirectorySection';
 
@@ -100,6 +104,15 @@ export default function FinanceMdrSetupPage() {
   const [selectedBankKey, setSelectedBankKey] = useState<string>('BCA');
   const [searchBank, setSearchBank] = useState('');
 
+  // Credit Card EDC On-Us vs Off-Us setup state (BCA On-Us: 1.70%, Off-Us: 2.00%, AMEX: 5.00%)
+  const [creditEdcRates, setCreditEdcRates] = useState<Record<string, EdcCreditRate>>({ ...DEFAULT_CREDIT_EDC_RATES });
+  const [originalCreditEdcRates, setOriginalCreditEdcRates] = useState<Record<string, EdcCreditRate>>({ ...DEFAULT_CREDIT_EDC_RATES });
+  const [defaultCreditOnUs, setDefaultCreditOnUs] = useState<number>(0.017); // 1.70%
+  const [defaultCreditOffUs, setDefaultCreditOffUs] = useState<number>(0.020); // 2.00%
+  const [originalCreditConfig, setOriginalCreditConfig] = useState<CreditConfig>(DEFAULT_CREDIT_CONFIG);
+  const [batchCreditOnUsInput, setBatchCreditOnUsInput] = useState<string>('1.70');
+  const [batchCreditOffUsInput, setBatchCreditOffUsInput] = useState<string>('2.00');
+
   // Debit Card setup state (BCA On-Us: 0.50%, BCA Off-Us: 1.00%, plus per-bank rates)
   const [bcaOnUsRate, setBcaOnUsRate] = useState<number>(0.005); // 0.50%
   const [bcaOffUsRate, setBcaOffUsRate] = useState<number>(0.010); // 1.00%
@@ -126,6 +139,14 @@ export default function FinanceMdrSetupPage() {
       const res = await getMergedBankMdrRules();
       setRulesState(JSON.parse(JSON.stringify(res.rules)));
       setOriginalState(JSON.parse(JSON.stringify(res.rules)));
+      if (res.creditConfig) {
+        setDefaultCreditOnUs(res.creditConfig.defaultOnUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOnUsRate);
+        setDefaultCreditOffUs(res.creditConfig.defaultOffUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOffUsRate);
+        const cRates = res.creditConfig.edcRates || DEFAULT_CREDIT_EDC_RATES;
+        setCreditEdcRates(JSON.parse(JSON.stringify(cRates)));
+        setOriginalCreditEdcRates(JSON.parse(JSON.stringify(cRates)));
+        setOriginalCreditConfig(JSON.parse(JSON.stringify(res.creditConfig)));
+      }
       if (res.debitConfig) {
         setBcaOnUsRate(res.debitConfig.bcaOnUsRate ?? DEFAULT_DEBIT_CONFIG.bcaOnUsRate);
         setBcaOffUsRate(res.debitConfig.bcaOffUsRate ?? DEFAULT_DEBIT_CONFIG.bcaOffUsRate);
@@ -152,8 +173,12 @@ export default function FinanceMdrSetupPage() {
 
   // Change detection
   const hasCreditChanges = useMemo(() => {
-    return JSON.stringify(rulesState) !== JSON.stringify(originalState);
-  }, [rulesState, originalState]);
+    const rulesDiff = JSON.stringify(rulesState) !== JSON.stringify(originalState);
+    const onUsDiff = defaultCreditOnUs !== (originalCreditConfig.defaultOnUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOnUsRate);
+    const offUsDiff = defaultCreditOffUs !== (originalCreditConfig.defaultOffUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOffUsRate);
+    const edcRatesDiff = JSON.stringify(creditEdcRates) !== JSON.stringify(originalCreditEdcRates);
+    return rulesDiff || onUsDiff || offUsDiff || edcRatesDiff;
+  }, [rulesState, originalState, defaultCreditOnUs, defaultCreditOffUs, creditEdcRates, originalCreditEdcRates, originalCreditConfig]);
 
   const hasDebitChanges = useMemo(() => {
     const bcaOnUsDiff = bcaOnUsRate !== (originalDebitConfig.bcaOnUsRate ?? DEFAULT_DEBIT_CONFIG.bcaOnUsRate);
@@ -288,6 +313,67 @@ export default function FinanceMdrSetupPage() {
     showToast(`Tarif Off-Us seluruh bank debit diset ke ${batchOffUsInput}%`);
   };
 
+  // Handler update individual credit EDC rate
+  const handleCreditEdcRateChange = (edcKey: string, field: 'onUs' | 'offUs', valStr: string) => {
+    if (isLocked) return;
+    const num = parseFloat(valStr);
+    const rateVal = isNaN(num) ? 0 : Math.max(0, num) / 100;
+    setCreditEdcRates(prev => {
+      const copy = { ...prev };
+      const current = copy[edcKey] || { onUs: 0.017, offUs: 0.020 };
+      copy[edcKey] = {
+        ...current,
+        [field]: rateVal,
+      };
+      return copy;
+    });
+  };
+
+  // Handler reset a single EDC's credit rate
+  const handleResetCreditEdc = (edcKey: string) => {
+    if (isLocked) return;
+    const def = DEFAULT_CREDIT_EDC_RATES[edcKey] || { onUs: 0.017, offUs: 0.020 };
+    setCreditEdcRates(prev => ({
+      ...prev,
+      [edcKey]: { ...def },
+    }));
+    showToast(`Tarif gesek EDC ${edcKey} dikembalikan ke default.`);
+  };
+
+  // Batch apply Credit On-Us to all EDCs
+  const handleApplyBatchCreditOnUs = () => {
+    if (isLocked) return;
+    const num = parseFloat(batchCreditOnUsInput);
+    if (isNaN(num)) return;
+    const rateVal = Math.max(0, num) / 100;
+    setCreditEdcRates(prev => {
+      const copy = { ...prev };
+      Object.keys(copy).forEach(k => {
+        copy[k] = { ...copy[k], onUs: rateVal };
+      });
+      return copy;
+    });
+    setDefaultCreditOnUs(rateVal);
+    showToast(`Tarif On-Us seluruh mesin EDC diset ke ${batchCreditOnUsInput}%`);
+  };
+
+  // Batch apply Credit Off-Us to all EDCs
+  const handleApplyBatchCreditOffUs = () => {
+    if (isLocked) return;
+    const num = parseFloat(batchCreditOffUsInput);
+    if (isNaN(num)) return;
+    const rateVal = Math.max(0, num) / 100;
+    setCreditEdcRates(prev => {
+      const copy = { ...prev };
+      Object.keys(copy).forEach(k => {
+        copy[k] = { ...copy[k], offUs: rateVal };
+      });
+      return copy;
+    });
+    setDefaultCreditOffUs(rateVal);
+    showToast(`Tarif Off-Us seluruh mesin EDC diset ke ${batchCreditOffUsInput}%`);
+  };
+
   // Verification PIN unlock handler
   const handleVerifyUnlock = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -325,19 +411,31 @@ export default function FinanceMdrSetupPage() {
     }
     setSaving(true);
     const email = userEmail || 'finance@mogems.co.id';
-    const res = await saveCustomBankMdrRules(rulesState, email, {
-      defaultRate: offUsRate,
-      bcaOnUsRate: debitBankRates['BCA']?.onUs ?? bcaOnUsRate,
-      bcaOffUsRate: debitBankRates['BCA']?.offUs ?? bcaOffUsRate,
-      onUsRate,
-      offUsRate,
-      bankRates: debitBankRates,
-      edcRates: {},
-    });
+    const creditConfigToSave: CreditConfig = {
+      defaultOnUsRate: defaultCreditOnUs,
+      defaultOffUsRate: defaultCreditOffUs,
+      edcRates: creditEdcRates,
+    };
+    const res = await saveCustomBankMdrRules(
+      rulesState,
+      email,
+      {
+        defaultRate: offUsRate,
+        bcaOnUsRate: debitBankRates['BCA']?.onUs ?? bcaOnUsRate,
+        bcaOffUsRate: debitBankRates['BCA']?.offUs ?? bcaOffUsRate,
+        onUsRate,
+        offUsRate,
+        bankRates: debitBankRates,
+        edcRates: {},
+      },
+      creditConfigToSave
+    );
     setSaving(false);
 
     if (res.success) {
       setOriginalState(JSON.parse(JSON.stringify(rulesState)));
+      setOriginalCreditEdcRates(JSON.parse(JSON.stringify(creditEdcRates)));
+      setOriginalCreditConfig(JSON.parse(JSON.stringify(creditConfigToSave)));
       setOriginalDebitBankRates(JSON.parse(JSON.stringify(debitBankRates)));
       setOriginalDebitConfig({
         defaultRate: offUsRate,
@@ -380,6 +478,11 @@ export default function FinanceMdrSetupPage() {
     if (res.success) {
       setRulesState(JSON.parse(JSON.stringify(BANK_MDR_RULES)));
       setOriginalState(JSON.parse(JSON.stringify(BANK_MDR_RULES)));
+      setDefaultCreditOnUs(DEFAULT_CREDIT_CONFIG.defaultOnUsRate);
+      setDefaultCreditOffUs(DEFAULT_CREDIT_CONFIG.defaultOffUsRate);
+      setCreditEdcRates({ ...DEFAULT_CREDIT_EDC_RATES });
+      setOriginalCreditEdcRates({ ...DEFAULT_CREDIT_EDC_RATES });
+      setOriginalCreditConfig(JSON.parse(JSON.stringify(DEFAULT_CREDIT_CONFIG)));
       setBcaOnUsRate(DEFAULT_DEBIT_CONFIG.bcaOnUsRate);
       setBcaOffUsRate(DEFAULT_DEBIT_CONFIG.bcaOffUsRate);
       setOnUsRate(DEFAULT_DEBIT_CONFIG.onUsRate);
@@ -638,7 +741,8 @@ export default function FinanceMdrSetupPage() {
 
       {/* Main Dual-Column Setup Cockpit for Credit Cards */}
       {activeCategory === 'CREDIT' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
         {/* Left Column: Bank Navigation List (4 cols) */}
         <div className="lg:col-span-4 bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
@@ -1063,7 +1167,305 @@ export default function FinanceMdrSetupPage() {
           )}
         </div>
       </div>
-    )}
+
+      {/* Section 2: Tarif Gesek Reguler Mesin EDC Kartu Kredit (On-Us vs Off-Us) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden space-y-5 p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase">
+                SMART RULE ENGINE
+              </span>
+              <span className="text-xs text-slate-400 font-medium">Full Payment & Cross-EDC Settlement</span>
+            </div>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-1">
+              <CreditCard className="w-5 h-5 text-emerald-600" />
+              <span>Tarif Gesek Reguler Mesin EDC Kartu Kredit (On-Us vs Off-Us)</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              SOP Perbankan Ritel: Kartu kredit reguler yang digesek pada EDC bank yang sama dikenakan rate On-Us (misal: BCA di EDC BCA = 1.70%). Jika digesek pada EDC bank berbeda (cross-EDC, misal: Kartu HSBC di EDC BCA), otomatis berlaku rate Off-Us (2.00%).
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !hasChanges || isLocked}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs",
+                isLocked
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                  : hasChanges
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 cursor-pointer"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+              )}
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isLocked ? 'Terkunci' : saving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Informative Callout: Contoh Kasus HSBC di EDC BCA */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 font-bold text-slate-900">
+              <Info className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Aturan Transaksi Kartu Beda EDC (Contoh: Kartu HSBC di EDC BCA)</span>
+            </div>
+            <p className="text-slate-600 text-[11px] leading-relaxed pl-6">
+              • <strong>Full Payment / Reguler:</strong> Kartu HSBC yang digesek di EDC BCA terdeteksi sebagai <strong>Off-Us</strong> dengan komisi <strong>{((creditEdcRates['BCA']?.offUs ?? 0.02) * 100).toFixed(2)}%</strong> (bukan tarif On-Us BCA 1.70%).<br/>
+              • <strong>Cicilan 0% HSBC:</strong> Tetap menggunakan rate program cicilan HSBC (6 bln = 3.5%, 12 bln = 5.0%) dan form manual penagihan ke HSBC.<br/>
+              • <strong>Cicilan 0% Bank EDC (Mandiri/CIMB/BRI/BNI):</strong> Kasir akan diperingatkan untuk menggunakan EDC bank penerbit terkait.
+            </p>
+          </div>
+        </div>
+
+        {/* Batch Controls for EDC Credit Rates */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50/70 border border-slate-200">
+          {/* Batch On-Us */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold text-slate-800">Setel On-Us Semua EDC</div>
+              <div className="text-[11px] text-slate-500">Tarif saat kartu kredit digesek di mesin EDC bank yang sama</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative w-24">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  disabled={isLocked}
+                  value={batchCreditOnUsInput}
+                  onChange={e => setBatchCreditOnUsInput(e.target.value)}
+                  className={cn(
+                    "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-slate-900 text-right pr-6 focus:outline-none",
+                    isLocked ? "bg-slate-100 cursor-not-allowed border-slate-200" : "bg-white border-slate-300 focus:ring-1 focus:ring-emerald-500"
+                  )}
+                />
+                <span className="absolute right-2 top-1.5 font-mono text-xs text-slate-400">%</span>
+              </div>
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={handleApplyBatchCreditOnUs}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-2xs",
+                  isLocked
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                )}
+              >
+                Terapkan
+              </button>
+            </div>
+          </div>
+
+          {/* Batch Off-Us */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold text-slate-800">Setel Off-Us Semua EDC</div>
+              <div className="text-[11px] text-slate-500">Tarif saat kartu bank lain digesek di EDC ini (misal HSBC di EDC BCA)</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative w-24">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  disabled={isLocked}
+                  value={batchCreditOffUsInput}
+                  onChange={e => setBatchCreditOffUsInput(e.target.value)}
+                  className={cn(
+                    "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-slate-900 text-right pr-6 focus:outline-none",
+                    isLocked ? "bg-slate-100 cursor-not-allowed border-slate-200" : "bg-white border-slate-300 focus:ring-1 focus:ring-emerald-500"
+                  )}
+                />
+                <span className="absolute right-2 top-1.5 font-mono text-xs text-slate-400">%</span>
+              </div>
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={handleApplyBatchCreditOffUs}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-2xs",
+                  isLocked
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer"
+                )}
+              >
+                Terapkan
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* EDC Rates Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th className="py-3 px-4 min-w-[200px]">Mesin EDC (Acquirer Bank)</th>
+                <th className="py-3 px-4 min-w-[170px]">
+                  <div className="flex items-center gap-1">
+                    <span>Tarif On-Us (Kartu Sama)</span>
+                    <span className="text-[10px] text-emerald-700 font-bold lowercase">(kartu = edc)</span>
+                  </div>
+                </th>
+                <th className="py-3 px-4 min-w-[170px]">
+                  <div className="flex items-center gap-1">
+                    <span>Tarif Off-Us (Cross-EDC)</span>
+                    <span className="text-[10px] text-slate-500 font-bold lowercase">(kartu ≠ edc)</span>
+                  </div>
+                </th>
+                <th className="py-3 px-4 min-w-[180px]">Simulasi Komisi per Rp 50 Jt</th>
+                <th className="py-3 px-4 min-w-[110px]">Status</th>
+                <th className="py-3 px-4 text-right min-w-[90px]">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {Object.keys(creditEdcRates).map(edcKey => {
+                const rule = creditEdcRates[edcKey] || { onUs: 0.017, offUs: 0.020 };
+                const defaultRule = DEFAULT_CREDIT_EDC_RATES[edcKey] || { onUs: 0.017, offUs: 0.020 };
+                const isCustom = rule.onUs !== defaultRule.onUs || rule.offUs !== defaultRule.offUs;
+                const isBca = edcKey === 'BCA';
+                const isAmex = edcKey === 'AMEX';
+
+                const feeOnUs = Math.round(50000000 * rule.onUs);
+                const feeOffUs = Math.round(50000000 * rule.offUs);
+
+                return (
+                  <tr key={edcKey} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs shrink-0 border",
+                          isBca
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : isAmex
+                              ? "bg-amber-50 text-amber-800 border-amber-300"
+                              : "bg-slate-100 text-slate-800 border-slate-200"
+                        )}>
+                          {edcKey.slice(0, 3).toUpperCase()}
+                        </span>
+                        <div>
+                          <div className="font-bold text-slate-900 flex items-center gap-2">
+                            <span>{isAmex ? 'Kartu AMEX' : `EDC ${edcKey}`}</span>
+                            {isBca && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                                Utama
+                              </span>
+                            )}
+                            {isAmex && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800">
+                                Flat 5.0%
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {isBca
+                              ? 'Boutique Primary EDC Terminal'
+                              : isAmex
+                                ? 'American Express Card Special Rate'
+                                : 'EDC Terminal Partner'}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* On-Us Rate */}
+                    <td className="py-3.5 px-4">
+                      <div className="relative w-32">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          disabled={isLocked}
+                          value={(rule.onUs * 100).toFixed(2)}
+                          onChange={e => handleCreditEdcRateChange(edcKey, 'onUs', e.target.value)}
+                          className={cn(
+                            "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-right pr-6 focus:outline-none transition-colors",
+                            isLocked
+                              ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed select-none"
+                              : "bg-white text-emerald-950 border-emerald-300 focus:ring-1 focus:ring-emerald-500"
+                          )}
+                        />
+                        <span className="absolute right-2 top-1.5 font-mono text-xs text-slate-400">%</span>
+                      </div>
+                    </td>
+
+                    {/* Off-Us Rate */}
+                    <td className="py-3.5 px-4">
+                      <div className="relative w-32">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          disabled={isLocked}
+                          value={(rule.offUs * 100).toFixed(2)}
+                          onChange={e => handleCreditEdcRateChange(edcKey, 'offUs', e.target.value)}
+                          className={cn(
+                            "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-right pr-6 focus:outline-none transition-colors",
+                            isLocked
+                              ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed select-none"
+                              : "bg-white text-slate-900 border-slate-300 focus:ring-1 focus:ring-emerald-500"
+                          )}
+                        />
+                        <span className="absolute right-2 top-1.5 font-mono text-xs text-slate-400">%</span>
+                      </div>
+                    </td>
+
+                    {/* Simulation Column */}
+                    <td className="py-3.5 px-4">
+                      <div className="space-y-0.5 font-mono text-[11px]">
+                        <div className="flex items-center gap-1.5 text-emerald-800">
+                          <span className="text-[10px] text-slate-400 font-sans">On-Us:</span>
+                          <strong>{formatCurrency(feeOnUs)}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-700">
+                          <span className="text-[10px] text-slate-400 font-sans">Off-Us:</span>
+                          <span>{formatCurrency(feeOffUs)}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3.5 px-4">
+                      <span className={cn(
+                        "inline-block px-2 py-0.5 rounded text-[10px] font-mono font-bold border",
+                        isCustom
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : "bg-slate-50 text-slate-500 border-slate-200"
+                      )}>
+                        {isCustom ? 'Kustom' : 'Standar'}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleResetCreditEdc(edcKey)}
+                        disabled={isLocked || !isCustom}
+                        className="px-2 py-1 rounded text-[10px] font-bold text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )}
 
       {/* Debit Card Setup Cockpit */}
       {activeCategory === 'DEBIT' && (

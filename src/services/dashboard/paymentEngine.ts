@@ -258,6 +258,37 @@ export const REGULAR_EDC_SWIPE_RATES: Record<string, number> = {
   'default': 0.017, // 1.7%
 };
 
+// Credit Card Regular Swipe Rates (On-Us vs Off-Us per EDC)
+export interface EdcCreditRate {
+  onUs: number;  // e.g. 0.017 = 1.70% (Kartu BCA di EDC BCA)
+  offUs: number; // e.g. 0.020 = 2.00% (Kartu HSBC / Bank Lain di EDC BCA)
+}
+
+export interface CreditConfig {
+  defaultOnUsRate: number;  // 0.017 = 1.70%
+  defaultOffUsRate: number; // 0.020 = 2.00%
+  edcRates: Record<string, EdcCreditRate>;
+}
+
+export const DEFAULT_CREDIT_EDC_RATES: Record<string, EdcCreditRate> = {
+  'BCA': { onUs: 0.017, offUs: 0.020 },
+  'MayBank': { onUs: 0.015, offUs: 0.020 },
+  'Mandiri': { onUs: 0.015, offUs: 0.020 },
+  'CIMB Niaga': { onUs: 0.015, offUs: 0.020 },
+  'BNI': { onUs: 0.015, offUs: 0.020 },
+  'BRI': { onUs: 0.015, offUs: 0.020 },
+  'Danamon': { onUs: 0.015, offUs: 0.020 },
+  'Permata': { onUs: 0.015, offUs: 0.020 },
+  'AMEX': { onUs: 0.050, offUs: 0.050 },
+  'Other': { onUs: 0.017, offUs: 0.020 },
+};
+
+export const DEFAULT_CREDIT_CONFIG: CreditConfig = {
+  defaultOnUsRate: 0.017,
+  defaultOffUsRate: 0.020,
+  edcRates: { ...DEFAULT_CREDIT_EDC_RATES },
+};
+
 export interface BankDebitRate {
   onUs: number; // e.g. 0.005 = 0.50% (settled on same bank's EDC)
   offUs: number; // e.g. 0.010 = 1.00% (settled on different bank's EDC)
@@ -328,7 +359,8 @@ export function computePaymentMdr(
     amount: number;
   },
   customRules?: Record<string, BankMdrRule>,
-  debitConfig?: DebitConfig
+  debitConfig?: DebitConfig,
+  creditConfig?: CreditConfig
 ): {
   mdrPct: number;
   cardComm: number;
@@ -432,20 +464,56 @@ export function computePaymentMdr(
     };
   }
 
-  // 4. Credit Card
+  // 4. Credit Card (On-Us vs Off-Us & Installment Smart Engine)
   if (paymentType === 'Credit Card') {
-    // If Full Payment / Reguler swipe (non-installment)
+    const cardBank = bank !== '--' ? bank : (edc !== '--' ? edc : 'BCA');
+    const settleEdc = edc !== '--' ? edc : 'BCA';
+    const isSameBank = cardBank.toLowerCase().trim() === settleEdc.toLowerCase().trim();
+
+    // A. Full Payment / Reguler swipe (non-installment)
     if (installment === '--') {
-      const edcKey = edc !== '--' ? edc : 'default';
-      const rate = REGULAR_EDC_SWIPE_RATES[edcKey] ?? REGULAR_EDC_SWIPE_RATES['default'];
+      const activeCreditRates = creditConfig?.edcRates || DEFAULT_CREDIT_CONFIG.edcRates;
+      const fallbackOnUs = creditConfig?.defaultOnUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOnUsRate;
+      const fallbackOffUs = creditConfig?.defaultOffUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOffUsRate;
+
+      // Special handling for AMEX card
+      if (cardBank === 'AMEX' || split.cardType === 'AMEX') {
+        const rate = 0.050; // 5.0%
+        return {
+          mdrPct: rate,
+          cardComm: Math.round(amount * rate),
+          processMethod: 'EDC',
+          warningNote: 'Kartu AMEX dikenakan MDR 5.00% (Wajib diproses di EDC BCA / AMEX).',
+        };
+      }
+
+      let edcRule: EdcCreditRate | undefined = activeCreditRates[settleEdc];
+      if (!edcRule) {
+        const matchKey = Object.keys(activeCreditRates).find(k => k.toLowerCase() === settleEdc.toLowerCase());
+        if (matchKey) edcRule = activeCreditRates[matchKey];
+      }
+      if (!edcRule) {
+        edcRule = activeCreditRates['Other'] || { onUs: fallbackOnUs, offUs: fallbackOffUs };
+      }
+
+      const rate = isSameBank ? edcRule.onUs : edcRule.offUs;
+      let warning: string | undefined;
+
+      if (!isSameBank) {
+        warning = `Kartu Kredit ${cardBank} digesek di EDC ${settleEdc} (Off-Us / Beda EDC) dikenakan tarif ${(rate * 100).toFixed(2)}%.`;
+      } else {
+        warning = `Kartu Kredit ${cardBank} di EDC ${settleEdc} (On-Us) dikenakan tarif ${(rate * 100).toFixed(2)}%.`;
+      }
+
       return {
         mdrPct: rate,
         cardComm: Math.round(amount * rate),
         processMethod: 'EDC',
+        warningNote: warning,
       };
     }
 
-    // Installment 0% on Credit Card
+    // B. Installment 0% on Credit Card
     const targetBank = bank !== '--' ? bank : (edc !== '--' ? edc : '');
     const activeRules = customRules ?? BANK_MDR_RULES;
     const bankRule = activeRules[targetBank];
@@ -460,6 +528,17 @@ export function computePaymentMdr(
         warning = `Min. transaksi cicilan ${bankRule.bank} (${installment}) adalah Rp ${minRequired.toLocaleString('id-ID')}.`;
       }
 
+      // Check cross-EDC for installment
+      if (bankRule.processMethod === 'MANUAL_FORM') {
+        const baseNote = bankRule.notes ? `${bankRule.notes} ` : '';
+        const crossNote = `Kartu ${targetBank} cicilan 0% ${installment} diproses melalui Form Manual ke bank (gesek di EDC ${settleEdc}).`;
+        warning = warning ? `${warning} ${crossNote}` : `${baseNote}${crossNote}`.trim();
+      } else if (!isSameBank && targetBank !== 'AMEX') {
+        // EDC-based installment (e.g. Mandiri, BNI, BRI, CIMB) swiped on different EDC
+        const edcAlert = `Perhatian: Program cicilan 0% ${bankRule.bank} seharusnya digesek di mesin EDC ${targetBank}. Gesek di EDC ${settleEdc} berpotensi gagal cicilan jika terminal tidak mendukung multi-acquirer.`;
+        warning = warning ? `${warning} ${edcAlert}` : edcAlert;
+      }
+
       if (rate !== undefined) {
         return {
           mdrPct: rate,
@@ -468,22 +547,23 @@ export function computePaymentMdr(
           warningNote: warning,
         };
       } else {
+        const fallbackRate = isSameBank ? 0.017 : 0.020;
         return {
-          mdrPct: 0.017,
-          cardComm: Math.round(amount * 0.017),
+          mdrPct: fallbackRate,
+          cardComm: Math.round(amount * fallbackRate),
           processMethod: bankRule.processMethod,
-          warningNote: `Tenor ${installment} tidak terdaftar pada program cicilan 0% ${bankRule.bank}. Menggunakan rate standar reguler 1.7%.`,
+          warningNote: `Tenor ${installment} tidak terdaftar pada program cicilan 0% ${bankRule.bank}. Menggunakan rate ${isSameBank ? 'On-Us' : 'Off-Us'} ${(fallbackRate * 100).toFixed(2)}%.`,
         };
       }
     }
 
     // Fallback if bank is not in standard installment list
-    const fallbackRate = 0.017;
+    const fallbackRate = isSameBank ? 0.017 : 0.020;
     return {
       mdrPct: fallbackRate,
       cardComm: Math.round(amount * fallbackRate),
       processMethod: 'EDC',
-      warningNote: 'Bank belum terdaftar pada program cicilan khusus. Menggunakan standar EDC 1.7%.',
+      warningNote: `Bank ${targetBank} belum terdaftar pada program cicilan khusus. Menggunakan standar ${isSameBank ? 'On-Us' : 'Off-Us'} ${(fallbackRate * 100).toFixed(2)}%.`,
     };
   }
 
@@ -607,11 +687,13 @@ export async function saveInvoicePaymentSplits(params: {
 export async function getMergedBankMdrRules(): Promise<{
   rules: Record<string, BankMdrRule>;
   debitConfig: DebitConfig;
+  creditConfig: CreditConfig;
   isCustom: boolean;
   updatedBy?: string;
   updatedAt?: string;
 }> {
   let debitConfig: DebitConfig = { ...DEFAULT_DEBIT_CONFIG };
+  let creditConfig: CreditConfig = { ...DEFAULT_CREDIT_CONFIG };
 
   try {
     const { data, error } = await supabase
@@ -661,6 +743,30 @@ export async function getMergedBankMdrRules(): Promise<{
           };
         }
 
+        if (parsed.creditConfig) {
+          const rawEdcRates = parsed.creditConfig.edcRates || {};
+          const mergedCreditEdcRates: Record<string, EdcCreditRate> = {};
+
+          Object.entries(DEFAULT_CREDIT_EDC_RATES).forEach(([eKey, defRate]) => {
+            mergedCreditEdcRates[eKey] = { ...defRate };
+          });
+
+          Object.entries(rawEdcRates).forEach(([eKey, val]: [string, any]) => {
+            if (val && typeof val === 'object') {
+              mergedCreditEdcRates[eKey] = {
+                onUs: typeof val.onUs === 'number' ? val.onUs : (DEFAULT_CREDIT_EDC_RATES[eKey]?.onUs ?? 0.017),
+                offUs: typeof val.offUs === 'number' ? val.offUs : (DEFAULT_CREDIT_EDC_RATES[eKey]?.offUs ?? 0.020),
+              };
+            }
+          });
+
+          creditConfig = {
+            defaultOnUsRate: typeof parsed.creditConfig.defaultOnUsRate === 'number' ? parsed.creditConfig.defaultOnUsRate : DEFAULT_CREDIT_CONFIG.defaultOnUsRate,
+            defaultOffUsRate: typeof parsed.creditConfig.defaultOffUsRate === 'number' ? parsed.creditConfig.defaultOffUsRate : DEFAULT_CREDIT_CONFIG.defaultOffUsRate,
+            edcRates: mergedCreditEdcRates,
+          };
+        }
+
         if (parsed.rules) {
           const merged: Record<string, BankMdrRule> = { ...BANK_MDR_RULES };
           Object.entries(parsed.rules).forEach(([bKey, customRule]: [string, any]) => {
@@ -677,6 +783,7 @@ export async function getMergedBankMdrRules(): Promise<{
           return {
             rules: merged,
             debitConfig,
+            creditConfig,
             isCustom: true,
             updatedBy: data.updated_by || parsed.updatedBy,
             updatedAt: data.updated_at || parsed.updatedAt,
@@ -688,7 +795,7 @@ export async function getMergedBankMdrRules(): Promise<{
     console.error('Failed to load custom MDR rules, using baseline:', err);
   }
 
-  return { rules: BANK_MDR_RULES, debitConfig, isCustom: false };
+  return { rules: BANK_MDR_RULES, debitConfig, creditConfig, isCustom: false };
 }
 
 /**
@@ -697,12 +804,14 @@ export async function getMergedBankMdrRules(): Promise<{
 export async function saveCustomBankMdrRules(
   rules: Record<string, BankMdrRule>,
   userEmail: string,
-  debitConfig?: DebitConfig
+  debitConfig?: DebitConfig,
+  creditConfig?: CreditConfig
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const payload = {
       rules,
       debitConfig: debitConfig || DEFAULT_DEBIT_CONFIG,
+      creditConfig: creditConfig || DEFAULT_CREDIT_CONFIG,
       updatedBy: userEmail,
       updatedAt: new Date().toISOString(),
     };
