@@ -138,6 +138,200 @@ const COMMON_BOUTIQUE_EDCS = [
   'Other',
 ];
 
+interface RatePercentInputProps {
+  value: number; // decimal e.g. 0.05
+  onChange: (decimalValue: number) => void;
+  disabled?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  isAmex?: boolean;
+  presets?: number[];
+  className?: string;
+}
+
+function RatePercentInput({
+  value,
+  onChange,
+  disabled = false,
+  min = 0,
+  max = 100,
+  step = 0.1,
+  isAmex = false,
+  presets,
+  className,
+}: RatePercentInputProps) {
+  const formatPct = (val: number): string => {
+    if (typeof val !== 'number' || isNaN(val)) return '0.00';
+    const pct = +(val * 100).toFixed(4);
+    return pct.toFixed(2);
+  };
+
+  const [text, setText] = useState<string>(() => formatPct(value));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setText(formatPct(value));
+    }
+  }, [value, isFocused]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const filtered = raw.replace(/[^0-9.,]/g, '');
+    setText(filtered);
+
+    const normalized = filtered.replace(',', '.');
+    if (normalized === '' || normalized === '.' || normalized === ',') {
+      return;
+    }
+
+    const parsed = parseFloat(normalized);
+    if (!isNaN(parsed) && parsed >= min && parsed <= max) {
+      onChange(+(parsed / 100).toFixed(6));
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const normalized = text.trim().replace(',', '.');
+    const parsed = parseFloat(normalized);
+    if (isNaN(parsed) || text.trim() === '') {
+      setText(formatPct(value));
+    } else {
+      const clamped = Math.min(max, Math.max(min, parsed));
+      const newDecimal = +(clamped / 100).toFixed(6);
+      onChange(newDecimal);
+      setText(clamped.toFixed(2));
+    }
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    setIsFocused(true);
+    e.target.select();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      stepChange(step);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      stepChange(-step);
+    }
+  };
+
+  const stepChange = (delta: number) => {
+    if (disabled) return;
+    const currentVal = typeof value === 'number' && !isNaN(value) ? value * 100 : 0;
+    const nextVal = Math.min(max, Math.max(min, +(currentVal + delta).toFixed(2)));
+    const newDecimal = +(nextVal / 100).toFixed(6);
+    onChange(newDecimal);
+    setText(nextVal.toFixed(2));
+  };
+
+  const handlePresetClick = (presetVal: number) => {
+    if (disabled) return;
+    const newDecimal = +(presetVal / 100).toFixed(6);
+    onChange(newDecimal);
+    setText(presetVal.toFixed(2));
+  };
+
+  return (
+    <div className={cn("inline-flex flex-col gap-1", className)}>
+      <div className="flex items-center gap-1">
+        {!disabled && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => stepChange(-step)}
+            className={cn(
+              "w-6 h-7 flex items-center justify-center rounded-md border text-xs font-bold transition-all shrink-0 cursor-pointer select-none active:scale-95",
+              isAmex
+                ? "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+                : "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-200"
+            )}
+            title={`Kurangi ${step}%`}
+          >
+            -
+          </button>
+        )}
+
+        <div className="relative w-20 sm:w-22">
+          <input
+            type="text"
+            inputMode="decimal"
+            disabled={disabled}
+            value={text}
+            onChange={handleChange}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            placeholder="0.00"
+            className={cn(
+              "w-full px-2 py-1 rounded-lg border font-mono font-bold text-xs text-right pr-5.5 focus:outline-none transition-all",
+              disabled
+                ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed select-none"
+                : isAmex
+                  ? "bg-white text-amber-950 border-amber-300 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 shadow-2xs"
+                  : "bg-white text-slate-900 border-slate-300 focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 shadow-2xs"
+            )}
+          />
+          <span className="absolute right-1.5 top-1 font-mono text-[11px] font-bold text-slate-400 pointer-events-none">
+            %
+          </span>
+        </div>
+
+        {!disabled && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => stepChange(step)}
+            className={cn(
+              "w-6 h-7 flex items-center justify-center rounded-md border text-xs font-bold transition-all shrink-0 cursor-pointer select-none active:scale-95",
+              isAmex
+                ? "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+                : "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-200"
+            )}
+            title={`Tambah ${step}%`}
+          >
+            +
+          </button>
+        )}
+      </div>
+
+      {!disabled && presets && presets.length > 0 && (
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-[9px] text-slate-400 font-medium">Cepat:</span>
+          {presets.map(p => {
+            const isCurrent = Math.abs((value || 0) * 100 - p) < 0.001;
+            return (
+              <button
+                key={p}
+                type="button"
+                tabIndex={-1}
+                onClick={() => handlePresetClick(p)}
+                className={cn(
+                  "px-1 py-0.2 rounded text-[9px] font-mono font-semibold transition-all cursor-pointer",
+                  isCurrent
+                    ? isAmex
+                      ? "bg-amber-500 text-white font-bold shadow-2xs"
+                      : "bg-emerald-600 text-white font-bold shadow-2xs"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                )}
+              >
+                {p}%
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FinanceMdrSetupPage() {
   const { userEmail, isAdmin } = useUserAccess();
 
@@ -1053,26 +1247,21 @@ export default function FinanceMdrSetupPage() {
                         </div>
 
                         {isTenorActive ? (
-                          <div className="relative">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              max="30"
-                              disabled={isLocked}
-                              readOnly={isLocked}
-                              value={percentVal}
-                              onChange={e => handleRateChange(selectedBankKey, tenor, e.target.value)}
-                              placeholder="0.0"
-                              className={cn(
-                                "w-full pl-3 pr-8 py-1.5 rounded-lg border font-mono font-bold text-sm focus:outline-none transition-colors",
-                                isLocked
-                                  ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed select-none"
-                                  : "bg-white text-slate-900 border-slate-200 focus:ring-1 focus:ring-emerald-500"
-                              )}
-                            />
-                            <span className="absolute right-3 top-2 font-mono font-bold text-xs text-slate-400">%</span>
-                          </div>
+                          <RatePercentInput
+                            value={currentRate ?? 0}
+                            onChange={newRate => {
+                              if (isLocked) return;
+                              setRulesState(prev => {
+                                const copy = { ...prev };
+                                const bankCopy = { ...copy[selectedBankKey], rates: { ...copy[selectedBankKey]?.rates } };
+                                bankCopy.rates[tenor] = newRate;
+                                copy[selectedBankKey] = bankCopy;
+                                return copy;
+                              });
+                            }}
+                            disabled={isLocked}
+                            presets={[0.0, 2.0, 3.5, 5.0]}
+                          />
                         ) : (
                           <div className="py-1.5 text-center text-xs text-slate-400 font-mono italic">
                             Tidak Tersedia
@@ -1108,6 +1297,7 @@ export default function FinanceMdrSetupPage() {
                       disabled={isLocked}
                       readOnly={isLocked}
                       value={activeBankRule.minAmount || ''}
+                      onFocus={e => e.target.select()}
                       onChange={e => handleFieldChange(selectedBankKey, 'minAmount', Number(e.target.value || 0))}
                       className={cn(
                         "w-full pl-9 pr-4 py-1.5 rounded-xl border font-mono font-bold text-xs focus:outline-none transition-colors",
@@ -1133,6 +1323,7 @@ export default function FinanceMdrSetupPage() {
                       disabled={isLocked}
                       readOnly={isLocked}
                       value={activeBankRule.adminFee || 0}
+                      onFocus={e => e.target.select()}
                       onChange={e => handleFieldChange(selectedBankKey, 'adminFee', Number(e.target.value || 0))}
                       className={cn(
                         "w-full pl-9 pr-4 py-1.5 rounded-xl border font-mono font-bold text-xs focus:outline-none transition-colors",
@@ -1411,26 +1602,19 @@ export default function FinanceMdrSetupPage() {
 
                     {/* MDR % Input */}
                     <td className="py-3.5 px-4">
-                      <div className="relative w-32">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          disabled={isLocked}
-                          value={(rate * 100).toFixed(2)}
-                          onChange={e => handleCardTypeRateChange(cardKey, e.target.value)}
-                          className={cn(
-                            "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-right pr-6 focus:outline-none transition-colors",
-                            isLocked
-                              ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed select-none"
-                              : isAmex
-                                ? "bg-white text-amber-950 border-amber-300 focus:ring-1 focus:ring-amber-500"
-                                : "bg-white text-slate-900 border-slate-300 focus:ring-1 focus:ring-emerald-500"
-                          )}
-                        />
-                        <span className="absolute right-2 top-1.5 font-mono text-xs text-slate-400">%</span>
-                      </div>
+                      <RatePercentInput
+                        value={rate}
+                        onChange={newRate => {
+                          if (isLocked) return;
+                          setCardTypeRates(prev => ({
+                            ...prev,
+                            [cardKey]: newRate,
+                          }));
+                        }}
+                        disabled={isLocked}
+                        isAmex={isAmex}
+                        presets={isAmex ? [3.0, 4.0, 4.5, 5.0] : [1.5, 1.7, 2.0, 2.5]}
+                      />
                     </td>
 
                     {/* Simulation Column */}
@@ -1539,13 +1723,13 @@ export default function FinanceMdrSetupPage() {
             <div className="flex items-center gap-2">
               <div className="relative w-24">
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
+                  type="text"
+                  inputMode="decimal"
                   disabled={isLocked}
                   value={batchCreditOnUsInput}
-                  onChange={e => setBatchCreditOnUsInput(e.target.value)}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setBatchCreditOnUsInput(e.target.value.replace(',', '.'))}
+                  placeholder="1.70"
                   className={cn(
                     "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-slate-900 text-right pr-6 focus:outline-none",
                     isLocked ? "bg-slate-100 cursor-not-allowed border-slate-200" : "bg-white border-slate-300 focus:ring-1 focus:ring-emerald-500"
@@ -1578,13 +1762,13 @@ export default function FinanceMdrSetupPage() {
             <div className="flex items-center gap-2">
               <div className="relative w-24">
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
+                  type="text"
+                  inputMode="decimal"
                   disabled={isLocked}
                   value={batchCreditOffUsInput}
-                  onChange={e => setBatchCreditOffUsInput(e.target.value)}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setBatchCreditOffUsInput(e.target.value.replace(',', '.'))}
+                  placeholder="2.00"
                   className={cn(
                     "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-slate-900 text-right pr-6 focus:outline-none",
                     isLocked ? "bg-slate-100 cursor-not-allowed border-slate-200" : "bg-white border-slate-300 focus:ring-1 focus:ring-emerald-500"
@@ -1684,46 +1868,34 @@ export default function FinanceMdrSetupPage() {
 
                     {/* On-Us Rate */}
                     <td className="py-3.5 px-4">
-                      <div className="relative w-32">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          disabled={isLocked}
-                          value={(rule.onUs * 100).toFixed(2)}
-                          onChange={e => handleCreditEdcRateChange(edcKey, 'onUs', e.target.value)}
-                          className={cn(
-                            "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-right pr-6 focus:outline-none transition-colors",
-                            isLocked
-                              ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed select-none"
-                              : "bg-white text-emerald-950 border-emerald-300 focus:ring-1 focus:ring-emerald-500"
-                          )}
-                        />
-                        <span className="absolute right-2 top-1.5 font-mono text-xs text-slate-400">%</span>
-                      </div>
+                      <RatePercentInput
+                        value={rule.onUs}
+                        onChange={newRate => {
+                          if (isLocked) return;
+                          setCreditEdcRates(prev => ({
+                            ...prev,
+                            [edcKey]: { ...(prev[edcKey] || { onUs: 0.017, offUs: 0.020 }), onUs: newRate }
+                          }));
+                        }}
+                        disabled={isLocked}
+                        presets={[1.5, 1.7, 1.8, 2.0]}
+                      />
                     </td>
 
                     {/* Off-Us Rate */}
                     <td className="py-3.5 px-4">
-                      <div className="relative w-32">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          disabled={isLocked}
-                          value={(rule.offUs * 100).toFixed(2)}
-                          onChange={e => handleCreditEdcRateChange(edcKey, 'offUs', e.target.value)}
-                          className={cn(
-                            "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-right pr-6 focus:outline-none transition-colors",
-                            isLocked
-                              ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed select-none"
-                              : "bg-white text-slate-900 border-slate-300 focus:ring-1 focus:ring-emerald-500"
-                          )}
-                        />
-                        <span className="absolute right-2 top-1.5 font-mono text-xs text-slate-400">%</span>
-                      </div>
+                      <RatePercentInput
+                        value={rule.offUs}
+                        onChange={newRate => {
+                          if (isLocked) return;
+                          setCreditEdcRates(prev => ({
+                            ...prev,
+                            [edcKey]: { ...(prev[edcKey] || { onUs: 0.017, offUs: 0.020 }), offUs: newRate }
+                          }));
+                        }}
+                        disabled={isLocked}
+                        presets={[1.8, 2.0, 2.2, 2.5]}
+                      />
                     </td>
 
                     {/* Simulation Column */}
@@ -1937,13 +2109,13 @@ export default function FinanceMdrSetupPage() {
                 <div className="flex items-center gap-2">
                   <div className="relative w-24">
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
+                      type="text"
+                      inputMode="decimal"
                       disabled={isLocked}
                       value={batchOnUsInput}
-                      onChange={e => setBatchOnUsInput(e.target.value)}
+                      onFocus={e => e.target.select()}
+                      onChange={e => setBatchOnUsInput(e.target.value.replace(',', '.'))}
+                      placeholder="0.50"
                       className={cn(
                         "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-slate-900 text-right pr-6 focus:outline-none",
                         isLocked ? "bg-slate-100 cursor-not-allowed border-slate-200" : "bg-white border-slate-300 focus:ring-1 focus:ring-emerald-500"
@@ -1976,13 +2148,13 @@ export default function FinanceMdrSetupPage() {
                 <div className="flex items-center gap-2">
                   <div className="relative w-24">
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
+                      type="text"
+                      inputMode="decimal"
                       disabled={isLocked}
                       value={batchOffUsInput}
-                      onChange={e => setBatchOffUsInput(e.target.value)}
+                      onFocus={e => e.target.select()}
+                      onChange={e => setBatchOffUsInput(e.target.value.replace(',', '.'))}
+                      placeholder="1.00"
                       className={cn(
                         "w-full px-2.5 py-1.5 rounded-lg border font-mono font-bold text-xs text-slate-900 text-right pr-6 focus:outline-none",
                         isLocked ? "bg-slate-100 cursor-not-allowed border-slate-200" : "bg-white border-slate-300 focus:ring-1 focus:ring-emerald-500"
@@ -2105,24 +2277,19 @@ export default function FinanceMdrSetupPage() {
 
                         {/* On-Us Rate Input */}
                         <td className="py-3.5 px-4">
-                          <div className="relative w-32">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              max="100"
-                              disabled={isLocked}
-                              value={(rule.onUs * 100).toFixed(2).replace(/\.00$/, '')}
-                              onChange={e => handleDebitBankRateChange(bankKey, 'onUs', e.target.value)}
-                              className={cn(
-                                "w-full pl-2.5 pr-7 py-1.5 rounded-lg border font-mono font-bold text-xs text-slate-900 transition-colors focus:outline-none",
-                                isLocked
-                                  ? "bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed select-none"
-                                  : "bg-white border-slate-300 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                              )}
-                            />
-                            <span className="absolute right-2.5 top-1.5 font-mono text-xs font-bold text-slate-400">%</span>
-                          </div>
+                          <RatePercentInput
+                            value={rule.onUs}
+                            onChange={newRate => {
+                              if (isLocked) return;
+                              setDebitBankRates(prev => ({
+                                ...prev,
+                                [bankKey]: { ...(prev[bankKey] || { onUs: 0.005, offUs: 0.010 }), onUs: newRate }
+                              }));
+                              if (bankKey === 'BCA') setBcaOnUsRate(newRate);
+                            }}
+                            disabled={isLocked}
+                            presets={[0.15, 0.5, 0.75, 1.0]}
+                          />
                           <p className="text-[10px] text-slate-400 mt-0.5">
                             Kartu {bankKey} → EDC {bankKey}
                           </p>
@@ -2130,24 +2297,19 @@ export default function FinanceMdrSetupPage() {
 
                         {/* Off-Us Rate Input */}
                         <td className="py-3.5 px-4">
-                          <div className="relative w-32">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              max="100"
-                              disabled={isLocked}
-                              value={(rule.offUs * 100).toFixed(2).replace(/\.00$/, '')}
-                              onChange={e => handleDebitBankRateChange(bankKey, 'offUs', e.target.value)}
-                              className={cn(
-                                "w-full pl-2.5 pr-7 py-1.5 rounded-lg border font-mono font-bold text-xs text-slate-900 transition-colors focus:outline-none",
-                                isLocked
-                                  ? "bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed select-none"
-                                  : "bg-white border-slate-300 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                              )}
-                            />
-                            <span className="absolute right-2.5 top-1.5 font-mono text-xs font-bold text-slate-400">%</span>
-                          </div>
+                          <RatePercentInput
+                            value={rule.offUs}
+                            onChange={newRate => {
+                              if (isLocked) return;
+                              setDebitBankRates(prev => ({
+                                ...prev,
+                                [bankKey]: { ...(prev[bankKey] || { onUs: 0.005, offUs: 0.010 }), offUs: newRate }
+                              }));
+                              if (bankKey === 'BCA') setBcaOffUsRate(newRate);
+                            }}
+                            disabled={isLocked}
+                            presets={[0.5, 1.0, 1.25, 1.5]}
+                          />
                           <p className="text-[10px] text-slate-400 mt-0.5">
                             Kartu {bankKey} → EDC Lain
                           </p>
@@ -2280,6 +2442,7 @@ export default function FinanceMdrSetupPage() {
                 <input
                   type="number"
                   value={simDebitAmount}
+                  onFocus={e => e.target.select()}
                   onChange={e => setSimDebitAmount(Math.max(0, parseInt(e.target.value) || 0))}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-mono font-bold text-sm text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
