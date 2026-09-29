@@ -35,7 +35,7 @@ export default function MonthlyOverviewPage() {
   const [syncKey, setSyncKey] = useState(0);
 
   useEffect(() => {
-    if (role === 'operations_sales') {
+    if (role === 'operations_sales' || role === 'finance') {
       router.replace('/operations-sales');
     }
   }, [role, router]);
