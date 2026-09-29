@@ -38,12 +38,14 @@ export type EdcOption = typeof EDC_OPTIONS[number];
 
 export const CARD_TYPES = [
   '--',
+  'ALIPAY',
   'AMEX',
   'BCA CARD',
   'JCB',
   'MASTER',
   'UNIONPAY',
   'VISA',
+  'WECHAT',
   'Other',
 ] as const;
 
@@ -258,6 +260,19 @@ export const REGULAR_EDC_SWIPE_RATES: Record<string, number> = {
   'default': 0.017, // 1.7%
 };
 
+// Default Card Type Rates (AMEX, Alipay, WeChat, UnionPay, JCB, etc.)
+export const DEFAULT_CARD_TYPE_RATES: Record<string, number> = {
+  'AMEX': 0.050,      // 5.00% (Khusus AMEX)
+  'ALIPAY': 0.020,    // 2.00% (Alipay+)
+  'WECHAT': 0.020,    // 2.00% (WeChat Pay)
+  'UNIONPAY': 0.020,  // 2.00% (China UnionPay)
+  'JCB': 0.020,       // 2.00% (JCB Japan)
+  'BCA CARD': 0.017,  // 1.70%
+  'VISA': 0.017,      // 1.70%
+  'MASTER': 0.017,    // 1.70%
+  'Other': 0.017,     // 1.70%
+};
+
 // Credit Card Regular Swipe Rates (On-Us vs Off-Us per EDC)
 export interface EdcCreditRate {
   onUs: number;  // e.g. 0.017 = 1.70% (Kartu BCA di EDC BCA)
@@ -268,6 +283,7 @@ export interface CreditConfig {
   defaultOnUsRate: number;  // 0.017 = 1.70%
   defaultOffUsRate: number; // 0.020 = 2.00%
   edcRates: Record<string, EdcCreditRate>;
+  cardTypeRates?: Record<string, number>;
 }
 
 export const DEFAULT_CREDIT_EDC_RATES: Record<string, EdcCreditRate> = {
@@ -287,6 +303,7 @@ export const DEFAULT_CREDIT_CONFIG: CreditConfig = {
   defaultOnUsRate: 0.017,
   defaultOffUsRate: 0.020,
   edcRates: { ...DEFAULT_CREDIT_EDC_RATES },
+  cardTypeRates: { ...DEFAULT_CARD_TYPE_RATES },
 };
 
 export interface BankDebitRate {
@@ -370,7 +387,15 @@ export function computePaymentMdr(
   const { paymentType, edc, installment, bank, amount } = split;
 
   // 1. Non-Card Zero MDR
-  if (['Cash', 'Transfer', 'Deposit', 'Voucher', 'Rounding', '--'].includes(paymentType)) {
+  if (['Cash', 'Transfer', 'Deposit', 'Voucher', 'Rounding'].includes(paymentType)) {
+    return {
+      mdrPct: 0.0,
+      cardComm: 0,
+      processMethod: 'EDC',
+    };
+  }
+
+  if (paymentType === '--' && (!split.cardType || split.cardType === '--') && split.edc === '--' && split.installment === '--') {
     return {
       mdrPct: 0.0,
       cardComm: 0,
@@ -475,15 +500,51 @@ export function computePaymentMdr(
       const activeCreditRates = creditConfig?.edcRates || DEFAULT_CREDIT_CONFIG.edcRates;
       const fallbackOnUs = creditConfig?.defaultOnUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOnUsRate;
       const fallbackOffUs = creditConfig?.defaultOffUsRate ?? DEFAULT_CREDIT_CONFIG.defaultOffUsRate;
+      const activeCardTypeRates = creditConfig?.cardTypeRates || DEFAULT_CARD_TYPE_RATES;
 
-      // Special handling for AMEX card
-      if (cardBank === 'AMEX' || split.cardType === 'AMEX') {
-        const rate = 0.050; // 5.0%
+      const cardTypeNorm = (split.cardType || '').toUpperCase().trim();
+
+      // 1. Special AMEX card handling (uses configured Card Type rate or fallback 5.0%)
+      if (cardBank === 'AMEX' || cardTypeNorm === 'AMEX') {
+        const rate = activeCardTypeRates['AMEX'] ?? 0.050;
         return {
           mdrPct: rate,
           cardComm: Math.round(amount * rate),
           processMethod: 'EDC',
-          warningNote: 'Kartu AMEX dikenakan MDR 5.00% (Wajib diproses di EDC BCA / AMEX).',
+          warningNote: `Kartu AMEX dikenakan MDR ${(rate * 100).toFixed(2)}% (Wajib diproses di EDC BCA / AMEX).`,
+        };
+      }
+
+      // 2. ALIPAY (Check cardTypeRates first, fallback 2.0%)
+      if (cardTypeNorm === 'ALIPAY' || cardTypeNorm.startsWith('ALIPAY')) {
+        const alipayRate = activeCardTypeRates['ALIPAY'] ?? 0.020;
+        return {
+          mdrPct: alipayRate,
+          cardComm: Math.round(amount * alipayRate),
+          processMethod: 'EDC',
+          warningNote: `Transaksi Alipay dikenakan MDR ${(alipayRate * 100).toFixed(2)}% (Settle via EDC BCA / Acquirer).`,
+        };
+      }
+
+      // 3. WECHAT (Check cardTypeRates first, fallback 2.0%)
+      if (cardTypeNorm === 'WECHAT' || cardTypeNorm.includes('WECHAT')) {
+        const wechatRate = activeCardTypeRates['WECHAT'] ?? 0.020;
+        return {
+          mdrPct: wechatRate,
+          cardComm: Math.round(amount * wechatRate),
+          processMethod: 'EDC',
+          warningNote: `Transaksi WeChat Pay dikenakan MDR ${(wechatRate * 100).toFixed(2)}% (Settle via EDC BCA / Acquirer).`,
+        };
+      }
+
+      // 4. Other Card Types with specific configured rates (e.g. UNIONPAY, JCB)
+      if (cardTypeNorm && ['UNIONPAY', 'JCB'].includes(cardTypeNorm) && activeCardTypeRates[cardTypeNorm] !== undefined) {
+        const customRate = activeCardTypeRates[cardTypeNorm];
+        return {
+          mdrPct: customRate,
+          cardComm: Math.round(amount * customRate),
+          processMethod: 'EDC',
+          warningNote: `Kartu ${cardTypeNorm} dikenakan MDR ${(customRate * 100).toFixed(2)}% (Settle via EDC ${settleEdc}).`,
         };
       }
 
@@ -760,10 +821,20 @@ export async function getMergedBankMdrRules(): Promise<{
             }
           });
 
+          const mergedCardTypeRates: Record<string, number> = { ...DEFAULT_CARD_TYPE_RATES };
+          if (parsed.creditConfig.cardTypeRates && typeof parsed.creditConfig.cardTypeRates === 'object') {
+            Object.entries(parsed.creditConfig.cardTypeRates).forEach(([cKey, val]: [string, any]) => {
+              if (typeof val === 'number' && !isNaN(val)) {
+                mergedCardTypeRates[cKey] = val;
+              }
+            });
+          }
+
           creditConfig = {
             defaultOnUsRate: typeof parsed.creditConfig.defaultOnUsRate === 'number' ? parsed.creditConfig.defaultOnUsRate : DEFAULT_CREDIT_CONFIG.defaultOnUsRate,
             defaultOffUsRate: typeof parsed.creditConfig.defaultOffUsRate === 'number' ? parsed.creditConfig.defaultOffUsRate : DEFAULT_CREDIT_CONFIG.defaultOffUsRate,
             edcRates: mergedCreditEdcRates,
+            cardTypeRates: mergedCardTypeRates,
           };
         }
 

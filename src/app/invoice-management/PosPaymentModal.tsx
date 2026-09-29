@@ -182,6 +182,20 @@ export default function PosPaymentModal({
         }
       }
 
+      if (field === 'cardType' && value !== '--') {
+        if (row.paymentType === '--' || ['Cash', 'Transfer', 'Deposit', 'Voucher', 'Rounding'].includes(row.paymentType)) {
+          row.paymentType = 'Credit Card';
+        }
+        if (row.edc === '--') {
+          row.edc = 'BCA';
+        }
+        if (value === 'AMEX' && (row.bank === '--' || row.bank === 'BCA')) {
+          row.bank = 'AMEX';
+        } else if ((value === 'ALIPAY' || value === 'WECHAT') && row.bank === '--') {
+          row.bank = 'BCA';
+        }
+      }
+
       // Recompute MDR and Comm
       const res = computePaymentMdr(row, activeRules, debitConfig, creditConfig);
       row.mdrPct = res.mdrPct;
@@ -431,7 +445,9 @@ export default function PosPaymentModal({
                             )}
                           >
                             {CARD_TYPES.map(ct => (
-                              <option key={ct} value={ct}>{ct}</option>
+                              <option key={ct} value={ct}>
+                                {ct === 'WECHAT' ? 'WECHAT (WeChat Pay)' : ct === 'ALIPAY' ? 'ALIPAY (Alipay+)' : ct}
+                              </option>
                             ))}
                           </select>
                         </td>
