@@ -79,6 +79,7 @@ const MENU_GROUPS = [
     title: 'Overview',
     items: [
       { path: '/',                    label: 'Monthly Overview' },
+      { path: '/operations-sales',    label: 'Operations Sales (Store Manager)' },
       { path: '/quarterly-standard',  label: 'Quarterly Standard' },
       { path: '/quarterly-budget',    label: 'Quarterly Budget' },
       { path: '/annual-sales',        label: 'Annual Net Sales' },

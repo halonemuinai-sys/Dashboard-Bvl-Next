@@ -107,6 +107,33 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     // Panduan cicilan & MDR terbuka sebagai referensi operasional bagi operations_sales
     if (path === '/installment-guide' && role === 'operations_sales') return true;
 
+    // Role finance memiliki akses terintegrasi ke seluruh dashboard Store Manager & modul Finance
+    if (role === 'finance') {
+      const financeStoreManagerPaths = [
+        '/',
+        '/operations-sales',
+        '/store-performance',
+        '/daily-report',
+        '/daily-breakdown',
+        '/invoice-management',
+        '/installment-guide',
+        '/monthly-transactions',
+        '/sales-journal',
+        '/sales',
+        '/crossing-sales',
+        '/annual-sales',
+        '/quarterly-standard',
+        '/quarterly-budget',
+        '/finance-reconciliation',
+        '/finance-payment-analytics',
+        '/finance-mdr-setup',
+      ];
+      if (allowedPaths.size > 0) {
+        return allowedPaths.has(path) || financeStoreManagerPaths.includes(path);
+      }
+      return financeStoreManagerPaths.includes(path);
+    }
+
     // Jika permissions sudah ada (baik dari cache localStorage maupun fetch), periksa path
     if (allowedPaths.size > 0) {
       return allowedPaths.has(path);
@@ -117,7 +144,7 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     if (loading) {
       if (role === 'operations_sales') return path === '/operations-sales' || path === '/installment-guide';
       if (role === 'crm') return path === '/crm-profiling';
-      if (role === 'finance') return path === '/finance-reconciliation';
+      if (role === 'finance') return path === '/operations-sales' || path === '/store-performance' || path === '/finance-payment-analytics' || path === '/installment-guide';
       return path === '/';
     }
 
