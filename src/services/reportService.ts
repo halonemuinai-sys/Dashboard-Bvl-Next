@@ -351,8 +351,6 @@ export const reportService = {
       },
     });
 
-    const targetEmail = emailTo || process.env.SMTP_USER;
-
     const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
 
     if (pdfBase64) {
@@ -377,10 +375,13 @@ export const reportService = {
       }
     }
 
+    const targetEmail = emailTo || 'renaldi@mraretail.co.id';
+    const targetCc = ccEmail !== undefined ? (ccEmail || undefined) : 'jessica@mogems.co.id, natalia@mraretail.co.id, aris@mraretail.co.id';
+
     const mailOptions: nodemailer.SendMailOptions = {
       from: `"Bvlgari Dashboard" <${process.env.SMTP_USER}>`,
       to: targetEmail,
-      cc: ccEmail || undefined,
+      cc: targetCc,
       subject,
       html: html,
     };

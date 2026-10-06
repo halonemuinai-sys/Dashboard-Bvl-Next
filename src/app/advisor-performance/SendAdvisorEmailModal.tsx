@@ -311,12 +311,31 @@ export default function SendAdvisorEmailModal({
                   type="text"
                   value={ccEmail}
                   onChange={e => setCcEmail(e.target.value)}
-                  placeholder="jessica@mogems.co.id, aris@mraretail.co.id"
+                  placeholder="jessica@mogems.co.id, natalia@mraretail.co.id, aris@mraretail.co.id"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-2xs"
                 />
-                <p className="text-[10px] text-slate-400">
-                  Gunakan tanda koma (,) untuk memisahkan beberapa alamat email tembusan.
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] text-slate-400 font-medium">Pilihan cepat:</span>
+                  {[
+                    { label: 'Jessica', email: 'jessica@mogems.co.id' },
+                    { label: 'Natalia', email: 'natalia@mraretail.co.id' },
+                    { label: 'Aris', email: 'aris@mraretail.co.id' },
+                  ].map(chip => (
+                    <button
+                      key={chip.email}
+                      type="button"
+                      onClick={() => {
+                        const list = ccEmail.split(',').map(s => s.trim()).filter(Boolean);
+                        if (!list.includes(chip.email)) {
+                          setCcEmail(list.length ? `${ccEmail}, ${chip.email}` : chip.email);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                    >
+                      + {chip.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Subject Field (Read-only preview) */}
