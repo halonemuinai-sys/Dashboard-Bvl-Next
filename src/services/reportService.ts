@@ -368,8 +368,10 @@ export const reportService = {
 
   /**
    * Sends Advisor Performance email matching GAS triggerAdvisorEmailManual logic.
+  /**
+   * Generates HTML for Advisor Performance Report matching the template in source/email.
    */
-  async sendAdvisorReport(month: string, year: number, emailTo?: string) {
+  async getAdvisorReportHtml(month: string, year: number) {
     const fmt = (val: number) =>
       Math.round(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
@@ -481,7 +483,7 @@ export const reportService = {
       ytdHtml += `</table>`;
     }
 
-    const dashboardUrl = process.env.NEXT_PUBLIC_SITE_URL || '#';
+    const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://bvl.mogems.co.id'}/advisor-performance`;
 
     const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;color:#333333;max-width:700px;margin:0 auto;background:#ffffff;">
@@ -511,6 +513,21 @@ export const reportService = {
       </div>
     </div>`;
 
+    return {
+      html,
+      subject: `Advisor Performance Report - ${month} ${year} | Bvlgari Indonesia`,
+      advisorsCount: advisors.length,
+      ytdCount: ytdAdvisors.length,
+      stores: storeOrder,
+    };
+  },
+
+  /**
+   * Sends Advisor Performance email matching GAS triggerAdvisorEmailManual logic.
+   */
+  async sendAdvisorReport(month: string, year: number, emailTo?: string, ccEmail?: string) {
+    const { html, subject } = await this.getAdvisorReportHtml(month, year);
+
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
@@ -521,7 +538,8 @@ export const reportService = {
     const info = await transporter.sendMail({
       from: `"Bvlgari Dashboard" <${process.env.SMTP_USER}>`,
       to: emailTo || process.env.SMTP_USER,
-      subject: `Advisor Performance Report - ${month} ${year} | Bvlgari Indonesia`,
+      cc: ccEmail || undefined,
+      subject,
       html,
     });
 
