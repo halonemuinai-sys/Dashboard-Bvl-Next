@@ -8,6 +8,7 @@ const ID_MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli'
 
 export interface DailyReportEmailOptions {
   emailTo?: string;
+  ccEmail?: string;
   pdfBase64?: string;
   excelBase64?: string;
   pdfFilename?: string;
@@ -16,17 +17,13 @@ export interface DailyReportEmailOptions {
 
 export const reportService = {
   /**
-   * Generates and sends the daily sales report email exactly matching the GAS format.
-   * Supports optional PDF and Excel attachments.
+   * Generates the HTML content and metadata for Daily Sales Report.
    */
-  async sendDailyReport(dateStr: string, optionsOrEmailTo?: string | DailyReportEmailOptions) {
-    const options: DailyReportEmailOptions = typeof optionsOrEmailTo === 'string'
-      ? { emailTo: optionsOrEmailTo }
-      : (optionsOrEmailTo || {});
-
-    const { emailTo, pdfBase64, excelBase64 } = options;
-    const pdfFilename = options.pdfFilename || `Daily_Sales_Report_${dateStr}.pdf`;
-    const excelFilename = options.excelFilename || `Daily_Sales_Report_${dateStr}.xlsx`;
+  async getDailyReportHtml(dateStr: string, options?: DailyReportEmailOptions) {
+    const pdfFilename = options?.pdfFilename || `Daily_Sales_Report_${dateStr}.pdf`;
+    const excelFilename = options?.excelFilename || `Daily_Sales_Report_${dateStr}.xlsx`;
+    const pdfBase64 = options?.pdfBase64;
+    const excelBase64 = options?.excelBase64;
 
     const formatCurrency = (val: number) => 
       new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
@@ -309,6 +306,40 @@ export const reportService = {
       </html>
     `;
 
+    return {
+      html,
+      subject: `Laporan Penjualan Harian Bulgari Indonesia : ${displayDate}`,
+      displayDate,
+      totalStoreSales,
+      totalHOSales,
+      totalSalesAll,
+      storeAchievement,
+      hasPdf: Boolean(pdfBase64),
+      hasExcel: Boolean(excelBase64),
+      pdfFilename,
+      excelFilename,
+    };
+  },
+
+  /**
+   * Generates and sends the daily sales report email exactly matching the GAS format.
+   * Supports optional PDF and Excel attachments.
+   */
+  async sendDailyReport(dateStr: string, optionsOrEmailTo?: string | DailyReportEmailOptions) {
+    const options: DailyReportEmailOptions = typeof optionsOrEmailTo === 'string'
+      ? { emailTo: optionsOrEmailTo }
+      : (optionsOrEmailTo || {});
+
+    const { emailTo, ccEmail, pdfBase64, excelBase64 } = options;
+    const pdfFilename = options.pdfFilename || `Daily_Sales_Report_${dateStr}.pdf`;
+    const excelFilename = options.excelFilename || `Daily_Sales_Report_${dateStr}.xlsx`;
+
+    const { html, subject } = await this.getDailyReportHtml(dateStr, {
+      ...options,
+      pdfFilename,
+      excelFilename,
+    });
+
     // Send Email
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
@@ -349,7 +380,8 @@ export const reportService = {
     const mailOptions: nodemailer.SendMailOptions = {
       from: `"Bvlgari Dashboard" <${process.env.SMTP_USER}>`,
       to: targetEmail,
-      subject: `Laporan Penjualan Harian Bulgari Indonesia : ${displayDate}`,
+      cc: ccEmail || undefined,
+      subject,
       html: html,
     };
 

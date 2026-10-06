@@ -21,6 +21,7 @@ import { dashboardService } from '@/services/dashboardService';
 import Amt from '@/components/Amt';
 import CustomCalendar from '@/components/CustomCalendar';
 import BvlgariLoader from '@/components/BvlgariLoader';
+import SendDailyEmailModal from './SendDailyEmailModal';
 
 const fmtPct = (n: number) => (typeof n === 'number' && !isNaN(n) ? n.toFixed(1) + '%' : '0.0%');
 const getLocalDateString = (d: Date) => {
@@ -46,8 +47,7 @@ export default function DailyReportPage() {
   const [date, setDate] = useState(getLocalDateString(new Date()));
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
-  const [sending, setSending] = useState(false);
-  const [sendingStatus, setSendingStatus] = useState<string>('');
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
 
@@ -105,62 +105,28 @@ export default function DailyReportPage() {
     }
   };
 
-  const handleSendEmail = async () => {
-    if (!confirm(`Apakah Anda yakin ingin mengirim Daily Sales Report tanggal ${date} dengan lampiran PDF & Excel?`)) return;
-    
-    setSending(true);
+  const handleGeneratePdfBase64 = async (): Promise<string | undefined> => {
     try {
-      // 1. Generate attachments
-      setSendingStatus("Menyiapkan dokumen PDF & Excel...");
-
-      let pdfBase64: string | undefined;
-      try {
-        const pdf = await generateDailyPDF();
-        if (pdf) {
-          const pdfBuffer = pdf.output('arraybuffer');
-          pdfBase64 = arrayBufferToBase64(pdfBuffer);
-        }
-      } catch (pdfErr) {
-        console.error("Gagal membuat lampiran PDF:", pdfErr);
+      const pdf = await generateDailyPDF();
+      if (pdf) {
+        const pdfBuffer = pdf.output('arraybuffer');
+        return arrayBufferToBase64(pdfBuffer);
       }
-
-      let excelBase64: string | undefined;
-      try {
-        const wb = await generateDailyExcelWorkbook();
-        const excelBuffer = await wb.xlsx.writeBuffer();
-        excelBase64 = arrayBufferToBase64(excelBuffer);
-      } catch (excelErr) {
-        console.error("Gagal membuat lampiran Excel:", excelErr);
-      }
-
-      setSendingStatus("Mengirim email laporan...");
-
-      const res = await fetch('/api/reports/daily', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          date,
-          pdfBase64,
-          excelBase64,
-          pdfFilename: `Daily Sales Report - ${date}.pdf`,
-          excelFilename: `Daily_Sales_Report_${date}.xlsx`,
-        })
-      });
-      
-      const result = await res.json();
-      if (result.success) {
-        const count = result.attachmentsCount ?? ((pdfBase64 && excelBase64) ? 2 : 1);
-        alert(`Email laporan harian berhasil dikirim! (${count} berkas PDF & Excel terlampir)`);
-      } else {
-        alert("Gagal mengirim email: " + (result.error || "Unknown error"));
-      }
-    } catch (err: any) {
-      console.error("Error sending daily report:", err);
-      alert("Error sending email: " + err.message);
-    } finally {
-      setSending(false);
-      setSendingStatus("");
+    } catch (pdfErr) {
+      console.error("Gagal membuat lampiran PDF:", pdfErr);
     }
+    return undefined;
+  };
+
+  const handleGenerateExcelBase64 = async (): Promise<string | undefined> => {
+    try {
+      const wb = await generateDailyExcelWorkbook();
+      const excelBuffer = await wb.xlsx.writeBuffer();
+      return arrayBufferToBase64(excelBuffer);
+    } catch (excelErr) {
+      console.error("Gagal membuat lampiran Excel:", excelErr);
+    }
+    return undefined;
   };
 
   const generateDailyExcelWorkbook = async () => {
@@ -729,12 +695,12 @@ export default function DailyReportPage() {
           </button>
 
           <button
-            onClick={handleSendEmail}
-            disabled={sending}
-            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-md shadow-slate-200 transition-all text-sm font-bold"
+            type="button"
+            onClick={() => setIsEmailModalOpen(true)}
+            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl shadow-md shadow-slate-200 transition-all text-sm font-bold"
           >
-            {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {sending ? (sendingStatus || 'Sending...') : 'Send Report'}
+            <Mail className="w-4 h-4" />
+            Send Email
           </button>
         </div>
       </div>
@@ -1109,6 +1075,14 @@ export default function DailyReportPage() {
         </div>
       </div>
 
+      {/* Send Email Modal */}
+      <SendDailyEmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        date={date}
+        onGeneratePdf={handleGeneratePdfBase64}
+        onGenerateExcel={handleGenerateExcelBase64}
+      />
     </div>
   );
 }
