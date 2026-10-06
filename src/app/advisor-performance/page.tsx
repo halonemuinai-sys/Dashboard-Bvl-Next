@@ -10,6 +10,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { dashboardService, AdvisorPerformanceData, AdvisorRecord } from '@/services/dashboardService';
 import Amt from '@/components/Amt';
 import BvlgariLoader from '@/components/BvlgariLoader';
+import SendAdvisorEmailModal from './SendAdvisorEmailModal';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const CAT_COLORS: Record<string,string> = { Jewelry:'#F59E0B', Watches:'#3B82F6', Accessories:'#EC4899', Perfume:'#10B981', Other:'#8B5CF6' };
@@ -78,27 +79,7 @@ export default function AdvisorPerformancePage() {
 
   const [exporting, setExporting] = useState(false);
   const [exportingAverage, setExportingAverage] = useState(false);
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<'idle'|'ok'|'err'>('idle');
-
-  const sendEmail = async () => {
-    setSendingEmail(true);
-    setEmailStatus('idle');
-    try {
-      const res = await fetch('/api/send-advisor-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, year }),
-      });
-      const json = await res.json();
-      setEmailStatus(json.success ? 'ok' : 'err');
-    } catch {
-      setEmailStatus('err');
-    } finally {
-      setSendingEmail(false);
-      setTimeout(() => setEmailStatus('idle'), 4000);
-    }
-  };
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   const exportExcel = async () => {
     setExporting(true);
@@ -832,19 +813,13 @@ export default function AdvisorPerformancePage() {
             {exportingAverage ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             <span className="hidden sm:inline">{exportingAverage ? 'Exporting...' : 'Export Rata-rata 6 Bln'}</span>
           </button>
-          <button type="button" onClick={sendEmail} disabled={sendingEmail}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-              emailStatus === 'ok'  ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-              emailStatus === 'err' ? 'bg-rose-50 border-rose-200 text-rose-700' :
-              'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
-            }`}>
-            {sendingEmail ? <RefreshCw className="w-4 h-4 animate-spin" /> :
-             emailStatus === 'ok'  ? <CheckCircle className="w-4 h-4" /> :
-             emailStatus === 'err' ? <AlertCircle className="w-4 h-4" /> :
-             <Mail className="w-4 h-4" />}
-            <span className="hidden sm:inline">
-              {sendingEmail ? 'Sending...' : emailStatus === 'ok' ? 'Sent!' : emailStatus === 'err' ? 'Failed' : 'Send Email'}
-            </span>
+          <button
+            type="button"
+            onClick={() => setIsEmailModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+          >
+            <Mail className="w-4 h-4" />
+            <span className="hidden sm:inline">Send Email</span>
           </button>
         </div>
       </div>
@@ -1160,6 +1135,14 @@ export default function AdvisorPerformancePage() {
           );
         })}
       </div>
+
+      {/* Send Email Modal */}
+      <SendAdvisorEmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        month={month}
+        year={year}
+      />
     </div>
   );
 }

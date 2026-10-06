@@ -14,13 +14,18 @@ export async function OPTIONS() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { month, year, emailTo, ccEmail, location, format } = body;
+    const { month, year, emailTo, ccEmail, location, format, action } = body;
 
     if (!month || !year) {
       return NextResponse.json(
         { success: false, error: 'month and year are required' },
         { status: 400, headers: corsHeaders }
       );
+    }
+
+    if (action === 'preview') {
+      const preview = await reportService.getAdvisorReportHtml(month, parseInt(year));
+      return NextResponse.json({ success: true, ...preview }, { headers: corsHeaders });
     }
 
     if (format === 'excel') {
@@ -34,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json(result, { headers: corsHeaders });
     }
 
-    const result = await reportService.sendAdvisorReport(month, parseInt(year), emailTo);
+    const result = await reportService.sendAdvisorReport(month, parseInt(year), emailTo, ccEmail);
     return NextResponse.json(result, { headers: corsHeaders });
   } catch (error: any) {
     console.error('Error sending report:', error);
