@@ -45,8 +45,8 @@ export default function SendDailyEmailModal({
   const [storeAchievement, setStoreAchievement] = useState<number>(0);
 
   // Email recipient state
-  const [emailTo, setEmailTo] = useState('aldi@mraretail.co.id, aris@mraretail.co.id');
-  const [ccEmail, setCcEmail] = useState('jessica@mogems.co.id, aris@mraretail.co.id');
+  const [emailTo, setEmailTo] = useState('renaldi@mraretail.co.id');
+  const [ccEmail, setCcEmail] = useState('jessica@mogems.co.id, natalia@mraretail.co.id, aris@mraretail.co.id');
 
   // Attachment toggles
   const [attachPdf, setAttachPdf] = useState(true);
@@ -402,9 +402,10 @@ export default function SendDailyEmailModal({
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <span className="text-[11px] text-slate-400 font-medium">Pilihan cepat:</span>
                   {[
-                    { label: 'Aldi', email: 'aldi@mraretail.co.id' },
-                    { label: 'Aris', email: 'aris@mraretail.co.id' },
+                    { label: 'Renaldi', email: 'renaldi@mraretail.co.id' },
                     { label: 'Jessica', email: 'jessica@mogems.co.id' },
+                    { label: 'Natalia', email: 'natalia@mraretail.co.id' },
+                    { label: 'Aris', email: 'aris@mraretail.co.id' },
                   ].map(chip => (
                     <button
                       key={chip.email}
@@ -427,13 +428,14 @@ export default function SendDailyEmailModal({
                   type="text"
                   value={ccEmail}
                   onChange={e => setCcEmail(e.target.value)}
-                  placeholder="contoh: jessica@mogems.co.id, finance@mogems.co.id"
+                  placeholder="contoh: jessica@mogems.co.id, natalia@mraretail.co.id, aris@mraretail.co.id"
                   className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-amber-500 focus:bg-white font-mono transition-colors"
                 />
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <span className="text-[11px] text-slate-400 font-medium">Pilihan cepat:</span>
                   {[
                     { label: 'Jessica', email: 'jessica@mogems.co.id' },
+                    { label: 'Natalia', email: 'natalia@mraretail.co.id' },
                     { label: 'Aris', email: 'aris@mraretail.co.id' },
                   ].map(chip => (
                     <button
