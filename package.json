@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "manual:capture": "python .agents/skills/bvl-visual-manual-generator/scripts/capture_screenshots.py",
+    "manual:generate": "python .agents/skills/bvl-visual-manual-generator/scripts/generate_visual_docx.py"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
