@@ -170,11 +170,21 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
 
       const netSales = grossAfterDiscount - taxAmount;
 
+      const normalizedSalesman = (() => {
+        const sm = (itm.salesman || '').trim();
+        if (/imelda/i.test(sm)) {
+          const loc = (itm.location || '').toUpperCase();
+          if (loc.includes('BALI') || loc.includes('DPS')) return 'Imelda Bali';
+          if (loc.includes('PLAZA INDONESIA') || loc.includes('PI')) return 'Imelda PI';
+        }
+        return sm || null;
+      })();
+
       // Mapping kolom sesuai server.js (baris 104-121) yang sudah berfungsi
       rawRows.push({
         transaction_date: itm.transactionDate || null,
         transaction_time: itm.transactionTime || null,
-        salesman: itm.salesman || null,
+        salesman: normalizedSalesman,
         customer_name: itm.customerName || null,
         phone_no: itm.phoneNo || null,
         transaction_no: itm.transactionNo || null,
