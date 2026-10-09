@@ -380,8 +380,27 @@ export default function AdvisorPerformancePage() {
         ...monthList.map(({ m, y }) => dashboardService.getAdvisorPerformance(m, y))
       ]);
 
-      // List all advisors that are active in the selected month (active = target > 0)
-      const activeAdvisors = currentMonthData.advisors.filter(a => a.target > 0);
+      // Kumpulkan semua advisor yang aktif di bulan terpilih ATAU memiliki aktivitas (target / sales > 0) dalam rentang 6 bulan terakhir
+      const allAdvisorsMap = new Map<string, AdvisorRecord>();
+
+      // 1. Masukkan advisor yang memiliki target > 0 di bulan berjalan
+      currentMonthData.advisors.forEach(a => {
+        if (a.target > 0) {
+          allAdvisorsMap.set(a.name.toLowerCase(), a);
+        }
+      });
+
+      // 2. Sertakan juga advisor yang memiliki riwayat di 6 bulan terakhir (misal Imelda PI yang mutasi ke Bali)
+      historicalMonthsData.forEach(hData => {
+        hData.advisors.forEach(a => {
+          const key = a.name.toLowerCase();
+          if ((a.target > 0 || a.netSales > 0) && !allAdvisorsMap.has(key)) {
+            allAdvisorsMap.set(key, a);
+          }
+        });
+      });
+
+      const activeAdvisors = Array.from(allAdvisorsMap.values());
 
       const wb = new ExcelJS.Workbook();
       wb.creator = 'MRA Retail BI Dashboard';
@@ -551,7 +570,13 @@ export default function AdvisorPerformancePage() {
       ];
 
       storeOrder.forEach(store => {
-        const advisors = grouped[store];
+        const advisors = [...(grouped[store] || [])].sort((a, b) => {
+          const aCurTarget = currentMonthData.advisors.find(x => x.name.toLowerCase() === a.name.toLowerCase())?.target || 0;
+          const bCurTarget = currentMonthData.advisors.find(x => x.name.toLowerCase() === b.name.toLowerCase())?.target || 0;
+          if (aCurTarget > 0 && bCurTarget === 0) return -1;
+          if (aCurTarget === 0 && bCurTarget > 0) return 1;
+          return b.netSales - a.netSales;
+        });
         if (!advisors?.length) return;
 
         const storeColor = STORE_COLORS[store] || C.subBg;
@@ -740,8 +765,8 @@ export default function AdvisorPerformancePage() {
       const notes = [
         '1. Rata-rata Bulanan dihitung dari: (Total Penjualan 6 Bulan) dibagi dengan (Jumlah Bulan Aktif).',
         '2. Bulan Aktif dihitung berdasarkan jumlah bulan di mana staff memiliki Target > 0 atau Penjualan > 0 dalam rentang 6 bulan terakhir.',
-        '3. Bagi staff baru yang bekerja kurang dari 6 bulan, rata-rata dihitung secara proporsional berdasarkan jumlah bulan aktif mereka bekerja di Bulgari Indonesia.',
-        '4. Staff dengan target = 0 pada bulan berjalan (seperti Supervisor, Store Manager, ASM, Operation Manager, atau staff yang telah resign) otomatis tidak disertakan dalam laporan ini.',
+        '3. Bagi staff baru atau staf yang mengalami mutasi kerja (perpindahan butik), rata-rata dihitung proporsional sesuai masa aktif di toko masing-masing.',
+        '4. Staff mutasi/transisi tetap dicatat di toko asal pada posisi bawah jika memiliki riwayat target/penjualan dalam 6 bulan terakhir.',
         '5. Pewarnaan Kolom Achv %: Biru (Di atas 100%), Hijau (80% s/d 100%), dan Merah (Di bawah 80%).'
       ];
 
