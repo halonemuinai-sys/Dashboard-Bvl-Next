@@ -125,8 +125,9 @@ const MENU_GROUPS = [
   {
     title: 'CRM & Traffic',
     items: [
-      { path: '/crm-profiling',      label: 'CRM Profiling' },
-      { path: '/crm-dedup',          label: 'CRM & Traffic' },
+      { path: '/crm-profiling',        label: 'CRM Profiling' },
+      { path: '/advanced-clienteling', label: 'Advanced Clienteling' },
+      { path: '/crm-dedup',            label: 'CRM & Traffic' },
       { path: '/event-selling-plan', label: 'Event Selling Plan' },
       { path: '/app-sheet-crm',      label: 'App Sheet (CRM)' },
       { path: '/footfall-store',     label: 'Footfall (Store)' },

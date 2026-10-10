@@ -129,7 +129,7 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     // JANGAN tampilkan menu yang dilarang (cegah flash of unauthorized menus)
     if (loading) {
       if (role === 'operations_sales') return path === '/operations-sales' || path === '/installment-guide';
-      if (role === 'crm') return path === '/crm-profiling';
+      if (role === 'crm') return path === '/crm-profiling' || path === '/advanced-clienteling';
       if (role === 'finance') return path === '/operations-sales' || path === '/finance-payment-analytics' || path === '/installment-guide';
       return path === '/';
     }

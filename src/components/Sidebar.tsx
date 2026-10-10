@@ -37,6 +37,7 @@ import {
   NotebookPen,
   Percent,
   CreditCard,
+  Crosshair,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -110,6 +111,7 @@ const menuGroups = [
     title: "CRM & TRAFFIC",
     items: [
       { name: 'CRM Profiling',        icon: ContactRound,    href: '/crm-profiling', badge: 'NEW', badgeColor: 'bg-violet-500' },
+      { name: 'Advanced Clienteling', icon: Crosshair,       href: '/advanced-clienteling', badge: 'NEW', badgeColor: 'bg-blue-600' },
       { name: 'CRM & Traffic',          icon: ShieldCheck,     href: '/crm-dedup', badge: 'NEW', badgeColor: 'bg-emerald-500' },
       { name: 'Event Selling Plan',  icon: Diamond,         href: '/event-selling-plan', badge: 'NEW', badgeColor: 'bg-amber-500' },
       { name: 'App Sheet (CRM)',     icon: Database,        href: '/app-sheet-crm' },
