@@ -15,7 +15,7 @@ import { getAdvancedClienteling, type AdvancedClient } from '@/services/dashboar
 type FacetKey =
   | 'store' | 'advisor' | 'status' | 'gender'
   | 'ageBracket' | 'origin' | 'nationality' | 'domicile' | 'ethnicity' | 'occupation' | 'maritalStatus' | 'children'
-  | 'interests' | 'fashionStyle' | 'characters' | 'hobbies';
+  | 'interests' | 'fashionStyle' | 'characters' | 'hobbyCategories' | 'hobbySubs';
 
 interface FacetDef {
   key: FacetKey;
@@ -29,24 +29,25 @@ interface FacetDef {
 const one = (v: string) => (v ? [v] : []);
 
 const FACETS: FacetDef[] = [
-  { key: 'store',         label: 'Toko',             group: 'Dasar', values: c => one(c.store), order: ['Plaza Indonesia', 'Plaza Senayan', 'Bali'] },
-  { key: 'status',        label: 'Status Klien',     group: 'Dasar', values: c => one(c.status), order: ['VIP', 'CURRENT', 'NEW', 'OLD'] },
-  { key: 'gender',        label: 'Title',            group: 'Dasar', values: c => one(c.gender), order: ['Mr', 'Mrs', 'Ms'] },
-  { key: 'advisor',       label: 'Advisor',          group: 'Dasar', values: c => one(c.advisor), limit: 40 },
+  { key: 'store',           label: 'Toko',             group: 'Dasar', values: c => one(c.store), order: ['Plaza Indonesia', 'Plaza Senayan', 'Bali'] },
+  { key: 'status',          label: 'Status Klien',     group: 'Dasar', values: c => one(c.status), order: ['VIP', 'CURRENT', 'NEW', 'OLD'] },
+  { key: 'gender',          label: 'Title',            group: 'Dasar', values: c => one(c.gender), order: ['Mr', 'Mrs', 'Ms'] },
+  { key: 'advisor',         label: 'Advisor',          group: 'Dasar', values: c => one(c.advisor), limit: 40 },
 
-  { key: 'ageBracket',    label: 'Umur',             group: 'Demografi', values: c => one(c.ageBracket), order: ['<30', '30-35', '35-40', '40-45', '45-50', '>50'] },
-  { key: 'origin',        label: 'Asal Klien',       group: 'Demografi', values: c => (c.nationality ? [c.isForeign ? 'Turis / Asing' : 'Lokal (WNI)'] : []) },
-  { key: 'nationality',   label: 'Kewarganegaraan',  group: 'Demografi', values: c => one(c.nationality), limit: 15 },
-  { key: 'domicile',      label: 'Domisili',         group: 'Demografi', values: c => one(c.domicile), limit: 15 },
-  { key: 'ethnicity',     label: 'Etnis',            group: 'Demografi', values: c => one(c.ethnicity), limit: 12 },
-  { key: 'occupation',    label: 'Pekerjaan',        group: 'Demografi', values: c => one(c.occupation), limit: 12 },
-  { key: 'maritalStatus', label: 'Status Nikah',     group: 'Demografi', values: c => one(c.maritalStatus) },
-  { key: 'children',      label: 'Anak',             group: 'Demografi', values: c => (c.hasChildren ? ['Punya Anak'] : []) },
+  { key: 'ageBracket',      label: 'Umur',             group: 'Demografi', values: c => one(c.ageBracket), order: ['<30', '30-35', '35-40', '40-45', '45-50', '>50'] },
+  { key: 'origin',          label: 'Asal Klien',       group: 'Demografi', values: c => (c.nationality ? [c.isForeign ? 'Turis / Asing' : 'Lokal (WNI)'] : []) },
+  { key: 'nationality',     label: 'Kewarganegaraan',  group: 'Demografi', values: c => one(c.nationality), limit: 15 },
+  { key: 'domicile',        label: 'Domisili',         group: 'Demografi', values: c => one(c.domicile), limit: 15 },
+  { key: 'ethnicity',       label: 'Etnis',            group: 'Demografi', values: c => one(c.ethnicity), limit: 12 },
+  { key: 'occupation',      label: 'Pekerjaan',        group: 'Demografi', values: c => one(c.occupation), limit: 12 },
+  { key: 'maritalStatus',   label: 'Status Nikah',     group: 'Demografi', values: c => one(c.maritalStatus) },
+  { key: 'children',        label: 'Anak',             group: 'Demografi', values: c => (c.hasChildren ? ['Punya Anak'] : []) },
 
-  { key: 'interests',     label: 'Barang Diminati',  group: 'Minat & Gaya', values: c => c.interests, order: ['Jewelry', 'Watches', 'LLGA', 'Perfume', 'Semi HJ'] },
-  { key: 'fashionStyle',  label: 'Fashion Style',    group: 'Minat & Gaya', values: c => one(c.fashionStyle) },
-  { key: 'characters',    label: 'Karakter',         group: 'Minat & Gaya', values: c => c.characters, limit: 15 },
-  { key: 'hobbies',       label: 'Hobby',            group: 'Minat & Gaya', values: c => c.hobbies, limit: 20 },
+  { key: 'interests',       label: 'Barang Diminati',  group: 'Minat & Gaya', values: c => c.interests, order: ['Jewelry', 'Watches', 'LLGA', 'Perfume', 'Semi HJ'] },
+  { key: 'fashionStyle',    label: 'Fashion Style',    group: 'Minat & Gaya', values: c => one(c.fashionStyle) },
+  { key: 'characters',      label: 'Karakter',         group: 'Minat & Gaya', values: c => c.characters, limit: 15 },
+  { key: 'hobbyCategories', label: 'Kategori Hobby',   group: 'Minat & Gaya', values: c => c.hobbyCategories, order: ['Gaya Hidup & Mewah', 'Olahraga & Kesehatan', 'Otomotif', 'Kuliner', 'Hiburan & Seni', 'Alam & Lingkungan', 'Others'] },
+  { key: 'hobbySubs',       label: 'Turunan Hobby',    group: 'Minat & Gaya', values: c => c.hobbySubs, limit: 30 },
 ];
 
 const SPEND_OPTIONS = [
@@ -167,9 +168,9 @@ function FacetBlock({
           )}
         </div>
       )}
-      {lowCoverage && def.key === 'hobbies' && (
+      {lowCoverage && (def.key === 'hobbyCategories' || def.key === 'hobbySubs') && (
         <p className="text-[10px] text-rose-500 mt-2 leading-snug">
-          Hobby baru diisi sebagian kecil klien. Hasil filter ini belum mewakili seluruh klien.
+          Hobby baru diisi sebagian klien. Smart-matching otomatis menghubungkan data lama.
         </p>
       )}
     </div>
@@ -349,16 +350,16 @@ export default function AdvancedClientelingPage() {
       wb.creator = 'MRA Retail BI Dashboard';
       const ws = wb.addWorksheet('Advanced Clienteling', { views: [{ state: 'frozen', ySplit: 3 }] });
 
-      ws.mergeCells('A1:R1');
+      ws.mergeCells('A1:U1');
       ws.getCell('A1').value = `Advanced Clienteling — ${filtered.length} klien`;
       ws.getCell('A1').font = { bold: true, size: 13, color: { argb: 'FF1E3A5F' } };
-      ws.mergeCells('A2:R2');
+      ws.mergeCells('A2:U2');
       ws.getCell('A2').value = chips.length ? `Filter: ${chips.map(c => c.label).join(' | ')}` : 'Filter: (tidak ada)';
       ws.getCell('A2').font = { italic: true, size: 9, color: { argb: 'FF64748B' } };
 
       const headers = ['No', 'Nama', 'Title', 'No HP', 'Email', 'Toko', 'Advisor', 'Status', 'Umur',
-        'Kewarganegaraan', 'Domisili', 'Pekerjaan', 'Barang Diminati', 'Fashion Style', 'Karakter', 'Hobby',
-        'Tanggal Lahir', 'Total Belanja', 'Jumlah Transaksi', 'Terakhir Belanja'];
+        'Kewarganegaraan', 'Domisili', 'Pekerjaan', 'Barang Diminati', 'Fashion Style', 'Karakter',
+        'Kategori Hobby', 'Turunan Hobby', 'Tanggal Lahir', 'Total Belanja', 'Jumlah Transaksi', 'Terakhir Belanja'];
       const hdr = ws.addRow(headers);
       hdr.eachCell(cell => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
@@ -371,17 +372,17 @@ export default function AdvancedClientelingPage() {
         const row = ws.addRow([
           i + 1, c.name, c.gender, c.phone, c.email, c.store, c.advisor, c.status, c.ageBracket,
           c.nationality, c.domicile, c.occupation, c.interests.join(', '), c.fashionStyle,
-          c.characters.join(', '), c.hobbies.join(', '), fmtDate(c.birthDate),
+          c.characters.join(', '), c.hobbyCategories.join(', '), c.hobbySubs.join(', '), fmtDate(c.birthDate),
           c.totalSpend, c.txCount, fmtDate(c.lastPurchase),
         ]);
-        row.getCell(18).numFmt = '#,##0';
+        row.getCell(19).numFmt = '#,##0';
         row.font = { size: 9.5 };
       });
 
       ws.columns = [
         { width: 6 }, { width: 30 }, { width: 7 }, { width: 16 }, { width: 26 }, { width: 16 }, { width: 22 },
         { width: 10 }, { width: 8 }, { width: 16 }, { width: 14 }, { width: 16 }, { width: 20 }, { width: 14 },
-        { width: 26 }, { width: 22 }, { width: 14 }, { width: 18 }, { width: 10 }, { width: 14 },
+        { width: 26 }, { width: 22 }, { width: 26 }, { width: 14 }, { width: 18 }, { width: 10 }, { width: 14 },
       ];
 
       const buffer = await wb.xlsx.writeBuffer();
@@ -576,8 +577,8 @@ export default function AdvancedClientelingPage() {
                             {c.interests.map(i => (
                               <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700">{i}</span>
                             ))}
-                            {c.hobbies.map(h => (
-                              <span key={h} className="text-[10px] px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700">{h}</span>
+                            {(c.hobbySubs.length > 0 ? c.hobbySubs : c.hobbyCategories).map(h => (
+                              <span key={h} className="text-[10px] px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 font-medium">{h}</span>
                             ))}
                             {c.fashionStyle && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">{c.fashionStyle}</span>
