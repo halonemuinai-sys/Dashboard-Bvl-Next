@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Crosshair, Search, RefreshCw, FileSpreadsheet, MessageCircle, X,
-  Users, Gem, Cake, Wallet, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Info, ArrowUpRight,
+  Users, Gem, Cake, UserPlus, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Info, ArrowUpRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
@@ -20,7 +20,7 @@ type FacetKey =
 interface FacetDef {
   key: FacetKey;
   label: string;
-  group: 'Dasar' | 'Demografi' | 'Minat & Gaya';
+  group: 'Basics' | 'Demographics' | 'Interests & Style';
   values: (c: AdvancedClient) => string[];
   limit?: number;
   order?: string[];
@@ -28,52 +28,72 @@ interface FacetDef {
 
 const one = (v: string) => (v ? [v] : []);
 
+// Translate display labels only; retain stored values for filtering.
+const PROFILE_LABELS: Record<string, string> = {
+  'gaya hidup & mewah': 'Lifestyle & Luxury',
+  'olahraga & kesehatan': 'Sports & Wellness',
+  otomotif: 'Automotive', kuliner: 'Culinary',
+  'hiburan & seni': 'Entertainment & Arts', 'alam & lingkungan': 'Nature & Environment',
+  'jam tangan': 'Watches', 'barang antik': 'Antiques',
+  lari: 'Running', berenang: 'Swimming', bersepeda: 'Cycling', berkuda: 'Horse Riding',
+  'otomotif roda 4': 'Cars', 'otomotif roda 2': 'Motorcycles',
+  'wisata kuliner': 'Culinary Travel', memasak: 'Cooking', 'kopi / barista': 'Coffee / Barista',
+  menonton: 'Movies & TV', fotografi: 'Photography', musik: 'Music', membaca: 'Reading',
+  berkebun: 'Gardening', 'bunga & tanaman hias': 'Flowers & Ornamental Plants',
+  'belum kawin': 'Single', kawin: 'Married', 'cerai hidup': 'Divorced',
+  'cerai mati': 'Widowed', janda: 'Widow', duda: 'Widower',
+  konservatif: 'Conservative', pendiam: 'Quiet', ceriwis: 'Talkative', supel: 'Sociable',
+  humoris: 'Humorous', kritis: 'Critical', antusias: 'Enthusiastic', ramah: 'Friendly',
+  'sok tahu': 'Know-it-all', 'suka discount': 'Discount-oriented',
+  jawa: 'Javanese', sunda: 'Sundanese', tionghoa: 'Chinese',
+};
+const profileLabel = (value: string) => PROFILE_LABELS[value.toLowerCase()] ?? value;
+const facetLabel = (key: FacetKey, value: string) =>
+  ['hobbyCategories', 'hobbySubs', 'characters', 'fashionStyle', 'maritalStatus', 'ethnicity'].includes(key)
+    ? profileLabel(value) : value;
+
 const FACETS: FacetDef[] = [
-  { key: 'store',           label: 'Toko',             group: 'Dasar', values: c => one(c.store), order: ['Plaza Indonesia', 'Plaza Senayan', 'Bali'] },
-  { key: 'status',          label: 'Status Klien',     group: 'Dasar', values: c => one(c.status), order: ['VIP', 'CURRENT', 'NEW', 'OLD'] },
-  { key: 'gender',          label: 'Title',            group: 'Dasar', values: c => one(c.gender), order: ['Mr', 'Mrs', 'Ms'] },
-  { key: 'advisor',         label: 'Advisor',          group: 'Dasar', values: c => one(c.advisor), limit: 40 },
+  { key: 'store',           label: 'Store',             group: 'Basics', values: c => one(c.store), order: ['Plaza Indonesia', 'Plaza Senayan', 'Bali'] },
+  { key: 'status',          label: 'Client Status',     group: 'Basics', values: c => one(c.status), order: ['VIP', 'CURRENT', 'NEW', 'OLD'] },
+  { key: 'gender',          label: 'Title',            group: 'Basics', values: c => one(c.gender), order: ['Mr', 'Mrs', 'Ms'] },
+  { key: 'advisor',         label: 'Advisor',          group: 'Basics', values: c => one(c.advisor), limit: 40 },
 
-  { key: 'ageBracket',      label: 'Umur',             group: 'Demografi', values: c => one(c.ageBracket), order: ['<30', '30-35', '35-40', '40-45', '45-50', '>50'] },
-  { key: 'origin',          label: 'Asal Klien',       group: 'Demografi', values: c => (c.nationality ? [c.isForeign ? 'Turis / Asing' : 'Lokal (WNI)'] : []) },
-  { key: 'nationality',     label: 'Kewarganegaraan',  group: 'Demografi', values: c => one(c.nationality), limit: 15 },
-  { key: 'domicile',        label: 'Domisili',         group: 'Demografi', values: c => one(c.domicile), limit: 15 },
-  { key: 'ethnicity',       label: 'Etnis',            group: 'Demografi', values: c => one(c.ethnicity), limit: 12 },
-  { key: 'occupation',      label: 'Pekerjaan',        group: 'Demografi', values: c => one(c.occupation), limit: 12 },
-  { key: 'maritalStatus',   label: 'Status Nikah',     group: 'Demografi', values: c => one(c.maritalStatus) },
-  { key: 'children',        label: 'Anak',             group: 'Demografi', values: c => (c.hasChildren ? ['Punya Anak'] : []) },
+  { key: 'ageBracket',      label: 'Age',             group: 'Demographics', values: c => one(c.ageBracket), order: ['<30', '30-35', '35-40', '40-45', '45-50', '>50'] },
+  { key: 'origin',          label: 'Client Origin',       group: 'Demographics', values: c => (c.nationality ? [c.isForeign ? 'International' : 'Local (Indonesian)'] : []) },
+  { key: 'nationality',     label: 'Nationality',  group: 'Demographics', values: c => one(c.nationality), limit: 15 },
+  { key: 'domicile',        label: 'Residence',         group: 'Demographics', values: c => one(c.domicile), limit: 15 },
+  { key: 'ethnicity',       label: 'Ethnicity',            group: 'Demographics', values: c => one(c.ethnicity), limit: 12 },
+  { key: 'occupation',      label: 'Occupation',        group: 'Demographics', values: c => one(c.occupation), limit: 12 },
+  { key: 'maritalStatus',   label: 'Marital Status',     group: 'Demographics', values: c => one(c.maritalStatus) },
+  { key: 'children',        label: 'Children',             group: 'Demographics', values: c => (c.hasChildren ? ['Has Children'] : []) },
 
-  { key: 'interests',       label: 'Barang Diminati',  group: 'Minat & Gaya', values: c => c.interests, order: ['Jewelry', 'Watches', 'LLGA', 'Perfume', 'Semi HJ'] },
-  { key: 'fashionStyle',    label: 'Fashion Style',    group: 'Minat & Gaya', values: c => one(c.fashionStyle) },
-  { key: 'characters',      label: 'Karakter',         group: 'Minat & Gaya', values: c => c.characters, limit: 15 },
-  { key: 'hobbyCategories', label: 'Kategori Hobby',   group: 'Minat & Gaya', values: c => c.hobbyCategories, order: ['Gaya Hidup & Mewah', 'Olahraga & Kesehatan', 'Otomotif', 'Kuliner', 'Hiburan & Seni', 'Alam & Lingkungan', 'Others'] },
-  { key: 'hobbySubs',       label: 'Turunan Hobby',    group: 'Minat & Gaya', values: c => c.hobbySubs, limit: 30 },
+  { key: 'interests',       label: 'Product Interests',  group: 'Interests & Style', values: c => c.interests, order: ['Jewelry', 'Watches', 'LLGA', 'Perfume', 'Semi HJ'] },
+  { key: 'fashionStyle',    label: 'Fashion Style',    group: 'Interests & Style', values: c => one(c.fashionStyle) },
+  { key: 'characters',      label: 'Personality',         group: 'Interests & Style', values: c => c.characters, limit: 15 },
+  { key: 'hobbyCategories', label: 'Hobby Categories',   group: 'Interests & Style', values: c => c.hobbyCategories, order: ['Gaya Hidup & Mewah', 'Olahraga & Kesehatan', 'Otomotif', 'Kuliner', 'Hiburan & Seni', 'Alam & Lingkungan', 'Others'] },
+  { key: 'hobbySubs',       label: 'Specific Hobbies',    group: 'Interests & Style', values: c => c.hobbySubs, limit: 30 },
 ];
 
 const SPEND_OPTIONS = [
-  { id: 'all',   label: 'Semua' },
-  { id: 'none',  label: 'Belum pernah beli', test: (c: AdvancedClient) => c.txCount === 0 },
-  { id: 'buyer', label: 'Pernah beli',       test: (c: AdvancedClient) => c.txCount > 0 },
-  { id: '50',    label: '≥ Rp 50 jt',        test: (c: AdvancedClient) => c.totalSpend >= 50_000_000 },
-  { id: '200',   label: '≥ Rp 200 jt',       test: (c: AdvancedClient) => c.totalSpend >= 200_000_000 },
-  { id: '500',   label: '≥ Rp 500 jt',       test: (c: AdvancedClient) => c.totalSpend >= 500_000_000 },
-  { id: '1000',  label: '≥ Rp 1 M',          test: (c: AdvancedClient) => c.totalSpend >= 1_000_000_000 },
+  { id: 'all',   label: 'All' },
+  { id: 'none',  label: 'No purchases yet', test: (c: AdvancedClient) => c.txCount === 0 },
+  { id: 'buyer', label: 'Has purchased',       test: (c: AdvancedClient) => c.txCount > 0 },
 ];
 
 const RECENCY_OPTIONS = [
-  { id: 'all',  label: 'Semua' },
-  { id: '90',   label: 'Beli ≤ 3 bln lalu',      test: (c: AdvancedClient) => c.daysSincePurchase !== null && c.daysSincePurchase <= 90 },
-  { id: '180',  label: 'Beli ≤ 6 bln lalu',      test: (c: AdvancedClient) => c.daysSincePurchase !== null && c.daysSincePurchase <= 180 },
-  { id: 'd180', label: 'Tidak beli > 6 bln',     test: (c: AdvancedClient) => c.daysSincePurchase !== null && c.daysSincePurchase > 180 },
-  { id: 'd365', label: 'Tidak beli > 12 bln',    test: (c: AdvancedClient) => c.daysSincePurchase !== null && c.daysSincePurchase > 365 },
+  { id: 'all',  label: 'All' },
+  { id: '90',   label: 'Purchased within 3 months',      test: (c: AdvancedClient) => c.daysSincePurchase !== null && c.daysSincePurchase <= 90 },
+  { id: '180',  label: 'Purchased within 6 months',      test: (c: AdvancedClient) => c.daysSincePurchase !== null && c.daysSincePurchase <= 180 },
+  { id: 'd180', label: 'No purchase in over 6 months',     test: (c: AdvancedClient) => c.daysSincePurchase !== null && c.daysSincePurchase > 180 },
+  { id: 'd365', label: 'No purchase in over 12 months',    test: (c: AdvancedClient) => c.daysSincePurchase !== null && c.daysSincePurchase > 365 },
 ];
 
 const BIRTHDAY_OPTIONS = [
-  { id: 'all', label: 'Semua' },
-  { id: '7',   label: '7 hari ke depan',  test: (c: AdvancedClient) => c.daysToBirthday !== null && c.daysToBirthday <= 7 },
-  { id: '30',  label: '30 hari ke depan', test: (c: AdvancedClient) => c.daysToBirthday !== null && c.daysToBirthday <= 30 },
-  { id: 'thisMonth', label: 'Bulan ini',  test: (c: AdvancedClient) => isBirthMonth(c, 0) },
-  { id: 'nextMonth', label: 'Bulan depan', test: (c: AdvancedClient) => isBirthMonth(c, 1) },
+  { id: 'all', label: 'All' },
+  { id: '7',   label: 'Next 7 days',  test: (c: AdvancedClient) => c.daysToBirthday !== null && c.daysToBirthday <= 7 },
+  { id: '30',  label: 'Next 30 days', test: (c: AdvancedClient) => c.daysToBirthday !== null && c.daysToBirthday <= 30 },
+  { id: 'thisMonth', label: 'This month',  test: (c: AdvancedClient) => isBirthMonth(c, 0) },
+  { id: 'nextMonth', label: 'Next month', test: (c: AdvancedClient) => isBirthMonth(c, 1) },
 ];
 
 function isBirthMonth(c: AdvancedClient, offset: number) {
@@ -90,7 +110,7 @@ const PAGE_SIZE = 25;
 const fmtDate = (s: string | null) => {
   if (!s) return '—';
   const d = new Date(s);
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const waLink = (phone: string) => {
@@ -126,17 +146,17 @@ function FacetBlock({
       <div className="flex items-center justify-between mb-2">
         <p className="text-[11px] font-black text-slate-700 uppercase tracking-wider">{def.label}</p>
         <span
-          title="Persentase klien yang sudah mengisi field ini di form profiling"
+          title="Percentage of clients with this profile field completed"
           className={cn(
             'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
             lowCoverage ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500',
           )}
         >
-          {coverage.toFixed(0)}% terisi
+          {coverage.toFixed(0)}% complete
         </span>
       </div>
       {options.length === 0 ? (
-        <p className="text-[11px] text-slate-400 italic">Belum ada data</p>
+        <p className="text-[11px] text-slate-400 italic">No data available</p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {shown.map(([v, n]) => {
@@ -154,7 +174,7 @@ function FacetBlock({
                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400',
                 )}
               >
-                {v} <span className={cn('ml-0.5', active ? 'text-slate-300' : 'text-slate-400')}>{n}</span>
+                {facetLabel(def.key, v)} <span className={cn('ml-0.5', active ? 'text-slate-300' : 'text-slate-400')}>{n}</span>
               </button>
             );
           })}
@@ -164,14 +184,14 @@ function FacetBlock({
               onClick={() => setExpanded(e => !e)}
               className="text-[11px] px-2 py-1 text-emerald-700 font-bold hover:underline"
             >
-              {expanded ? 'Lebih sedikit' : `+${options.length - 8} lagi`}
+              {expanded ? 'Show less' : `+${options.length - 8} more`}
             </button>
           )}
         </div>
       )}
       {lowCoverage && (def.key === 'hobbyCategories' || def.key === 'hobbySubs') && (
         <p className="text-[10px] text-rose-500 mt-2 leading-snug">
-          Hobby baru diisi sebagian klien. Smart-matching otomatis menghubungkan data lama.
+          Hobbies are available for some clients only. Smart matching automatically links older records.
         </p>
       )}
     </div>
@@ -235,7 +255,7 @@ export default function AdvancedClientelingPage() {
   const [spend, setSpend] = useState('all');
   const [recency, setRecency] = useState('all');
   const [birthday, setBirthday] = useState('all');
-  const [sortBy, setSortBy] = useState<'spend' | 'recent' | 'birthday' | 'name'>('spend');
+  const [sortBy, setSortBy] = useState<'newest' | 'recent' | 'birthday' | 'name'>('newest');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -246,7 +266,7 @@ export default function AdvancedClientelingPage() {
     try {
       setClients(await getAdvancedClienteling());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Gagal memuat data klien');
+      setError(e instanceof Error ? e.message : 'Unable to load client data');
     } finally {
       setLoading(false);
     }
@@ -303,7 +323,7 @@ export default function AdvancedClientelingPage() {
     });
 
     const sorters: Record<typeof sortBy, (a: AdvancedClient, b: AdvancedClient) => number> = {
-      spend: (a, b) => b.totalSpend - a.totalSpend,
+      newest: (a, b) => (b.inputDate ? new Date(b.inputDate).getTime() : -1) - (a.inputDate ? new Date(a.inputDate).getTime() : -1),
       recent: (a, b) => (a.daysSincePurchase ?? 1e9) - (b.daysSincePurchase ?? 1e9),
       birthday: (a, b) => (a.daysToBirthday ?? 1e9) - (b.daysToBirthday ?? 1e9),
       name: (a, b) => a.name.localeCompare(b.name),
@@ -311,13 +331,20 @@ export default function AdvancedClientelingPage() {
     return list.sort(sorters[sortBy]);
   }, [clients, search, facetSel, spend, recency, birthday, sortBy]);
 
-  const kpi = useMemo(() => ({
-    count: filtered.length,
-    vip: filtered.filter(c => c.status === 'VIP').length,
-    buyers: filtered.filter(c => c.txCount > 0).length,
-    spend: filtered.reduce((s, c) => s + c.totalSpend, 0),
-    birthdays30: filtered.filter(c => c.daysToBirthday !== null && c.daysToBirthday <= 30).length,
-  }), [filtered]);
+  const kpi = useMemo(() => {
+    const now = Date.now();
+    return {
+      count: filtered.length,
+      vip: filtered.filter(c => c.status === 'VIP').length,
+      buyers: filtered.filter(c => c.txCount > 0).length,
+      newProfiles30: filtered.filter(c => {
+        if (!c.inputDate) return false;
+        const days = (now - new Date(c.inputDate).getTime()) / 86_400_000;
+        return days >= 0 && days <= 30;
+      }).length,
+      birthdays30: filtered.filter(c => c.daysToBirthday !== null && c.daysToBirthday <= 30).length,
+    };
+  }, [filtered]);
 
   const activeCount =
     Object.values(facetSel).reduce((n, s) => n + (s?.size || 0), 0) +
@@ -337,11 +364,11 @@ export default function AdvancedClientelingPage() {
 
   const chips: { label: string; onRemove: () => void }[] = [
     ...FACETS.flatMap(f => Array.from(facetSel[f.key] || []).map(v => ({
-      label: `${f.label}: ${v}`, onRemove: () => toggle(f.key, v),
+      label: `${f.label}: ${facetLabel(f.key, v)}`, onRemove: () => toggle(f.key, v),
     }))),
     ...(spend !== 'all' ? [{ label: SPEND_OPTIONS.find(o => o.id === spend)!.label, onRemove: () => setSpend('all') }] : []),
     ...(recency !== 'all' ? [{ label: RECENCY_OPTIONS.find(o => o.id === recency)!.label, onRemove: () => setRecency('all') }] : []),
-    ...(birthday !== 'all' ? [{ label: `Ultah ${BIRTHDAY_OPTIONS.find(o => o.id === birthday)!.label}`, onRemove: () => setBirthday('all') }] : []),
+    ...(birthday !== 'all' ? [{ label: `Birthday ${BIRTHDAY_OPTIONS.find(o => o.id === birthday)!.label}`, onRemove: () => setBirthday('all') }] : []),
   ];
 
   const exportExcel = async () => {
@@ -352,16 +379,16 @@ export default function AdvancedClientelingPage() {
       wb.creator = 'MRA Retail BI Dashboard';
       const ws = wb.addWorksheet('Advanced Clienteling', { views: [{ state: 'frozen', ySplit: 3 }] });
 
-      ws.mergeCells('A1:U1');
-      ws.getCell('A1').value = `Advanced Clienteling — ${filtered.length} klien`;
+      ws.mergeCells('A1:T1');
+      ws.getCell('A1').value = `Advanced Clienteling — ${filtered.length} clients`;
       ws.getCell('A1').font = { bold: true, size: 13, color: { argb: 'FF1E3A5F' } };
-      ws.mergeCells('A2:U2');
-      ws.getCell('A2').value = chips.length ? `Filter: ${chips.map(c => c.label).join(' | ')}` : 'Filter: (tidak ada)';
+      ws.mergeCells('A2:T2');
+      ws.getCell('A2').value = chips.length ? `Filter: ${chips.map(c => c.label).join(' | ')}` : 'Filter: (none)';
       ws.getCell('A2').font = { italic: true, size: 9, color: { argb: 'FF64748B' } };
 
-      const headers = ['No', 'Nama', 'Title', 'No HP', 'Email', 'Toko', 'Advisor', 'Status', 'Umur',
-        'Kewarganegaraan', 'Domisili', 'Pekerjaan', 'Barang Diminati', 'Fashion Style', 'Karakter',
-        'Kategori Hobby', 'Turunan Hobby', 'Tanggal Lahir', 'Total Belanja', 'Jumlah Transaksi', 'Terakhir Belanja'];
+      const headers = ['No', 'Name', 'Title', 'Phone Number', 'Email', 'Store', 'Advisor', 'Status', 'Age',
+        'Nationality', 'Residence', 'Occupation', 'Product Interests', 'Fashion Style', 'Personality',
+        'Hobby Categories', 'Specific Hobbies', 'Date of Birth', 'Transaction Count', 'Last Purchase'];
       const hdr = ws.addRow(headers);
       hdr.eachCell(cell => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
@@ -373,18 +400,17 @@ export default function AdvancedClientelingPage() {
       filtered.forEach((c, i) => {
         const row = ws.addRow([
           i + 1, c.name, c.gender, c.phone, c.email, c.store, c.advisor, c.status, c.ageBracket,
-          c.nationality, c.domicile, c.occupation, c.interests.join(', '), c.fashionStyle,
-          c.characters.join(', '), c.hobbyCategories.join(', '), c.hobbySubs.join(', '), fmtDate(c.birthDate),
-          c.totalSpend, c.txCount, fmtDate(c.lastPurchase),
+          c.nationality, c.domicile, c.occupation, c.interests.join(', '), profileLabel(c.fashionStyle),
+          c.characters.map(profileLabel).join(', '), c.hobbyCategories.map(profileLabel).join(', '), c.hobbySubs.map(profileLabel).join(', '), fmtDate(c.birthDate),
+          c.txCount, fmtDate(c.lastPurchase),
         ]);
-        row.getCell(19).numFmt = '#,##0';
         row.font = { size: 9.5 };
       });
 
       ws.columns = [
         { width: 6 }, { width: 30 }, { width: 7 }, { width: 16 }, { width: 26 }, { width: 16 }, { width: 22 },
         { width: 10 }, { width: 8 }, { width: 16 }, { width: 14 }, { width: 16 }, { width: 20 }, { width: 14 },
-        { width: 26 }, { width: 22 }, { width: 26 }, { width: 14 }, { width: 18 }, { width: 10 }, { width: 14 },
+        { width: 26 }, { width: 22 }, { width: 26 }, { width: 14 }, { width: 10 }, { width: 14 },
       ];
 
       const buffer = await wb.xlsx.writeBuffer();
@@ -408,7 +434,7 @@ export default function AdvancedClientelingPage() {
       <div className="p-6">
         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-sm text-rose-700">
           {error}
-          <button type="button" onClick={load} className="ml-3 font-bold underline">Coba lagi</button>
+          <button type="button" onClick={load} className="ml-3 font-bold underline">Try again</button>
         </div>
       </div>
     );
@@ -416,7 +442,7 @@ export default function AdvancedClientelingPage() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const groups: FacetDef['group'][] = ['Dasar', 'Demografi', 'Minat & Gaya'];
+  const groups: FacetDef['group'][] = ['Basics', 'Demographics', 'Interests & Style'];
 
   return (
     <div className="min-w-0 space-y-6 rounded-3xl bg-[#f8f9f6] p-3 sm:p-6 [&_button]:cursor-pointer [&_button]:transition-colors [&_button:disabled]:cursor-not-allowed [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-emerald-700">
@@ -427,8 +453,8 @@ export default function AdvancedClientelingPage() {
           <div className="max-w-xl">
             <p className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#dfd0a6]"><Crosshair className="h-4 w-4" /> Bvlgari · Client relationships</p>
             <h1 className="text-3xl sm:text-4xl font-medium tracking-tight">Advanced Clienteling</h1>
-            <p className="mt-3 text-sm leading-relaxed text-emerald-50/75">Kenali setiap klien. Ciptakan hubungan yang lebih personal.</p>
-            <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-emerald-50"><Users className="h-3.5 w-3.5" />{clients.length.toLocaleString('id-ID')} profil klien tersedia</p>
+            <p className="mt-3 text-sm leading-relaxed text-emerald-50/75">Know every client. Build more personal connections.</p>
+            <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-emerald-50"><Users className="h-3.5 w-3.5" />{clients.length.toLocaleString('en-GB')} client profiles available</p>
           </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setShowFilters(s => !s)}
@@ -436,7 +462,7 @@ export default function AdvancedClientelingPage() {
             className="lg:hidden flex items-center gap-1.5 text-xs font-semibold px-3 py-3 rounded-xl border border-white/20 bg-white/10">
             <SlidersHorizontal className="w-4 h-4" /> Filter {activeCount > 0 && `(${activeCount})`}
           </button>
-          <button type="button" onClick={load} aria-label="Refresh data klien"
+          <button type="button" onClick={load} aria-label="Refresh client data"
             className="flex items-center gap-2 text-xs font-semibold px-4 py-3 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20">
             <RefreshCw className="w-4 h-4" /> <span className="hidden sm:inline">Refresh</span>
           </button>
@@ -451,22 +477,22 @@ export default function AdvancedClientelingPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Klien Ditemukan" value={kpi.count.toLocaleString('id-ID')} sub={`${kpi.buyers.toLocaleString('id-ID')} pernah belanja`} icon={Users} tone="bg-blue-50 text-blue-600" />
-        <Kpi label="VIP" value={kpi.vip.toLocaleString('id-ID')} sub="Status VIP di form profiling" icon={Gem} tone="bg-amber-50 text-amber-600" />
-        <Kpi label="Total Belanja" value={<Amt value={kpi.spend} short />} sub="Akumulasi belanja klien terpilih" icon={Wallet} tone="bg-emerald-50 text-emerald-600" />
-        <Kpi label="Ultah 30 Hari" value={kpi.birthdays30.toLocaleString('id-ID')} sub="Kesempatan sapaan personal" icon={Cake} tone="bg-rose-50 text-rose-600" />
+        <Kpi label="Matching Clients" value={kpi.count.toLocaleString('en-GB')} sub={`${kpi.buyers.toLocaleString('en-GB')} have made a purchase`} icon={Users} tone="bg-blue-50 text-blue-600" />
+        <Kpi label="VIP" value={kpi.vip.toLocaleString('en-GB')} sub="VIP status in client profiles" icon={Gem} tone="bg-amber-50 text-amber-600" />
+        <Kpi label="New Profiles (30D)" value={kpi.newProfiles30.toLocaleString('en-GB')} sub="Client profiles added in the last 30 days" icon={UserPlus} tone="bg-emerald-50 text-emerald-600" />
+        <Kpi label="Birthdays in 30 Days" value={kpi.birthdays30.toLocaleString('en-GB')} sub="Opportunities for a personal greeting" icon={Cake} tone="bg-rose-50 text-rose-600" />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-2 text-xs font-semibold text-slate-500">Segmen cepat</span>
+        <span className="mr-2 text-xs font-semibold text-slate-500">Quick segments</span>
         {[
-          { label: 'Semua klien', icon: Users, active: activeCount === 0 && !search, action: resetAll },
-          { label: 'Klien VIP', icon: Gem, active: activeCount === 1 && facetSel.status?.has('VIP'), action: () => { resetAll(); setFacetSel({ status: new Set(['VIP']) }); } },
-          { label: 'Ulang tahun mendatang', icon: Cake, active: activeCount === 1 && birthday === '30', action: () => { resetAll(); setBirthday('30'); } },
-          { label: 'Sapa kembali', icon: MessageCircle, active: activeCount === 1 && recency === 'd180', action: () => { resetAll(); setRecency('d180'); } },
+          { label: 'All clients', icon: Users, active: activeCount === 0 && !search, action: resetAll },
+          { label: 'VIP clients', icon: Gem, active: activeCount === 1 && facetSel.status?.has('VIP'), action: () => { resetAll(); setFacetSel({ status: new Set(['VIP']) }); } },
+          { label: 'Upcoming birthdays', icon: Cake, active: activeCount === 1 && birthday === '30', action: () => { resetAll(); setBirthday('30'); } },
+          { label: 'Reconnect', icon: MessageCircle, active: activeCount === 1 && recency === 'd180', action: () => { resetAll(); setRecency('d180'); } },
         ].map(segment => (
           <button key={segment.label} type="button" onClick={segment.action} aria-pressed={!!segment.active}
-            title={segment.label === 'Sapa kembali' ? 'Klien yang tidak berbelanja lebih dari 6 bulan' : segment.label}
+            title={segment.label === 'Reconnect' ? 'Clients with no purchases in over 6 months' : segment.label}
             className={cn('inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-xs font-medium', segment.active ? 'border-[#123d33] bg-[#123d33] text-white' : 'border-stone-200 bg-white text-slate-600 hover:border-emerald-700 hover:text-emerald-800')}>
             <segment.icon className="h-3.5 w-3.5" />{segment.label}
           </button>
@@ -477,21 +503,21 @@ export default function AdvancedClientelingPage() {
         {/* Filter panel */}
         <aside id="clienteling-filters" className={cn('w-full lg:w-64 xl:w-72 shrink-0 bg-white border border-stone-200 rounded-2xl shadow-sm', !showFilters && 'hidden lg:block')}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><SlidersHorizontal className="h-4 w-4 text-emerald-700" />Filter klien {activeCount > 0 && <span className="text-emerald-700">({activeCount})</span>}</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><SlidersHorizontal className="h-4 w-4 text-emerald-700" />Client filters {activeCount > 0 && <span className="text-emerald-700">({activeCount})</span>}</p>
             {activeCount > 0 && (
-              <button type="button" onClick={resetAll} className="text-[11px] font-bold text-rose-600 hover:underline">Reset semua</button>
+              <button type="button" onClick={resetAll} className="text-[11px] font-bold text-rose-600 hover:underline">Reset all</button>
             )}
           </div>
           <div className="px-4 max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar">
-            <p className="pt-4 pb-1 text-[10px] font-black text-emerald-800 uppercase tracking-widest">Nilai Belanja</p>
-            <SelectRow label="Total Belanja" options={SPEND_OPTIONS} value={spend} onChange={setSpend} />
-            <SelectRow label="Terakhir Belanja" options={RECENCY_OPTIONS} value={recency} onChange={setRecency} />
+            <p className="pt-4 pb-1 text-[10px] font-black text-emerald-800 uppercase tracking-widest">Engagement</p>
+            <SelectRow label="Purchase Status" options={SPEND_OPTIONS} value={spend} onChange={setSpend} />
+            <SelectRow label="Last Purchase" options={RECENCY_OPTIONS} value={recency} onChange={setRecency} />
 
-            <p className="pt-4 pb-1 text-[10px] font-black text-emerald-800 uppercase tracking-widest">Momen</p>
-            <SelectRow label="Ulang Tahun" options={BIRTHDAY_OPTIONS} value={birthday} onChange={setBirthday} />
+            <p className="pt-4 pb-1 text-[10px] font-black text-emerald-800 uppercase tracking-widest">Occasions</p>
+            <SelectRow label="Birthday" options={BIRTHDAY_OPTIONS} value={birthday} onChange={setBirthday} />
 
             {groups.map(g => (
-              <details key={g} open={g === 'Dasar'} className="group border-b border-slate-100">
+              <details key={g} open={g === 'Basics'} className="group border-b border-slate-100">
                 <summary className="flex cursor-pointer list-none items-center justify-between py-4 text-[10px] font-bold text-emerald-800 uppercase tracking-widest">{g}<ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" /></summary>
                 {FACETS.filter(f => f.group === g).map(def => (
                   <FacetBlock
@@ -507,7 +533,7 @@ export default function AdvancedClientelingPage() {
             ))}
             <div className="flex gap-2 text-[10px] text-slate-400 py-4 leading-snug">
               <Info className="w-3.5 h-3.5 shrink-0" />
-              Dalam satu filter, pilihan digabung dengan ATAU. Antar filter berbeda digabung dengan DAN.
+              Selections within a filter use OR. Different filters are combined using AND.
             </div>
           </div>
         </aside>
@@ -515,7 +541,7 @@ export default function AdvancedClientelingPage() {
         {/* Results */}
         <section className="flex-1 min-w-0 space-y-3 w-full">
           <div className="flex items-center justify-between gap-3 pb-1">
-            <div><h2 className="text-lg font-semibold tracking-tight text-slate-900">Direktori klien</h2><p className="mt-1 text-xs text-slate-500" aria-live="polite">{filtered.length.toLocaleString('id-ID')} klien {activeCount || search ? 'sesuai pencarian Anda' : 'siap untuk lebih dikenal'}</p></div>
+            <div><h2 className="text-lg font-semibold tracking-tight text-slate-900">Client directory</h2><p className="mt-1 text-xs text-slate-500" aria-live="polite">{filtered.length.toLocaleString('en-GB')} clients {activeCount || search ? 'matching your search' : 'ready to connect with'}</p></div>
             <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-emerald-800"><ArrowUpRight className="h-4 w-4" /> Personal connections</span>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -523,22 +549,22 @@ export default function AdvancedClientelingPage() {
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 value={search}
-                aria-label="Cari nama, nomor HP, atau advisor"
+                aria-label="Search by name, phone number, or advisor"
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Cari nama, No HP, atau advisor..."
+                placeholder="Search name, phone, or advisor..."
                 className="w-full pl-9 pr-3 py-3 text-sm bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
               />
             </div>
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as typeof sortBy)}
-              aria-label="Urutkan"
+              aria-label="Sort clients"
               className="text-sm px-3 py-2.5 bg-white border border-slate-200 rounded-xl"
             >
-              <option value="spend">Urut: Belanja terbesar</option>
-              <option value="recent">Urut: Belanja terbaru</option>
-              <option value="birthday">Urut: Ulang tahun terdekat</option>
-              <option value="name">Urut: Nama A–Z</option>
+              <option value="newest">Sort: Newest profile</option>
+              <option value="recent">Sort: Latest purchase</option>
+              <option value="birthday">Sort: Upcoming birthday</option>
+              <option value="name">Sort: Name A–Z</option>
             </select>
           </div>
 
@@ -547,7 +573,7 @@ export default function AdvancedClientelingPage() {
               {chips.map(c => (
                 <span key={c.label} className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full pl-2.5 pr-1 py-0.5">
                   {c.label}
-                  <button type="button" onClick={c.onRemove} aria-label={`Hapus ${c.label}`} className="p-0.5 rounded-full hover:bg-emerald-100">
+                  <button type="button" onClick={c.onRemove} aria-label={`Remove ${c.label}`} className="p-0.5 rounded-full hover:bg-emerald-100">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -556,22 +582,21 @@ export default function AdvancedClientelingPage() {
           )}
 
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-emerald-700" tabIndex={0} role="region" aria-label="Daftar klien">
+            <div className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-emerald-700" tabIndex={0} role="region" aria-label="Client list">
               <table className="w-full min-w-[800px] text-sm">
                 <thead className="bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-wider">
                   <tr>
-                    <th className="text-left px-4 py-4">Klien</th>
-                    <th className="text-left px-3 py-4">Toko / Advisor</th>
-                    <th className="text-left px-3 py-4">Minat & Hobby</th>
-                    <th className="text-right px-3 py-4">Total Belanja</th>
-                    <th className="text-left px-3 py-4">Terakhir Beli</th>
-                    <th className="text-left px-3 py-4">Ultah</th>
-                    <th className="px-3 py-4"><span className="sr-only">Hubungi klien</span></th>
+                    <th className="text-left px-4 py-4">Client</th>
+                    <th className="text-left px-3 py-4">Store / Advisor</th>
+                    <th className="text-left px-3 py-4">Interests & Hobbies</th>
+                    <th className="text-left px-3 py-4">Last Purchase</th>
+                    <th className="text-left px-3 py-4">Birthday</th>
+                    <th className="px-3 py-4"><span className="sr-only">Contact client</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {paged.length === 0 && (
-                    <tr><td colSpan={7} className="text-center px-4 py-16 text-sm"><Search className="mx-auto mb-4 h-8 w-8 text-stone-300" /><p className="font-semibold text-slate-700">Belum ada klien yang cocok</p><p className="mt-2 text-xs text-slate-500">Coba kata kunci lain atau sesuaikan filter pencarian.</p><button type="button" onClick={resetAll} className="mt-5 rounded-xl bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">Reset pencarian</button></td></tr>
+                    <tr><td colSpan={6} className="text-center px-4 py-16 text-sm"><Search className="mx-auto mb-4 h-8 w-8 text-stone-300" /><p className="font-semibold text-slate-700">No matching clients</p><p className="mt-2 text-xs text-slate-500">Try a different keyword or adjust your search filters.</p><button type="button" onClick={resetAll} className="mt-5 rounded-xl bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">Reset search</button></td></tr>
                   )}
                   {paged.map(c => {
                     const wa = waLink(c.phone);
@@ -586,7 +611,7 @@ export default function AdvancedClientelingPage() {
                             {c.isForeign && (
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">{c.nationality}</span>
                             )}
-                            {c.ageBracket && <span className="text-[10px] text-slate-400">{c.ageBracket} th</span>}
+                            {c.ageBracket && <span className="text-[10px] text-slate-400">{c.ageBracket} yrs</span>}
                           </div>
                           <p className="text-[11px] text-slate-400 mt-1">{c.phone || '—'}</p>
                         </td>
@@ -600,41 +625,38 @@ export default function AdvancedClientelingPage() {
                               <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700">{i}</span>
                             ))}
                             {(c.hobbySubs.length > 0 ? c.hobbySubs : c.hobbyCategories).map(h => (
-                              <span key={h} className="text-[10px] px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 font-medium">{h}</span>
+                              <span key={h} className="text-[10px] px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 font-medium">{profileLabel(h)}</span>
                             ))}
                             {c.fashionStyle && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">{c.fashionStyle}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">{profileLabel(c.fashionStyle)}</span>
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-4 text-right whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           {c.txCount > 0 ? (
                             <>
-                              <Amt value={c.totalSpend} short className="font-black text-slate-900" />
-                              <p className="text-[10px] text-slate-400">{c.txCount} transaksi</p>
+                              <p className="text-xs text-slate-700">{fmtDate(c.lastPurchase)}</p>
+                              <p className="text-[10px] text-slate-400">{c.txCount} transactions</p>
                             </>
-                          ) : <span className="text-[11px] text-slate-400">Belum ada</span>}
-                        </td>
-                        <td className="px-3 py-4 whitespace-nowrap">
-                          <p className="text-xs text-slate-700">{fmtDate(c.lastPurchase)}</p>
+                          ) : <span className="text-[11px] text-slate-400">None yet</span>}
                           {c.daysSincePurchase !== null && (
                             <p className={cn('text-[10px]', c.daysSincePurchase > 180 ? 'text-rose-500 font-bold' : 'text-slate-400')}>
-                              {c.daysSincePurchase} hari lalu
+                              {c.daysSincePurchase} days ago
                             </p>
                           )}
                         </td>
                         <td className="px-3 py-4 whitespace-nowrap">
                           <p className="text-xs text-slate-700">
-                            {c.birthDate ? new Date(c.birthDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '—'}
+                            {c.birthDate ? new Date(c.birthDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
                           </p>
                           {c.daysToBirthday !== null && c.daysToBirthday <= 30 && (
-                            <p className="text-[10px] font-bold text-rose-500">{c.daysToBirthday === 0 ? 'Hari ini!' : `${c.daysToBirthday} hari lagi`}</p>
+                            <p className="text-[10px] font-bold text-rose-500">{c.daysToBirthday === 0 ? 'Today!' : `${c.daysToBirthday} days away`}</p>
                           )}
                         </td>
                         <td className="px-3 py-4 text-right">
                           {wa && (
                             <a href={wa} target="_blank" rel="noopener noreferrer"
-                              aria-label={`Hubungi ${c.name} melalui WhatsApp`}
+                              aria-label={`Contact ${c.name} via WhatsApp`}
                               title={`WhatsApp ${c.name}`}
                               className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
                               <MessageCircle className="w-3.5 h-3.5" /> WA
@@ -650,13 +672,13 @@ export default function AdvancedClientelingPage() {
 
             <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-xs text-slate-500">
               <span>
-                {filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} dari {filtered.length.toLocaleString('id-ID')}
+                {filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length.toLocaleString('en-GB')}
               </span>
               <div className="flex items-center gap-1">
-                <button type="button" aria-label="Halaman sebelumnya" disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+                <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(p => p - 1)}
                   className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
                 <span className="px-2">{page} / {totalPages}</span>
-                <button type="button" aria-label="Halaman berikutnya" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
+                <button type="button" aria-label="Next page" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
                   className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
               </div>
             </div>
