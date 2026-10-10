@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Crosshair, Search, RefreshCw, FileSpreadsheet, MessageCircle, X,
-  Users, Gem, Cake, Wallet, ChevronLeft, ChevronRight, SlidersHorizontal, Info,
+  Users, Gem, Cake, Wallet, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Info, ArrowUpRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
@@ -145,11 +145,12 @@ function FacetBlock({
               <button
                 key={v}
                 type="button"
+                aria-pressed={active}
                 onClick={() => onToggle(v)}
                 className={cn(
                   'text-[11px] px-2 py-1 rounded-lg border transition-all',
                   active
-                    ? 'bg-slate-900 text-white border-slate-900'
+                    ? 'bg-[#123d33] text-white border-[#123d33]'
                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400',
                 )}
               >
@@ -161,7 +162,7 @@ function FacetBlock({
             <button
               type="button"
               onClick={() => setExpanded(e => !e)}
-              className="text-[11px] px-2 py-1 text-blue-600 font-bold hover:underline"
+              className="text-[11px] px-2 py-1 text-emerald-700 font-bold hover:underline"
             >
               {expanded ? 'Lebih sedikit' : `+${options.length - 8} lagi`}
             </button>
@@ -188,11 +189,12 @@ function SelectRow<T extends { id: string; label: string }>({
           <button
             key={o.id}
             type="button"
+            aria-pressed={value === o.id}
             onClick={() => onChange(o.id)}
             className={cn(
               'text-[11px] px-2 py-1 rounded-lg border transition-all',
               value === o.id
-                ? 'bg-slate-900 text-white border-slate-900'
+                ? 'bg-[#123d33] text-white border-[#123d33]'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400',
             )}
           >
@@ -208,15 +210,15 @@ function Kpi({ label, value, sub, icon: Icon, tone }: {
   label: string; value: React.ReactNode; sub?: string; icon: React.ElementType; tone: string;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+    <div className="relative overflow-hidden bg-white border border-stone-200/80 rounded-2xl p-5 shadow-[0_4px_24px_-12px_rgba(15,52,43,0.15)]">
       <div className="flex items-center justify-between mb-2">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
         <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center', tone)}>
           <Icon className="w-4 h-4" />
         </div>
       </div>
-      <p className="text-2xl font-black text-slate-900">{value}</p>
-      {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
+      <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</p>
+      {sub && <p className="text-xs text-slate-500 mt-2 leading-relaxed">{sub}</p>}
     </div>
   );
 }
@@ -236,7 +238,7 @@ export default function AdvancedClientelingPage() {
   const [sortBy, setSortBy] = useState<'spend' | 'recent' | 'birthday' | 'name'>('spend');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -417,34 +419,33 @@ export default function AdvancedClientelingPage() {
   const groups: FacetDef['group'][] = ['Dasar', 'Demografi', 'Minat & Gaya'];
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
+    <div className="min-w-0 space-y-6 rounded-3xl bg-[#f8f9f6] p-3 sm:p-6 [&_button]:cursor-pointer [&_button]:transition-colors [&_button:disabled]:cursor-not-allowed [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-emerald-700">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center">
-            <Crosshair className="w-5 h-5 text-white" />
+      <div className="relative isolate overflow-hidden rounded-3xl bg-[#123d33] px-6 py-8 sm:p-9 text-white shadow-lg shadow-emerald-950/10">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-40 -z-10 h-96 w-96 rounded-full border-[50px] border-[#c9b681]/10" />
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-7">
+          <div className="max-w-xl">
+            <p className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#dfd0a6]"><Crosshair className="h-4 w-4" /> Bvlgari · Client relationships</p>
+            <h1 className="text-3xl sm:text-4xl font-medium tracking-tight">Advanced Clienteling</h1>
+            <p className="mt-3 text-sm leading-relaxed text-emerald-50/75">Kenali setiap klien. Ciptakan hubungan yang lebih personal.</p>
+            <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-emerald-50"><Users className="h-3.5 w-3.5" />{clients.length.toLocaleString('id-ID')} profil klien tersedia</p>
           </div>
-          <div>
-            <h1 className="text-xl font-black text-slate-900">Advanced Clienteling</h1>
-            <p className="text-xs text-slate-500">
-              Cari klien berdasarkan profil, minat, momen, dan nilai belanja — {clients.length.toLocaleString('id-ID')} profil
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setShowFilters(s => !s)}
-            className="lg:hidden flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white">
+            aria-expanded={showFilters} aria-controls="clienteling-filters"
+            className="lg:hidden flex items-center gap-1.5 text-xs font-semibold px-3 py-3 rounded-xl border border-white/20 bg-white/10">
             <SlidersHorizontal className="w-4 h-4" /> Filter {activeCount > 0 && `(${activeCount})`}
           </button>
-          <button type="button" onClick={load}
-            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50">
+          <button type="button" onClick={load} aria-label="Refresh data klien"
+            className="flex items-center gap-2 text-xs font-semibold px-4 py-3 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20">
             <RefreshCw className="w-4 h-4" /> <span className="hidden sm:inline">Refresh</span>
           </button>
           <button type="button" onClick={exportExcel} disabled={exporting || filtered.length === 0}
-            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+            className="flex items-center gap-2 text-xs font-semibold px-4 py-3 rounded-xl bg-[#e5d6ad] text-[#123d33] hover:bg-[#f2e6c8] disabled:opacity-50">
             {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Export Excel ({filtered.length})
           </button>
+        </div>
         </div>
       </div>
 
@@ -452,30 +453,46 @@ export default function AdvancedClientelingPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Klien Ditemukan" value={kpi.count.toLocaleString('id-ID')} sub={`${kpi.buyers.toLocaleString('id-ID')} pernah belanja`} icon={Users} tone="bg-blue-50 text-blue-600" />
         <Kpi label="VIP" value={kpi.vip.toLocaleString('id-ID')} sub="Status VIP di form profiling" icon={Gem} tone="bg-amber-50 text-amber-600" />
-        <Kpi label="Total Belanja" value={<Amt value={kpi.spend} short />} sub="Dari transaksi POS (cocok via No HP)" icon={Wallet} tone="bg-emerald-50 text-emerald-600" />
+        <Kpi label="Total Belanja" value={<Amt value={kpi.spend} short />} sub="Akumulasi belanja klien terpilih" icon={Wallet} tone="bg-emerald-50 text-emerald-600" />
         <Kpi label="Ultah 30 Hari" value={kpi.birthdays30.toLocaleString('id-ID')} sub="Kesempatan sapaan personal" icon={Cake} tone="bg-rose-50 text-rose-600" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mr-2 text-xs font-semibold text-slate-500">Segmen cepat</span>
+        {[
+          { label: 'Semua klien', icon: Users, active: activeCount === 0 && !search, action: resetAll },
+          { label: 'Klien VIP', icon: Gem, active: activeCount === 1 && facetSel.status?.has('VIP'), action: () => { resetAll(); setFacetSel({ status: new Set(['VIP']) }); } },
+          { label: 'Ulang tahun mendatang', icon: Cake, active: activeCount === 1 && birthday === '30', action: () => { resetAll(); setBirthday('30'); } },
+          { label: 'Sapa kembali', icon: MessageCircle, active: activeCount === 1 && recency === 'd180', action: () => { resetAll(); setRecency('d180'); } },
+        ].map(segment => (
+          <button key={segment.label} type="button" onClick={segment.action} aria-pressed={!!segment.active}
+            title={segment.label === 'Sapa kembali' ? 'Klien yang tidak berbelanja lebih dari 6 bulan' : segment.label}
+            className={cn('inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-xs font-medium', segment.active ? 'border-[#123d33] bg-[#123d33] text-white' : 'border-stone-200 bg-white text-slate-600 hover:border-emerald-700 hover:text-emerald-800')}>
+            <segment.icon className="h-3.5 w-3.5" />{segment.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* Filter panel */}
-        <aside className={cn('w-full lg:w-80 shrink-0 bg-white border border-slate-200 rounded-2xl shadow-sm', !showFilters && 'hidden lg:block')}>
+        <aside id="clienteling-filters" className={cn('w-full lg:w-64 xl:w-72 shrink-0 bg-white border border-stone-200 rounded-2xl shadow-sm', !showFilters && 'hidden lg:block')}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <p className="text-sm font-black text-slate-900">Filter {activeCount > 0 && <span className="text-blue-600">({activeCount})</span>}</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><SlidersHorizontal className="h-4 w-4 text-emerald-700" />Filter klien {activeCount > 0 && <span className="text-emerald-700">({activeCount})</span>}</p>
             {activeCount > 0 && (
               <button type="button" onClick={resetAll} className="text-[11px] font-bold text-rose-600 hover:underline">Reset semua</button>
             )}
           </div>
           <div className="px-4 max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar">
-            <p className="pt-4 pb-1 text-[10px] font-black text-blue-600 uppercase tracking-widest">Nilai Belanja</p>
+            <p className="pt-4 pb-1 text-[10px] font-black text-emerald-800 uppercase tracking-widest">Nilai Belanja</p>
             <SelectRow label="Total Belanja" options={SPEND_OPTIONS} value={spend} onChange={setSpend} />
             <SelectRow label="Terakhir Belanja" options={RECENCY_OPTIONS} value={recency} onChange={setRecency} />
 
-            <p className="pt-4 pb-1 text-[10px] font-black text-blue-600 uppercase tracking-widest">Momen</p>
+            <p className="pt-4 pb-1 text-[10px] font-black text-emerald-800 uppercase tracking-widest">Momen</p>
             <SelectRow label="Ulang Tahun" options={BIRTHDAY_OPTIONS} value={birthday} onChange={setBirthday} />
 
             {groups.map(g => (
-              <div key={g}>
-                <p className="pt-4 pb-1 text-[10px] font-black text-blue-600 uppercase tracking-widest">{g}</p>
+              <details key={g} open={g === 'Dasar'} className="group border-b border-slate-100">
+                <summary className="flex cursor-pointer list-none items-center justify-between py-4 text-[10px] font-bold text-emerald-800 uppercase tracking-widest">{g}<ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" /></summary>
                 {FACETS.filter(f => f.group === g).map(def => (
                   <FacetBlock
                     key={def.key}
@@ -486,7 +503,7 @@ export default function AdvancedClientelingPage() {
                     onToggle={v => toggle(def.key, v)}
                   />
                 ))}
-              </div>
+              </details>
             ))}
             <div className="flex gap-2 text-[10px] text-slate-400 py-4 leading-snug">
               <Info className="w-3.5 h-3.5 shrink-0" />
@@ -497,14 +514,19 @@ export default function AdvancedClientelingPage() {
 
         {/* Results */}
         <section className="flex-1 min-w-0 space-y-3 w-full">
+          <div className="flex items-center justify-between gap-3 pb-1">
+            <div><h2 className="text-lg font-semibold tracking-tight text-slate-900">Direktori klien</h2><p className="mt-1 text-xs text-slate-500" aria-live="polite">{filtered.length.toLocaleString('id-ID')} klien {activeCount || search ? 'sesuai pencarian Anda' : 'siap untuk lebih dikenal'}</p></div>
+            <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-emerald-800"><ArrowUpRight className="h-4 w-4" /> Personal connections</span>
+          </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 value={search}
+                aria-label="Cari nama, nomor HP, atau advisor"
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Cari nama, No HP, atau advisor..."
-                className="w-full pl-9 pr-3 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-slate-400"
+                className="w-full pl-9 pr-3 py-3 text-sm bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
               />
             </div>
             <select
@@ -523,9 +545,9 @@ export default function AdvancedClientelingPage() {
           {chips.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {chips.map(c => (
-                <span key={c.label} className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full pl-2.5 pr-1 py-0.5">
+                <span key={c.label} className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full pl-2.5 pr-1 py-0.5">
                   {c.label}
-                  <button type="button" onClick={c.onRemove} aria-label={`Hapus ${c.label}`} className="p-0.5 rounded-full hover:bg-blue-100">
+                  <button type="button" onClick={c.onRemove} aria-label={`Hapus ${c.label}`} className="p-0.5 rounded-full hover:bg-emerald-100">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -534,29 +556,29 @@ export default function AdvancedClientelingPage() {
           )}
 
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-emerald-700" tabIndex={0} role="region" aria-label="Daftar klien">
+              <table className="w-full min-w-[800px] text-sm">
                 <thead className="bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-wider">
                   <tr>
-                    <th className="text-left px-4 py-3">Klien</th>
-                    <th className="text-left px-3 py-3">Toko / Advisor</th>
-                    <th className="text-left px-3 py-3">Minat & Hobby</th>
-                    <th className="text-right px-3 py-3">Total Belanja</th>
-                    <th className="text-left px-3 py-3">Terakhir Beli</th>
-                    <th className="text-left px-3 py-3">Ultah</th>
-                    <th className="px-3 py-3" />
+                    <th className="text-left px-4 py-4">Klien</th>
+                    <th className="text-left px-3 py-4">Toko / Advisor</th>
+                    <th className="text-left px-3 py-4">Minat & Hobby</th>
+                    <th className="text-right px-3 py-4">Total Belanja</th>
+                    <th className="text-left px-3 py-4">Terakhir Beli</th>
+                    <th className="text-left px-3 py-4">Ultah</th>
+                    <th className="px-3 py-4"><span className="sr-only">Hubungi klien</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {paged.length === 0 && (
-                    <tr><td colSpan={7} className="text-center py-16 text-slate-400 text-sm">Tidak ada klien yang cocok dengan filter ini.</td></tr>
+                    <tr><td colSpan={7} className="text-center px-4 py-16 text-sm"><Search className="mx-auto mb-4 h-8 w-8 text-stone-300" /><p className="font-semibold text-slate-700">Belum ada klien yang cocok</p><p className="mt-2 text-xs text-slate-500">Coba kata kunci lain atau sesuaikan filter pencarian.</p><button type="button" onClick={resetAll} className="mt-5 rounded-xl bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">Reset pencarian</button></td></tr>
                   )}
                   {paged.map(c => {
                     const wa = waLink(c.phone);
                     return (
-                      <tr key={c.id} className="hover:bg-slate-50/60 align-top">
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-slate-900">{c.gender && <span className="text-slate-400 font-medium">{c.gender} </span>}{c.name || '—'}</p>
+                      <tr key={c.id} className="hover:bg-[#f6f9f6] transition-colors align-top">
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2.5"><span aria-hidden="true" className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold', c.status === 'VIP' ? 'bg-[#f3ebd6] text-[#8a6d2b]' : 'bg-emerald-50 text-emerald-800')}>{c.name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?'}</span><p className="min-w-[110px] font-semibold text-slate-900">{c.gender && <span className="text-slate-400 font-medium">{c.gender} </span>}{c.name || '—'}</p></div>
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {c.status && (
                               <span className={cn('text-[9px] font-black px-1.5 py-0.5 rounded-full border', statusColor[c.status] || statusColor.OLD)}>{c.status}</span>
@@ -568,11 +590,11 @@ export default function AdvancedClientelingPage() {
                           </div>
                           <p className="text-[11px] text-slate-400 mt-1">{c.phone || '—'}</p>
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="px-3 py-4">
                           <p className="text-xs font-semibold text-slate-700">{c.store || '—'}</p>
                           <p className="text-[11px] text-slate-400">{c.advisor || '—'}</p>
                         </td>
-                        <td className="px-3 py-3 max-w-[220px]">
+                        <td className="px-3 py-4 max-w-[220px]">
                           <div className="flex flex-wrap gap-1">
                             {c.interests.map(i => (
                               <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700">{i}</span>
@@ -585,7 +607,7 @@ export default function AdvancedClientelingPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-right whitespace-nowrap">
+                        <td className="px-3 py-4 text-right whitespace-nowrap">
                           {c.txCount > 0 ? (
                             <>
                               <Amt value={c.totalSpend} short className="font-black text-slate-900" />
@@ -593,7 +615,7 @@ export default function AdvancedClientelingPage() {
                             </>
                           ) : <span className="text-[11px] text-slate-400">Belum ada</span>}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <p className="text-xs text-slate-700">{fmtDate(c.lastPurchase)}</p>
                           {c.daysSincePurchase !== null && (
                             <p className={cn('text-[10px]', c.daysSincePurchase > 180 ? 'text-rose-500 font-bold' : 'text-slate-400')}>
@@ -601,7 +623,7 @@ export default function AdvancedClientelingPage() {
                             </p>
                           )}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <p className="text-xs text-slate-700">
                             {c.birthDate ? new Date(c.birthDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '—'}
                           </p>
@@ -609,9 +631,10 @@ export default function AdvancedClientelingPage() {
                             <p className="text-[10px] font-bold text-rose-500">{c.daysToBirthday === 0 ? 'Hari ini!' : `${c.daysToBirthday} hari lagi`}</p>
                           )}
                         </td>
-                        <td className="px-3 py-3 text-right">
+                        <td className="px-3 py-4 text-right">
                           {wa && (
                             <a href={wa} target="_blank" rel="noopener noreferrer"
+                              aria-label={`Hubungi ${c.name} melalui WhatsApp`}
                               title={`WhatsApp ${c.name}`}
                               className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
                               <MessageCircle className="w-3.5 h-3.5" /> WA
