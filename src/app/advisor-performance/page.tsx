@@ -23,6 +23,18 @@ const TOOLTIP_STYLE = { backgroundColor: '#fff', border: '1px solid #e2e8f0', bo
 const achvColor = (a: number) => a >= 100 ? 'text-emerald-600' : a >= 80 ? 'text-amber-500' : 'text-rose-500';
 const achvBg   = (a: number) => a >= 100 ? 'bg-emerald-500' : a >= 80 ? 'bg-amber-500' : 'bg-rose-500';
 
+function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | any): string {
+  const bytes = buffer instanceof Uint8Array 
+    ? buffer 
+    : (buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : new Uint8Array(buffer?.buffer || buffer));
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return window.btoa(binary);
+}
+
 export default function AdvisorPerformancePage() {
   const [month, setMonth] = useState(MONTHS[new Date().getMonth()]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
@@ -81,10 +93,8 @@ export default function AdvisorPerformancePage() {
   const [exportingAverage, setExportingAverage] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
-  const exportExcel = async () => {
-    setExporting(true);
-    try {
-      const ExcelJS = (await import('exceljs')).default;
+  const buildAdvisorPerformanceWorkbook = async () => {
+    const ExcelJS = (await import('exceljs')).default;
 
       const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
       const curMonthIdx = MONTH_NAMES.indexOf(month);
@@ -341,26 +351,43 @@ export default function AdvisorPerformancePage() {
         }
       });
 
-      // ── Download ──────────────────────────────────────────────
+    return wb;
+  };
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const wb = await buildAdvisorPerformanceWorkbook();
       const buffer = await wb.xlsx.writeBuffer();
       const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url    = URL.createObjectURL(blob);
       const a      = document.createElement('a');
       a.href       = url;
-      a.download   = `Advisor_Performance_${month}_${year}.xlsx`;
+      a.download   = `BVLGARI - Advisor Performance - ${month} ${year}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting Advisor Performance Excel:', err);
     } finally {
       setExporting(false);
     }
   };
 
-  const export6MonthsAverage = async () => {
-    setExportingAverage(true);
+  const handleGeneratePerformanceExcelBase64 = async (): Promise<string | undefined> => {
     try {
-      const ExcelJS = (await import('exceljs')).default;
+      const wb = await buildAdvisorPerformanceWorkbook();
+      const buffer = await wb.xlsx.writeBuffer();
+      return arrayBufferToBase64(buffer);
+    } catch (err) {
+      console.error('Error generating Performance Excel base64:', err);
+      return undefined;
+    }
+  };
+
+  const build6MonthsAverageWorkbook = async () => {
+    const ExcelJS = (await import('exceljs')).default;
       const curMonthIdx = MONTHS.indexOf(month);
       const curYear     = parseInt(year);
 
@@ -777,20 +804,38 @@ export default function AdvisorPerformancePage() {
         row.height = 18;
       });
 
+    return wb;
+  };
+
+  const export6MonthsAverage = async () => {
+    setExportingAverage(true);
+    try {
+      const wb = await build6MonthsAverageWorkbook();
       const buffer = await wb.xlsx.writeBuffer();
       const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url    = URL.createObjectURL(blob);
       const a      = document.createElement('a');
       a.href       = url;
-      a.download   = `Advisor_RataRata_6Bulan_${month}_${year}.xlsx`;
+      a.download   = `BVLGARI - Advisor Average 6 Months - ${month} ${year}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error(err);
+      console.error('Error exporting 6 Months Average Excel:', err);
     } finally {
       setExportingAverage(false);
+    }
+  };
+
+  const handleGenerateAvg6MonthsExcelBase64 = async (): Promise<string | undefined> => {
+    try {
+      const wb = await build6MonthsAverageWorkbook();
+      const buffer = await wb.xlsx.writeBuffer();
+      return arrayBufferToBase64(buffer);
+    } catch (err) {
+      console.error('Error generating 6 Months Average Excel base64:', err);
+      return undefined;
     }
   };
 
@@ -1167,6 +1212,8 @@ export default function AdvisorPerformancePage() {
         onClose={() => setIsEmailModalOpen(false)}
         month={month}
         year={year}
+        onGeneratePerformanceExcel={handleGeneratePerformanceExcelBase64}
+        onGenerateAvg6MonthsExcel={handleGenerateAvg6MonthsExcelBase64}
       />
     </div>
   );

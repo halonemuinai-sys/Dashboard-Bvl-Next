@@ -14,7 +14,19 @@ export async function OPTIONS() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { month, year, emailTo, ccEmail, location, format, action } = body;
+    const {
+      month,
+      year,
+      emailTo,
+      ccEmail,
+      location,
+      format,
+      action,
+      perfExcelBase64,
+      perfExcelFilename,
+      avg6ExcelBase64,
+      avg6ExcelFilename,
+    } = body;
 
     if (!month || !year) {
       return NextResponse.json(
@@ -39,7 +51,14 @@ export async function POST(request: Request) {
       return NextResponse.json(result, { headers: corsHeaders });
     }
 
-    const result = await reportService.sendAdvisorReport(month, parseInt(year), emailTo, ccEmail);
+    const result = await reportService.sendAdvisorReport(month, parseInt(year), {
+      emailTo,
+      ccEmail,
+      perfExcelBase64,
+      perfExcelFilename,
+      avg6ExcelBase64,
+      avg6ExcelFilename,
+    });
     return NextResponse.json(result, { headers: corsHeaders });
   } catch (error: any) {
     console.error('Error sending report:', error);
