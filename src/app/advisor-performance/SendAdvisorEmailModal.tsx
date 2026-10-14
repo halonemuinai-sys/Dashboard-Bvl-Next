@@ -40,8 +40,8 @@ export default function SendAdvisorEmailModal({
   const [stores, setStores] = useState<string[]>([]);
 
   // Email form state
-  const [emailTo, setEmailTo] = useState('aris@mraretail.co.id');
-  const [ccEmail, setCcEmail] = useState('jessica@mogems.co.id, aris@mraretail.co.id');
+  const [emailTo, setEmailTo] = useState('renaldi@mraretail.co.id');
+  const [ccEmail, setCcEmail] = useState('aris@mraretail.co.id, jessica@mogems.co.id');
 
   // Sending state
   const [sending, setSending] = useState(false);
@@ -272,13 +272,14 @@ export default function SendAdvisorEmailModal({
                   type="email"
                   value={emailTo}
                   onChange={e => setEmailTo(e.target.value)}
-                  placeholder="aris@mraretail.co.id"
+                  placeholder="renaldi@mraretail.co.id"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-2xs"
                 />
                 {/* Quick email presets */}
                 <div className="flex items-center gap-1.5 flex-wrap pt-1">
                   <span className="text-[10px] text-slate-400 font-semibold">Pilih Cepat:</span>
                   {[
+                    'renaldi@mraretail.co.id',
                     'aris@mraretail.co.id',
                     'pi@mogems.co.id',
                     'ps@mogems.co.id',
@@ -311,15 +312,15 @@ export default function SendAdvisorEmailModal({
                   type="text"
                   value={ccEmail}
                   onChange={e => setCcEmail(e.target.value)}
-                  placeholder="jessica@mogems.co.id, natalia@mraretail.co.id, aris@mraretail.co.id"
+                  placeholder="aris@mraretail.co.id, jessica@mogems.co.id"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-2xs"
                 />
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <span className="text-[11px] text-slate-400 font-medium">Pilihan cepat:</span>
                   {[
+                    { label: 'Aris', email: 'aris@mraretail.co.id' },
                     { label: 'Jessica', email: 'jessica@mogems.co.id' },
                     { label: 'Natalia', email: 'natalia@mraretail.co.id' },
-                    { label: 'Aris', email: 'aris@mraretail.co.id' },
                   ].map(chip => (
                     <button
                       key={chip.email}

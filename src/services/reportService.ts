@@ -528,7 +528,7 @@ export const reportService = {
       </table>
       <div style="padding:24px 28px;">
         <p style="font-size:13px;color:#374151;line-height:1.6;margin:0 0 24px 0;">
-          Dear All,<br><br>
+          Dear Pak Aldi,<br><br>
           Berikut ringkasan performa Advisor untuk periode <b>${month} ${year}</b>.
           Total <b>${advisors.length}</b> advisors tercatat aktif pada periode ini (exclude non-target).
         </p>
@@ -568,10 +568,13 @@ export const reportService = {
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
     });
 
+    const targetTo = emailTo || 'renaldi@mraretail.co.id';
+    const targetCc = ccEmail !== undefined ? (ccEmail || undefined) : 'aris@mraretail.co.id, jessica@mogems.co.id';
+
     const info = await transporter.sendMail({
       from: `"Bvlgari Dashboard" <${process.env.SMTP_USER}>`,
-      to: emailTo || process.env.SMTP_USER,
-      cc: ccEmail || undefined,
+      to: targetTo,
+      cc: targetCc,
       subject,
       html,
     });
