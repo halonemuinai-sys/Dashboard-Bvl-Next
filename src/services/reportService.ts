@@ -20,8 +20,8 @@ export const reportService = {
    * Generates the HTML content and metadata for Daily Sales Report.
    */
   async getDailyReportHtml(dateStr: string, options?: DailyReportEmailOptions) {
-    const pdfFilename = options?.pdfFilename || `Daily_Sales_Report_${dateStr}.pdf`;
-    const excelFilename = options?.excelFilename || `Daily_Sales_Report_${dateStr}.xlsx`;
+    const pdfFilename = options?.pdfFilename || `BVLGARI - Daily Sales Report - ${dateStr}.pdf`;
+    const excelFilename = options?.excelFilename || `BVLGARI - Daily Sales Report - ${dateStr}.xlsx`;
     const pdfBase64 = options?.pdfBase64;
     const excelBase64 = options?.excelBase64;
 
@@ -331,8 +331,8 @@ export const reportService = {
       : (optionsOrEmailTo || {});
 
     const { emailTo, ccEmail, pdfBase64, excelBase64 } = options;
-    const pdfFilename = options.pdfFilename || `Daily_Sales_Report_${dateStr}.pdf`;
-    const excelFilename = options.excelFilename || `Daily_Sales_Report_${dateStr}.xlsx`;
+    const pdfFilename = options.pdfFilename || `BVLGARI - Daily Sales Report - ${dateStr}.pdf`;
+    const excelFilename = options.excelFilename || `BVLGARI - Daily Sales Report - ${dateStr}.xlsx`;
 
     const { html, subject } = await this.getDailyReportHtml(dateStr, {
       ...options,
