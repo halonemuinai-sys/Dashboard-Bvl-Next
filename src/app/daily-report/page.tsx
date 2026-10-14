@@ -97,7 +97,7 @@ export default function DailyReportPage() {
     try {
       const pdf = await generateDailyPDF();
       if (pdf) {
-        pdf.save(`Daily Sales Report - ${date}.pdf`);
+        pdf.save(`BVLGARI - Daily Sales Report - ${date}.pdf`);
       }
     } catch (err: any) {
       console.error(err);
@@ -540,7 +540,7 @@ export default function DailyReportPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Daily_Sales_Report_${date}.xlsx`;
+      a.download = `BVLGARI - Daily Sales Report - ${date}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

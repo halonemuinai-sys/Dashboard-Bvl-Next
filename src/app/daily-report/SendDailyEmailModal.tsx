@@ -70,8 +70,8 @@ export default function SendDailyEmailModal({
         body: JSON.stringify({
           date,
           action: 'preview',
-          pdfFilename: `Daily Sales Report - ${date}.pdf`,
-          excelFilename: `Daily_Sales_Report_${date}.xlsx`,
+          pdfFilename: `BVLGARI - Daily Sales Report - ${date}.pdf`,
+          excelFilename: `BVLGARI - Daily Sales Report - ${date}.xlsx`,
         }),
       });
       const data = await res.json();
@@ -142,8 +142,8 @@ export default function SendDailyEmailModal({
           ccEmail: ccEmail.trim(),
           pdfBase64: attachPdf ? pdfBase64 : undefined,
           excelBase64: attachExcel ? excelBase64 : undefined,
-          pdfFilename: `Daily Sales Report - ${date}.pdf`,
-          excelFilename: `Daily_Sales_Report_${date}.xlsx`,
+          pdfFilename: `BVLGARI - Daily Sales Report - ${date}.pdf`,
+          excelFilename: `BVLGARI - Daily Sales Report - ${date}.xlsx`,
         }),
       });
 
@@ -340,14 +340,14 @@ export default function SendDailyEmailModal({
                       {attachPdf && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-semibold">
                           <FileText className="w-3.5 h-3.5 text-rose-600" />
-                          <span>Daily Sales Report - {date}.pdf</span>
+                          <span>BVLGARI - Daily Sales Report - {date}.pdf</span>
                           <span className="text-[10px] text-rose-500 font-normal">(Executive Summary)</span>
                         </span>
                       )}
                       {attachExcel && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold">
                           <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Daily_Sales_Report_{date}.xlsx</span>
+                          <span>BVLGARI - Daily Sales Report - {date}.xlsx</span>
                           <span className="text-[10px] text-emerald-500 font-normal">(Overview & Details)</span>
                         </span>
                       )}
