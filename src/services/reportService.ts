@@ -15,6 +15,15 @@ export interface DailyReportEmailOptions {
   excelFilename?: string;
 }
 
+export interface SendAdvisorReportOptions {
+  emailTo?: string;
+  ccEmail?: string;
+  perfExcelBase64?: string;
+  perfExcelFilename?: string;
+  avg6ExcelBase64?: string;
+  avg6ExcelFilename?: string;
+}
+
 export const reportService = {
   /**
    * Generates the HTML content and metadata for Daily Sales Report.
@@ -558,7 +567,26 @@ export const reportService = {
   /**
    * Sends Advisor Performance email matching GAS triggerAdvisorEmailManual logic.
    */
-  async sendAdvisorReport(month: string, year: number, emailTo?: string, ccEmail?: string) {
+  async sendAdvisorReport(
+    month: string,
+    year: number,
+    optionsOrEmailTo?: string | SendAdvisorReportOptions,
+    maybeCcEmail?: string
+  ) {
+    const options: SendAdvisorReportOptions =
+      typeof optionsOrEmailTo === 'string'
+        ? { emailTo: optionsOrEmailTo, ccEmail: maybeCcEmail }
+        : (optionsOrEmailTo || {});
+
+    const {
+      emailTo,
+      ccEmail,
+      perfExcelBase64,
+      perfExcelFilename,
+      avg6ExcelBase64,
+      avg6ExcelFilename,
+    } = options;
+
     const { html, subject } = await this.getAdvisorReportHtml(month, year);
 
     const transporter = nodemailer.createTransport({
@@ -571,15 +599,32 @@ export const reportService = {
     const targetTo = emailTo || 'renaldi@mraretail.co.id';
     const targetCc = ccEmail !== undefined ? (ccEmail || undefined) : 'aris@mraretail.co.id, jessica@mogems.co.id';
 
+    const attachments: Array<{ filename: string; content: Buffer }> = [];
+
+    if (perfExcelBase64) {
+      attachments.push({
+        filename: perfExcelFilename || `BVLGARI - Advisor Performance - ${month} ${year}.xlsx`,
+        content: Buffer.from(perfExcelBase64, 'base64'),
+      });
+    }
+
+    if (avg6ExcelBase64) {
+      attachments.push({
+        filename: avg6ExcelFilename || `BVLGARI - Advisor Average 6 Months - ${month} ${year}.xlsx`,
+        content: Buffer.from(avg6ExcelBase64, 'base64'),
+      });
+    }
+
     const info = await transporter.sendMail({
       from: `"Bvlgari Dashboard" <${process.env.SMTP_USER}>`,
       to: targetTo,
       cc: targetCc,
       subject,
       html,
+      attachments: attachments.length ? attachments : undefined,
     });
 
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: info.messageId, attachmentsCount: attachments.length };
   },
 
   /**

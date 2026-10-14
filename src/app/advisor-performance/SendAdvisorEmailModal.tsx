@@ -14,7 +14,8 @@ import {
   Store,
   Trophy,
   ExternalLink,
-  Info
+  Info,
+  FileSpreadsheet
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,8 @@ interface SendAdvisorEmailModalProps {
   onClose: () => void;
   month: string;
   year: string;
+  onGeneratePerformanceExcel?: () => Promise<string | undefined>;
+  onGenerateAvg6MonthsExcel?: () => Promise<string | undefined>;
 }
 
 export default function SendAdvisorEmailModal({
@@ -30,6 +33,8 @@ export default function SendAdvisorEmailModal({
   onClose,
   month,
   year,
+  onGeneratePerformanceExcel,
+  onGenerateAvg6MonthsExcel,
 }: SendAdvisorEmailModalProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'settings'>('preview');
   const [loadingPreview, setLoadingPreview] = useState(true);
@@ -91,6 +96,25 @@ export default function SendAdvisorEmailModal({
     setSendSuccess(null);
     setSendError(null);
     try {
+      let perfExcelBase64: string | undefined;
+      let avg6ExcelBase64: string | undefined;
+
+      if (onGeneratePerformanceExcel) {
+        try {
+          perfExcelBase64 = await onGeneratePerformanceExcel();
+        } catch (e) {
+          console.error('Error generating Advisor Performance Excel:', e);
+        }
+      }
+
+      if (onGenerateAvg6MonthsExcel) {
+        try {
+          avg6ExcelBase64 = await onGenerateAvg6MonthsExcel();
+        } catch (e) {
+          console.error('Error generating Avg 6 Months Excel:', e);
+        }
+      }
+
       const res = await fetch('/api/send-advisor-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,12 +123,17 @@ export default function SendAdvisorEmailModal({
           year,
           emailTo: emailTo.trim(),
           ccEmail: ccEmail.trim(),
-          action: 'send'
+          action: 'send',
+          perfExcelBase64,
+          perfExcelFilename: `BVLGARI - Advisor Performance - ${month} ${year}.xlsx`,
+          avg6ExcelBase64,
+          avg6ExcelFilename: `BVLGARI - Advisor Average 6 Months - ${month} ${year}.xlsx`,
         }),
       });
       const json = await res.json();
       if (json.success) {
-        setSendSuccess(`Email laporan berhasil terkirim ke ${emailTo}! (Message ID: ${json.messageId || 'OK'})`);
+        const attachCount = json.attachmentsCount ?? ((perfExcelBase64 ? 1 : 0) + (avg6ExcelBase64 ? 1 : 0));
+        setSendSuccess(`Email laporan berhasil terkirim ke ${emailTo}! (${attachCount} lampiran Excel disertakan)`);
       } else {
         setSendError(json.error || 'Gagal mengirim email laporan.');
       }
@@ -235,11 +264,25 @@ export default function SendAdvisorEmailModal({
                   <span className="font-semibold text-blue-700">{emailTo}</span>
                 </div>
                 {ccEmail && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2">
                     <span className="text-slate-400 font-medium">Tembusan (CC):</span>
                     <span className="text-slate-600 font-mono text-[11px]">{ccEmail}</span>
                   </div>
                 )}
+                {/* Lampiran Badges */}
+                <div className="pt-1 flex flex-wrap items-center gap-2">
+                  <span className="text-slate-400 font-medium text-[11px]">Lampiran:</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold">
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>BVLGARI - Advisor Performance - {month} {year}.xlsx</span>
+                    <span className="text-[10px] text-emerald-600 font-normal">(YTD &amp; Monthly)</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-semibold">
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-teal-600" />
+                    <span>BVLGARI - Advisor Average 6 Months - {month} {year}.xlsx</span>
+                    <span className="text-[10px] text-teal-600 font-normal">(Rolling 6-Month)</span>
+                  </span>
+                </div>
               </div>
 
               {/* Email HTML Container Frame */}
