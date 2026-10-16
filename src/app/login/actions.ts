@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createClient } from '@/utils/supabase/server'
 import { verifyPassword, generateSessionToken } from '@/utils/auth'
 
 export async function login(formData: FormData) {
@@ -14,7 +14,7 @@ export async function login(formData: FormData) {
     return redirect('/login?error=Email dan password wajib diisi')
   }
 
-  const supabase = createAdminClient()
+  const supabase = await createClient()
 
   // Query langsung ke tabel dashboard_users untuk mendapatkan user & password hash
   const { data: dbUser, error } = await supabase
