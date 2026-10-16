@@ -6,7 +6,11 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import BvlgariLoader from '@/components/BvlgariLoader';
 import { useUserAccess } from '@/lib/user-access-context';
-import { createUserAction, resetUserPasswordAction } from './actions';
+import {
+  createUserAction, resetUserPasswordAction, getUserAccessDataAction,
+  toggleUserActiveAction, changeUserRoleAction, changeUserStoreAction,
+  deleteUserAction, savePermissionsAction,
+} from './actions';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | 'finance';
@@ -183,34 +187,27 @@ export default function UserAccessPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [usersRes, accessRes, advisorsRes] = await Promise.all([
-      supabase.from('dashboard_users').select('*').order('full_name'),
-      supabase.from('role_menu_access').select('*'),
-      supabase.from('advisors').select('name, home_location'),
-    ]);
-
-    const advisorMap = new Map<string, string>();
-    (advisorsRes.data || []).forEach((a: any) => {
-      if (a.name && a.home_location) {
-        advisorMap.set(a.name.toLowerCase().trim(), a.home_location);
-      }
-    });
-
-    let localMap: Record<string, string> = {};
     try {
-      localMap = JSON.parse(localStorage.getItem('user_store_assignments') || '{}');
-    } catch (e) {}
+      const { users: freshUsers, menuAccess: freshAccess } = await getUserAccessDataAction();
 
-    const mappedUsers = (usersRes.data || []).map((u: any) => {
-      const emailKey = u.email.toLowerCase().trim();
-      const nameKey = u.full_name.toLowerCase().trim();
-      const store = localMap[emailKey] || advisorMap.get(nameKey) || u.assigned_store || 'ALL';
-      return { ...u, assigned_store: store };
-    });
+      let localMap: Record<string, string> = {};
+      try {
+        localMap = JSON.parse(localStorage.getItem('user_store_assignments') || '{}');
+      } catch (e) {}
 
-    setUsers(mappedUsers);
-    setMenuAccess((accessRes.data || []) as MenuAccess[]);
-    setLoading(false);
+      const mappedUsers = freshUsers.map((u: any) => {
+        const emailKey = u.email.toLowerCase().trim();
+        const store = localMap[emailKey] || u.assigned_store || 'ALL';
+        return { ...u, assigned_store: store };
+      });
+
+      setUsers(mappedUsers);
+      setMenuAccess(freshAccess as MenuAccess[]);
+    } catch (err) {
+      console.error('Error loading user access data:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const loadAuditLogs = useCallback(async () => {
@@ -266,11 +263,13 @@ export default function UserAccessPage() {
   const savePermissions = async () => {
     setSaving(true);
     const rows = menuAccess.filter(m => m.role === activeRole);
-    const { error } = await supabase
-      .from('role_menu_access')
-      .upsert(rows, { onConflict: 'role,menu_path' });
+    try {
+      await savePermissionsAction(rows);
+      setSavedMsg('Tersimpan!');
+    } catch (err) {
+      setSavedMsg('Gagal menyimpan');
+    }
     setSaving(false);
-    setSavedMsg(error ? 'Gagal menyimpan' : 'Tersimpan!');
     setTimeout(() => setSavedMsg(''), 3000);
   };
 
@@ -315,13 +314,23 @@ export default function UserAccessPage() {
   };
 
   const toggleUserActive = async (user: DashboardUser) => {
-    await supabase.from('dashboard_users').update({ is_active: !user.is_active }).eq('id', user.id);
     setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_active: !u.is_active } : u));
+    try {
+      await toggleUserActiveAction(user.id, !user.is_active);
+    } catch (err) {
+      console.error('Error toggling user active:', err);
+      load();
+    }
   };
 
   const changeUserRole = async (user: DashboardUser, role: Role) => {
-    await supabase.from('dashboard_users').update({ role }).eq('id', user.id);
     setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role } : u));
+    try {
+      await changeUserRoleAction(user.id, role);
+    } catch (err) {
+      console.error('Error changing user role:', err);
+      load();
+    }
   };
 
   const changeUserStore = async (user: DashboardUser, assigned_store: string) => {
@@ -335,25 +344,22 @@ export default function UserAccessPage() {
       localStorage.setItem('user_store_assignments', JSON.stringify(localMap));
     } catch (e) {}
 
-    // 3. Sync to advisors table in Supabase
     try {
-      const { data: advList } = await supabase.from('advisors').select('id, name');
-      const matchAdv = (advList || []).find((a: any) => a.name.toLowerCase().trim() === user.full_name.toLowerCase().trim());
-      if (matchAdv) {
-        await supabase.from('advisors').update({ home_location: assigned_store }).eq('id', matchAdv.id);
-      } else {
-        await supabase.from('advisors').insert({ name: user.full_name, home_location: assigned_store, is_active: true });
-      }
-    } catch (e) {}
-
-    // 4. Try updating dashboard_users
-    await supabase.from('dashboard_users').update({ assigned_store }).eq('id', user.id);
+      await changeUserStoreAction(user.id, user.full_name, assigned_store);
+    } catch (err) {
+      console.error('Error changing user store:', err);
+    }
   };
 
   const deleteUser = async (id: number) => {
     if (!confirm('Hapus user ini?')) return;
-    await supabase.from('dashboard_users').delete().eq('id', id);
     setUsers(prev => prev.filter(u => u.id !== id));
+    try {
+      await deleteUserAction(id);
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      load();
+    }
   };
 
   // Roles selectable when assigning: non-super_admin can't assign super_admin
