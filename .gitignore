@@ -20,10 +20,11 @@
 # production
 /build
 
-# misc
+# misc & office locks
 .DS_Store
 *.pem
 ~$*
+*.tmp
 
 # debug
 npm-debug.log*
@@ -31,7 +32,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (secrets)
 .env*
 
 # vercel
@@ -41,15 +42,23 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# scratch files
+# scratch, reports & snapshots
 /scratch/
+/reports/
+/.snapshots/
+/riset/
+/source/
 .claude
 
 # database backups
 /backups/
 
+# one-off / scratch scripts
+check_*.ts
+inspect_*.ts
+migrate_*.ts
 
-.vercel
-.env*
-
+# Excel files & data exports (preserve production templates)
 *.xlsx
+!/templates/*.xlsx
+!/public/templates/*.xlsx

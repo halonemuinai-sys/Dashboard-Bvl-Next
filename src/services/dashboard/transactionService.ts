@@ -130,17 +130,11 @@ export async function getTransactionAuditLogs(limit: number = 200) {
   return (data || []) as TransactionAuditLog[];
 }
 
-export async function getDashboardUsersMap() {
-  const { data } = await supabase
-    .from('dashboard_users')
-    .select('email, full_name, role');
-  const map: Record<string, { full_name: string; role: string }> = {};
-  (data || []).forEach((u: { email: string; full_name: string; role: string }) => {
-    if (u.email) {
-      map[u.email.toLowerCase()] = { full_name: u.full_name, role: u.role };
-    }
-  });
-  return map;
+export async function getDashboardUsersMap(): Promise<Record<string, { full_name: string; role: string }>> {
+  // dashboard_users is RLS-locked — fetch through the server-side API route instead of querying it directly.
+  const res = await fetch('/api/dashboard-users-map');
+  if (!res.ok) return {};
+  return res.json();
 }
 
 export async function getDpsSvcTransactions(month: string, year: number) {

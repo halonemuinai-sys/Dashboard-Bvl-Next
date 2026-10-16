@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { hashPassword, verifyPasswordResetToken } from '@/utils/auth';
 
 export async function validateToken(token: string) {
@@ -15,7 +15,7 @@ export async function validateToken(token: string) {
 
     if (!email) return { valid: false, error: 'Email tidak terdaftar dalam token.' };
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data: dbUser, error } = await supabase
       .from('dashboard_users')
       .select('email, password, is_active')
@@ -56,7 +56,7 @@ export async function completePasswordReset(prevState: any, formData: FormData) 
     const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf-8'));
     const email = payload.email;
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data: dbUser, error } = await supabase
       .from('dashboard_users')
       .select('id, email, password, is_active')
