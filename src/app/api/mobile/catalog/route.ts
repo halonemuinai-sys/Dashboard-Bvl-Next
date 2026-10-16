@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const page = searchParams.get('page') || '1';
     const limit = searchParams.get('limit') || '20';
 
-    const token = process.env.BVLGARI_API_TOKEN || '***REMOVED***';
+    const token = process.env.BVLGARI_API_TOKEN || '';
     const apiUrl = `http://139.99.102.231:8089/demo/catalogproduct2?keyword=${encodeURIComponent(keyword)}&category=${encodeURIComponent(category)}&page=${page}&limit=${limit}`;
 
     const apiRes = await fetch(apiUrl, {

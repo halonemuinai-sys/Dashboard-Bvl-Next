@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     // Proxy request to Bvlgari External API
     const bvlgariApiUrl = `http://139.99.102.231:8089/demo/dailysalestransaction?startdate=${startDateStr}&enddate=${endDateStr}`;
     // Token already contains scheme prefix (e.g. "Bearer ..."), use as-is
-    const token = process.env.BVLGARI_API_TOKEN || '***REMOVED***';
+    const token = process.env.BVLGARI_API_TOKEN || '';
 
     let records: any[] = [];
     let isOfflineMock = false;
