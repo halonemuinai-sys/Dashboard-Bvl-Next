@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createClient } from '@/utils/supabase/server';
 import { verifySessionToken } from '@/utils/auth';
 
 export async function GET() {
@@ -18,7 +18,7 @@ export async function GET() {
       return NextResponse.json({ role: null, allowedPaths: [] });
     }
 
-    const supabase = createAdminClient();
+    const supabase = await createClient();
 
     // Query data user dari database untuk memastikan akun aktif
     const { data: dbUser } = await supabase
