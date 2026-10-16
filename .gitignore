@@ -63,6 +63,7 @@ migrate_*.ts
 deploy_remote.py
 /scripts/
 /src/scripts/
+/sql/
 
 # internal documentation & strategy markdown files
 AGENTS.md
