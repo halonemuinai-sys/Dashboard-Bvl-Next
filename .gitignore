@@ -49,6 +49,7 @@ next-env.d.ts
 /riset/
 /source/
 .claude
+/.agents/
 
 # database backups
 /backups/
@@ -57,6 +58,23 @@ next-env.d.ts
 check_*.ts
 inspect_*.ts
 migrate_*.ts
+
+# local utility & deployment scripts
+deploy_remote.py
+/scripts/
+/src/scripts/
+
+# internal documentation & strategy markdown files
+AGENTS.md
+CLAUDE.md
+docker.README.md
+APP_INTEGRATION_AND_FUNCTIONS.md
+INVENTORY_VALUATION.md
+IT_GOVERNANCE_PLAN.md
+MIGRATION_LOG.md
+PROJECT_PLAN.md
+STRATEGI_PRESENTASI_BVLGARI.md
+/docs/
 
 # Excel files & data exports (preserve production templates)
 *.xlsx
