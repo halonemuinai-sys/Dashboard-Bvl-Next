@@ -22,7 +22,7 @@ def parse_env():
     return env
 
 def get_project_ref(url):
-    # Extracts project reference from 'https://vekgzcxorvdidjutuvrj.supabase.co' -> 'vekgzcxorvdidjutuvrj'
+    # Extracts project reference from 'https://<project-ref>.supabase.co' -> '<project-ref>'
     if not url:
         return None
     url = url.replace('https://', '').replace('http://', '')

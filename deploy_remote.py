@@ -3,11 +3,30 @@ import sys
 import time
 import paramiko
 
-# SSH Details
-SSH_HOST = "202.6.239.245"
-SSH_USER = "ubuntu-mogems"
-SSH_PASS = "ubuntu2026"
-PROJECT_DIR = "dashboard-bvl"
+# SSH Details - Loaded dynamically from environment or .env.local (Never hardcoded in Git)
+def load_env_local():
+    env = {}
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env.local')
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    parts = line.split('=', 1)
+                    k = parts[0].strip()
+                    v = parts[1].strip().strip("'").strip('"')
+                    env[k] = v
+    return env
+
+_local_env = load_env_local()
+SSH_HOST = os.getenv("PROXMOX_SSH_HOST") or _local_env.get("PROXMOX_SSH_HOST", "202.6.239.245")
+SSH_USER = os.getenv("PROXMOX_SSH_USER") or _local_env.get("PROXMOX_SSH_USER", "ubuntu-mogems")
+SSH_PASS = os.getenv("PROXMOX_SSH_PASS") or _local_env.get("PROXMOX_SSH_PASS", "")
+PROJECT_DIR = os.getenv("PROXMOX_PROJECT_DIR") or _local_env.get("PROXMOX_PROJECT_DIR", "dashboard-bvl")
+
+if not SSH_PASS:
+    print("Error: PROXMOX_SSH_PASS tidak ditemukan di environment maupun .env.local.", file=sys.stderr)
+    sys.exit(1)
 
 def run_ssh_command(client, command, stdin_input=None):
     print(f"Executing: {command}")
