@@ -52,6 +52,18 @@ const ROLE_LABEL: Record<string, string> = {
   crm:              'CRM',
   finance:          'Finance',
 };
+
+function getBadgeStyle(badgeColor?: string) {
+  if (!badgeColor) return styles.badgeSlate;
+  if (badgeColor.includes('violet')) return styles.badgeViolet;
+  if (badgeColor.includes('indigo')) return styles.badgeIndigo;
+  if (badgeColor.includes('blue')) return styles.badgeBlue;
+  if (badgeColor.includes('emerald') || badgeColor.includes('green')) return styles.badgeEmerald;
+  if (badgeColor.includes('amber') || badgeColor.includes('orange')) return styles.badgeAmber;
+  if (badgeColor.includes('rose') || badgeColor.includes('red')) return styles.badgeRose;
+  return styles.badgeSlate;
+}
+
 const menuGroups = [
   {
     title: "OVERVIEW",
@@ -217,7 +229,22 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
                   className={cn(styles.menuItem, active && styles.active)}
                 >
                   <item.icon size={18} strokeWidth={1.7} aria-hidden="true" />
-                  {isExpanded && <><span className={styles.itemName}>{item.name}</span>{item.badge && item.badge !== 'NEW' && <span className={styles.badge}>{item.badge}</span>}</>}
+                  {isExpanded && (
+                    <>
+                      <span className={styles.itemName}>{item.name}</span>
+                      {item.badge && (
+                        <span
+                          className={cn(
+                            styles.badge,
+                            getBadgeStyle(item.badgeColor),
+                            (item.badge === 'NEW' || item.badge === 'UPDATE' || item.badge === 'INPUT') && styles.badgePulse
+                          )}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </Link>;
               })}
             </div>
