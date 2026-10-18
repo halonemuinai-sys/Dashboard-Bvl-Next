@@ -1,6 +1,8 @@
 "use client";
 
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import styles from './Sidebar.module.css';
 import { usePathname } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { useHideAmounts } from '@/lib/hide-amounts';
@@ -10,7 +12,6 @@ import {
   BarChart,
   Store,
   TrendingUp,
-  LineChart,
   Sparkles,
   Calendar,
   ClipboardList,
@@ -24,13 +25,15 @@ import {
   Users,
   Database,
   Heart,
-  ChevronRight,
+  ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
   Diamond,
   ContactRound,
   LogOut,
   ShieldCheck,
   Boxes,
-  Sliders,
   Table,
   Award,
   Receipt,
@@ -49,14 +52,6 @@ const ROLE_LABEL: Record<string, string> = {
   crm:              'CRM',
   finance:          'Finance',
 };
-const ROLE_COLOR: Record<string, string> = {
-  super_admin:      'bg-rose-100 text-rose-700',
-  management_it:    'bg-indigo-100 text-indigo-700',
-  operations_sales: 'bg-amber-100 text-amber-700',
-  crm:              'bg-emerald-100 text-emerald-700',
-  finance:          'bg-teal-100 text-teal-700',
-};
-
 const menuGroups = [
   {
     title: "OVERVIEW",
@@ -72,7 +67,7 @@ const menuGroups = [
     ]
   },
   {
-    title: "OPERASIONAL",
+    title: "OPERATIONS",
     items: [
       { name: 'Daily Report',        icon: Calendar,        href: '/daily-report' },
       { name: 'Daily Breakdown',     icon: Table,           href: '/daily-breakdown' },
@@ -98,7 +93,7 @@ const menuGroups = [
     ]
   },
   {
-    title: "PRODUK & ADVISOR",
+    title: "PRODUCTS & ADVISORS",
     items: [
       { name: 'Product Rank',        icon: Zap,             href: '/product-rank' },
       { name: 'Product Projection',  icon: Presentation,    href: '/product-projection' },
@@ -130,7 +125,6 @@ const menuGroups = [
 ];
 
 import { logout } from '@/app/login/actions';
-import { Menu, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -143,192 +137,110 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
   const pathname = usePathname();
   const { hidden, toggle } = useHideAmounts();
   const { canAccess, role } = useUserAccess();
+  const [query, setQuery] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const isExpanded = isMobile || isOpen;
+  const search = query.trim().toLowerCase();
 
-  // If mobile, we rely on mobileOpen for the slide translation. If desktop, we rely on isOpen for the width.
-  const isActuallyOpen = isMobile ? true : isOpen;
+  useEffect(() => {
+    if (!isMobile || !mobileOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [isMobile, mobileOpen, setIsOpen]);
+
+  const visibleGroups = menuGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => {
+      if (role === 'finance' && group.title !== 'FINANCE' && !(group.title === 'OVERVIEW' && item.href === '/operations-sales')) return false;
+      return canAccess(item.href) && (!isExpanded || !search || `${item.name} ${group.title}`.toLowerCase().includes(search));
+    }),
+  })).filter(group => group.items.length > 0);
 
   return (
-    <aside className={cn(
-      "fixed left-0 top-0 h-screen bg-white border-r border-slate-200 flex flex-col z-[50] shadow-2xl transition-transform duration-300",
-      isMobile ? (mobileOpen ? "translate-x-0 w-[280px]" : "-translate-x-full w-[280px]") : "translate-x-0",
-      !isMobile && (isOpen ? "w-64" : "w-20")
-    )}>
-      {/* Brand Logo & Toggle */}
-      <div className={cn("p-6 mb-2 border-b border-slate-100 flex items-center", isActuallyOpen ? "justify-between" : "justify-center px-0")}>
-        <div className={cn("flex items-center gap-3", !isActuallyOpen && "hidden")}>
-          <div className="bg-blue-600 p-1.5 rounded-lg shrink-0">
-            <Diamond className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-tight">MRA Retail</h1>
-            <p className="text-blue-600 text-[10px] font-medium uppercase tracking-widest">Bvlgari Intelligence</p>
-          </div>
-        </div>
-        {!isActuallyOpen && (
-          <div className="bg-blue-600 p-1.5 rounded-lg shrink-0 mb-4 mt-2">
-            <Diamond className="w-5 h-5 text-white" />
-          </div>
-        )}
-        
-        {/* Absolute Toggle Button so it floats nicely on the edge - hidden on mobile */}
-        {!isMobile && (
-          <button
-            type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="absolute -right-3 top-8 bg-white border border-slate-200 rounded-full p-1 shadow-sm hover:bg-slate-50 text-slate-500 hover:text-blue-600 transition-colors z-50"
-          >
-            {isOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRightIcon className="w-4 h-4" />}
+    <aside
+      id="dashboard-sidebar"
+      aria-label="Sidebar"
+      inert={isMobile && !mobileOpen ? true : undefined}
+      className={cn(styles.sidebar, !isExpanded && styles.compact, isMobile && styles.mobile, isMobile && !mobileOpen && styles.mobileClosed)}
+    >
+      <header className={styles.header}>
+        <div className={styles.brandMark} aria-hidden="true"><Diamond size={21} strokeWidth={1.5} /></div>
+        {isExpanded && <div className={styles.brandText}><span>BVLGARI</span><p>RETAIL INTELLIGENCE</p></div>}
+        {isMobile ? (
+          <button ref={closeRef} type="button" onClick={() => setIsOpen(false)} className={styles.iconButton} aria-label="Close menu"><X size={18} /></button>
+        ) : (
+          <button type="button" onClick={() => setIsOpen(!isOpen)} className={styles.collapseButton} aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'} aria-expanded={isOpen} aria-controls="sidebar-navigation" title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}>
+            {isOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
           </button>
         )}
-      </div>
+      </header>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 space-y-5 overflow-y-auto custom-scrollbar py-4">
-        {menuGroups.map((group) => {
-          const visibleItems = group.items.filter(item => {
-            // Untuk role finance: HANYA tampilkan Operations Sales di OVERVIEW, dan modul FINANCE. Grup lainnya disembunyikan.
-            if (role === 'finance') {
-              if (group.title === 'FINANCE') return canAccess(item.href);
-              if (group.title === 'OVERVIEW' && item.href === '/operations-sales') return canAccess(item.href);
-              return false;
-            }
-            return canAccess(item.href);
-          });
-          if (visibleItems.length === 0) return null;
-          return (
-          <div key={group.title}>
-            {isActuallyOpen ? (
-              <p className="px-4 text-[10px] font-bold text-slate-400 mb-1.5 tracking-[0.15em] uppercase">
-                {group.title}
-              </p>
-            ) : (
-              <div className="w-8 border-t border-slate-200 mx-auto mb-3 mt-4" />
-            )}
-            <div className="space-y-1">
-              {visibleItems.map((item) => {
-                const isActive = pathname === item.href;
-                const isSpecialAction = item.href === '/monthly-transactions';
+      {isExpanded && <div className={styles.searchWrap}>
+        <Search size={16} aria-hidden="true" />
+        <input aria-label="Search navigation" placeholder="Find a menu..." value={query} onChange={event => setQuery(event.target.value)} />
+        {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear menu search"><X size={14} /></button>}
+      </div>}
 
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={() => {
-                      if (isMobile) {
-                        setIsOpen(false);
-                      }
-                    }}
-                    title={!isActuallyOpen ? item.name : undefined}
-                    className={cn(
-                      "flex items-center transition-all duration-200 group relative",
-                      isActuallyOpen ? "justify-between px-4 py-2.5 rounded-xl" : "justify-center p-3 rounded-xl mx-2",
-                      isActive
-                        ? "bg-blue-50 text-blue-700 border border-blue-200 shadow-sm"
-                        : isSpecialAction
-                        ? "bg-blue-50/40 text-blue-900 border border-blue-200/60 font-semibold hover:bg-blue-50/70"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                    )}
-                  >
-                    {/* Animated Beam traversing the corners for Monthly Trans. */}
-                    {isSpecialAction && (
-                      <span className="absolute inset-0 rounded-xl pointer-events-none p-[1px] overflow-hidden z-10">
-                        <svg className="w-full h-full" style={{ filter: 'drop-shadow(0 0 3px rgba(37,99,235,0.6))' }}>
-                          <defs>
-                            <linearGradient id="transCornerBeam" x1="0%" y1="0%" x2="100%" y2="100%">
-                              <stop offset="0%" stopColor="#93c5fd" stopOpacity="0.2" />
-                              <stop offset="50%" stopColor="#2563eb" stopOpacity="1" />
-                              <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.8" />
-                            </linearGradient>
-                          </defs>
-                          <rect
-                            width="100%"
-                            height="100%"
-                            rx="11"
-                            fill="none"
-                            stroke="url(#transCornerBeam)"
-                            strokeWidth="2.5"
-                            pathLength="100"
-                            strokeDasharray="24 76"
-                            className="animate-border-beam"
-                          />
-                        </svg>
-                      </span>
-                    )}
-
-                    <div className="flex items-center gap-3">
-                      <item.icon className={cn("w-5 h-5", isActive || isSpecialAction ? "text-blue-600" : "text-slate-400 group-hover:text-slate-700")} />
-                      {isActuallyOpen && <span className="text-sm font-medium tracking-tight">{item.name}</span>}
-                    </div>
-                    {isActuallyOpen && item.badge && !isActive && (
-                      <span className={cn(
-                        "text-[8px] font-black px-1.5 py-0.5 rounded-full text-white shrink-0",
-                        item.badgeColor,
-                        (item.badge === 'UPDATE' || item.badge === 'NEW' || item.badge === 'INPUT') && "animate-pulse shadow-lg",
-                        item.badge === 'INPUT' ? "shadow-blue-300" : item.badge === 'UPDATE' ? "shadow-amber-200" : "shadow-indigo-200"
-                      )}>
-                        {item.badge}
-                      </span>
-                    )}
-                    {isActuallyOpen && isActive && <ChevronRight className="w-3.5 h-3.5 text-blue-400 opacity-60" />}
-                  </Link>
-                );
+      <nav id="sidebar-navigation" aria-label="Main navigation" className={styles.navigation}>
+        {visibleGroups.map(group => {
+          const groupId = `nav-${group.title.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+          const groupOpen = !isExpanded || Boolean(search) || !collapsedGroups.includes(group.title);
+          const hasActivePage = group.items.some(item => pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`)));
+          return <section key={group.title} className={styles.group} aria-label={group.title}>
+            {isExpanded ? <button
+              type="button"
+              className={styles.groupHeading}
+              aria-expanded={groupOpen}
+              aria-controls={groupId}
+              disabled={Boolean(search)}
+              onClick={() => setCollapsedGroups(current => current.includes(group.title) ? current.filter(title => title !== group.title) : [...current, group.title])}
+            ><span>{group.title}{!groupOpen && hasActivePage && <span className={styles.activeDot} />}</span><ChevronDown size={13} className={cn(!groupOpen && styles.chevronClosed)} /></button> : <div className={styles.divider} />}
+            <div id={groupId} hidden={!groupOpen}>
+              {group.items.map(item => {
+                const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+                return <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-label={!isExpanded ? item.name : undefined}
+                  aria-current={active ? 'page' : undefined}
+                  title={item.name}
+                  onClick={() => { if (isMobile) setIsOpen(false); }}
+                  className={cn(styles.menuItem, active && styles.active)}
+                >
+                  <item.icon size={18} strokeWidth={1.7} aria-hidden="true" />
+                  {isExpanded && <><span className={styles.itemName}>{item.name}</span>{item.badge && item.badge !== 'NEW' && <span className={styles.badge}>{item.badge}</span>}</>}
+                </Link>;
               })}
             </div>
-          </div>
-          );
+          </section>;
         })}
+        {visibleGroups.length === 0 && <div className={styles.empty} role="status"><Search size={22} /><p>No menus found</p><span>Try another keyword.</span></div>}
       </nav>
 
-      {/* Footer Within Sidebar */}
-      <div className={cn("border-t border-slate-200 bg-slate-50 space-y-3", isActuallyOpen ? "p-4" : "p-3 flex flex-col items-center")}>
-        <button
-          type="button"
-          onClick={toggle}
-          title={isActuallyOpen ? undefined : (hidden ? "Show Amounts" : "Hide Amounts")}
-          className={cn(
-            "flex items-center justify-center transition-all border",
-            isActuallyOpen ? "w-full gap-2 px-3 py-2 rounded-xl text-xs font-bold" : "w-10 h-10 rounded-xl",
-            hidden
-              ? "bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100"
-              : "bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200"
-          )}
-        >
-          {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          {isActuallyOpen && (hidden ? "Amounts Hidden" : "Hide Amounts")}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('bvl_user_role');
-              localStorage.removeItem('bvl_assigned_store');
-              localStorage.removeItem('bvl_allowed_paths');
-            }
+      <footer className={styles.footer}>
+        {isExpanded && <div className={styles.workspace}><div className={styles.avatar}>MR</div><div><strong>MRA Retail</strong><span>{role ? ROLE_LABEL[role] || role : 'Workspace'}</span></div><ShieldCheck size={16} aria-hidden="true" /></div>}
+        <div className={styles.actions}>
+          <button type="button" onClick={toggle} aria-label={hidden ? 'Show amounts' : 'Hide amounts'} aria-pressed={hidden} title={hidden ? 'Show amounts' : 'Hide amounts'} className={cn(styles.footerButton, hidden && styles.amountsHidden)}>
+            {hidden ? <EyeOff size={16} /> : <Eye size={16} />}{isExpanded && <span>{hidden ? 'Amounts hidden' : 'Hide amounts'}</span>}
+          </button>
+          <button type="button" aria-label="Sign out" title="Sign out" className={cn(styles.footerButton, styles.signOut)} onClick={() => {
+            localStorage.removeItem('bvl_user_role');
+            localStorage.removeItem('bvl_assigned_store');
+            localStorage.removeItem('bvl_allowed_paths');
             logout();
-          }}
-          title={isActuallyOpen ? undefined : "Sign Out"}
-          className={cn(
-            "flex items-center justify-center transition-all border border-red-100 text-red-500 hover:bg-red-50",
-            isActuallyOpen ? "w-full gap-2 px-3 py-2 rounded-xl text-xs font-bold" : "w-10 h-10 rounded-xl"
-          )}
-        >
-          <LogOut className="w-4 h-4" />
-          {isActuallyOpen && "Sign Out"}
-        </button>
-
-        {isActuallyOpen && role && (
-          <div className={cn('text-[10px] font-bold px-2 py-1 rounded-lg text-center', ROLE_COLOR[role] || 'bg-slate-100 text-slate-500')}>
-            {ROLE_LABEL[role] || role}
-          </div>
-        )}
-        {isActuallyOpen && (
-          <p className="text-[9px] text-slate-400 text-center leading-relaxed">
-            &copy; 2026 MRA Retail.<br />
-            <span className="text-slate-300">Created By Aris Setiyono.</span>
-          </p>
-        )}
-      </div>
+          }}><LogOut size={16} /></button>
+        </div>
+        {isExpanded && <p className={styles.credit}>&copy; 2026 MRA Retail <span>Created by Aris Setiyono</span></p>}
+      </footer>
     </aside>
   );
 }

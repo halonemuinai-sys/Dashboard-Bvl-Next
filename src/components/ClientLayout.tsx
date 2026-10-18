@@ -49,14 +49,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       <main className={cn(
         "flex-1 min-h-screen transition-all duration-300 w-full max-w-full flex flex-col",
-        !isMobile ? (isOpen ? "md:ml-64" : "md:ml-20") : "ml-0"
+        !isMobile ? (isOpen ? "md:ml-72" : "md:ml-20") : "ml-0"
       )}>
         {isMobile && (
           <div className="mobile-header-bar bg-white border-b border-slate-200 h-16 px-4 flex items-center justify-between sticky top-0 z-30 shadow-xs">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsOpen(true)}
-                aria-label="Open Menu"
+                aria-label="Open menu"
+                aria-expanded={isOpen}
+                aria-controls="dashboard-sidebar"
                 className="p-2 -ml-1 text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200 shadow-2xs flex items-center space-x-1.5"
               >
                 <Menu className="w-5 h-5 text-indigo-600" />

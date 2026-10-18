@@ -1,929 +1,191 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, Users, Plus, Trash2, Save, RefreshCw, Check, Lock, Unlock, X, Crown, ClipboardList, Search, Eye, ChevronLeft, ChevronRight, Key } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ShieldCheck, Users, Plus, Trash2, Save, RefreshCw, Check, Lock, X, Search, Eye, ChevronLeft, ChevronRight, KeyRound, ArrowUpRight, Building2, CircleCheck, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
-import BvlgariLoader from '@/components/BvlgariLoader';
-import { useUserAccess } from '@/lib/user-access-context';
-import { createUserAction, resetUserPasswordAction } from './actions';
+import { ROLES, ROLE_LABEL, STORES, MENU_GROUPS, hasMenuAccess, isFixedPermission, type Role, type DashboardUser, type MenuAccess, type AuditLog } from '@/lib/access-policy';
+import { loadUserAccessAction, createUserAction, updateUserAction, deleteUserAction, resetUserPasswordAction, savePermissionsAction, loadAuditAction } from './actions';
+import styles from './user-access.module.css';
 
-// ── Types ──────────────────────────────────────────────────────────────────
-type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | 'finance';
-type PermRole = Exclude<Role, 'super_admin'>;
+type Notice = { kind: 'success' | 'error'; text: string } | null;
+const paths = MENU_GROUPS.flatMap(group => group.items.map(item => item.path));
+const date = (value: string) => new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' });
 
-interface DashboardUser {
-  id: number;
-  email: string;
-  full_name: string;
-  role: Role;
-  assigned_store?: string;
-  is_active: boolean;
+function Modal({ title, onClose, busy, children }: { title: string; onClose: () => void; busy: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
+  return <dialog ref={ref} className={styles.dialog} aria-label={title} onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
+    <div className={styles.modalHeader}><div><span className={styles.eyebrow}>ACCESS MANAGEMENT</span><h2>{title}</h2></div><button type="button" className={styles.iconButton} disabled={busy} onClick={onClose} aria-label="Close dialog"><X size={20} /></button></div>
+    <div className={styles.modalBody}>{children}</div>
+  </dialog>;
 }
 
-interface MenuAccess {
-  role: PermRole;
-  menu_path: string;
-  allowed: boolean;
-}
-
-// ── Constants ──────────────────────────────────────────────────────────────
-const ALL_ROLES: { value: Role; label: string; color: string; bg: string }[] = [
-  { value: 'super_admin',      label: 'Super Admin',         color: 'text-rose-700',    bg: 'bg-rose-50 border-rose-200' },
-  { value: 'management_it',    label: 'Management & IT All', color: 'text-indigo-700',  bg: 'bg-indigo-50 border-indigo-200' },
-  { value: 'operations_sales', label: 'Operations Sales',    color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200' },
-  { value: 'crm',              label: 'CRM',                 color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
-  { value: 'finance',          label: 'Finance',             color: 'text-teal-700',    bg: 'bg-teal-50 border-teal-200' },
-];
-
-const PERM_ROLES = ALL_ROLES.filter(r => r.value !== 'super_admin') as { value: PermRole; label: string; color: string; bg: string }[];
-
-const ROLE_LABEL: Record<Role, string> = {
-  super_admin:      'Super Admin',
-  management_it:    'Management & IT All',
-  operations_sales: 'Operations Sales',
-  crm:              'CRM',
-  finance:          'Finance',
-};
-
-const ROLE_BADGE: Record<Role, string> = {
-  super_admin:      'bg-rose-100 text-rose-700',
-  management_it:    'bg-indigo-100 text-indigo-700',
-  operations_sales: 'bg-amber-100 text-amber-700',
-  crm:              'bg-emerald-100 text-emerald-700',
-  finance:          'bg-teal-100 text-teal-700',
-};
-
-const STORE_LOCATIONS = [
-  { value: 'ALL', label: 'Semua Store (ALL)' },
-  { value: 'Plaza Indonesia', label: 'Plaza Indonesia' },
-  { value: 'Plaza Senayan', label: 'Plaza Senayan' },
-  { value: 'Bali', label: 'Bali' },
-  { value: 'Head Office', label: 'Head Office' }
-];
-
-const TABLE_LABEL: Record<string, string> = {
-  dashboard_users: 'User Access Control',
-  role_menu_access: 'Menu Permission Access',
-  advisors: 'Advisor Profile',
-  advisor_rotations: 'Advisor Rotation',
-  advisor_targets: 'Advisor Monthly Target',
-  footfall_store: 'Traffic Footfall (Store)',
-  footfall_crm: 'Traffic Footfall (CRM)',
-  clean_master: 'Transactions Data',
-  transaction_records_meta: 'Invoice Records Meta',
-};
-
-const MENU_GROUPS = [
-  {
-    title: 'Overview',
-    items: [
-      { path: '/',                    label: 'Monthly Overview' },
-      { path: '/operations-sales',    label: 'Operations Sales (Store Manager)' },
-      { path: '/quarterly-standard',  label: 'Quarterly Standard' },
-      { path: '/quarterly-budget',    label: 'Quarterly Budget' },
-      { path: '/annual-sales',        label: 'Annual Net Sales' },
-      { path: '/store-performance',   label: 'Store Performance' },
-      { path: '/forecasting',         label: 'Forecasting (AI)' },
-      { path: '/sales-simulator',     label: 'Sales Simulator' },
-      { path: '/comparison-sandbox',  label: 'Comparison Sandbox' },
-    ],
-  },
-  {
-    title: 'Operasional',
-    items: [
-      { path: '/daily-report',         label: 'Daily Report' },
-      { path: '/daily-breakdown',      label: 'Daily Breakdown' },
-      { path: '/invoice-management',   label: 'Invoice Management' },
-      { path: '/installment-guide',    label: 'Installment & MDR Guide' },
-      { path: '/monthly-transactions', label: 'Monthly Transactions' },
-      { path: '/monthly-dps-svc',      label: 'DP & SVC Transactions' },
-      { path: '/heatmap-calendar',     label: 'Heatmap Calendar' },
-      { path: '/crossing-sales',       label: 'Crossing Sales' },
-      { path: '/sales',                label: 'Sales Data' },
-      { path: '/sales-dps-svc',        label: 'Sales Data (DP/SVC)' },
-    ],
-  },
-  {
-    title: 'Finance',
-    items: [
-      { path: '/finance-reconciliation',     label: 'Reconciliation & Audit' },
-      { path: '/finance-payment-analytics',  label: 'Bank Performance & MDR' },
-      { path: '/finance-mdr-setup',          label: 'Bank MDR Setup' },
-    ],
-  },
-  {
-    title: 'Produk & Advisor',
-    items: [
-      { path: '/product-rank',          label: 'Product Rank' },
-      { path: '/product-projection',    label: 'Product Projection' },
-      { path: '/advisor-setup',         label: 'Setup & Targets' },
-      { path: '/advisor-performance',   label: 'Advisor Performance' },
-      { path: '/advisor-productivity',  label: 'Advisor Productivity' },
-    ],
-  },
-  {
-    title: 'CRM & Traffic',
-    items: [
-      { path: '/crm-profiling',        label: 'CRM Profiling' },
-      { path: '/advanced-clienteling', label: 'Advanced Clienteling' },
-      { path: '/crm-dedup',            label: 'CRM & Traffic' },
-      { path: '/event-selling-plan', label: 'Event Selling Plan' },
-      { path: '/app-sheet-crm',      label: 'App Sheet (CRM)' },
-      { path: '/footfall-store',     label: 'Footfall (Store)' },
-      { path: '/footfall-crm',       label: 'Footfall (CRM)' },
-      { path: '/customer-segment',   label: 'Customer Segment' },
-      { path: '/clienteling-hub',    label: 'Clienteling Hub' },
-    ],
-  },
-  {
-    title: 'Admin',
-    items: [
-      { path: '/user-access', label: 'User Access Config' },
-    ],
-  },
-];
-
-// ── Component ──────────────────────────────────────────────────────────────
 export default function UserAccessPage() {
-  const { role: currentUserRole } = useUserAccess();
-  const isSuperAdmin = currentUserRole === 'super_admin';
-
-  const [tab, setTab] = useState<'users' | 'permissions' | 'audit'>('users');
-  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<DashboardUser[]>([]);
-  const [menuAccess, setMenuAccess] = useState<MenuAccess[]>([]);
-  const [activeRole, setActiveRole] = useState<PermRole>('management_it');
-  const [saving, setSaving] = useState(false);
-  const [savedMsg, setSavedMsg] = useState('');
-
-  const [showForm, setShowForm] = useState(false);
-  const [newEmail, setNewEmail] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState<Role>('operations_sales');
-  const [newAssignedStore, setNewAssignedStore] = useState<string>('ALL');
-  const [newPassword, setNewPassword] = useState('');
-  const [addingUser, setAddingUser] = useState(false);
-
-  // Reset Password State
-  const [resetUser, setResetUser] = useState<DashboardUser | null>(null);
-  const [resetPassword, setResetPassword] = useState('');
-  const [resetting, setResetting] = useState(false);
-
-  // Audit Logs State
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [auditLoading, setAuditLoading] = useState(false);
+  const [permissions, setPermissions] = useState<MenuAccess[]>([]);
+  const [savedPermissions, setSavedPermissions] = useState<MenuAccess[]>([]);
+  const [actor, setActor] = useState<DashboardUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+  const [tab, setTab] = useState<'users' | 'permissions' | 'audit'>('users');
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [activeRole, setActiveRole] = useState<Role>('operations_sales');
+  const [menuSearch, setMenuSearch] = useState('');
+  const [modal, setModal] = useState<'create' | 'reset' | 'delete' | null>(null);
+  const [target, setTarget] = useState<DashboardUser | null>(null);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditPage, setAuditPage] = useState(1);
   const [auditTotal, setAuditTotal] = useState(0);
   const [auditSearch, setAuditSearch] = useState('');
-  const [auditActionFilter, setAuditActionFilter] = useState<string>('ALL');
-  const [selectedAudit, setSelectedAudit] = useState<any | null>(null);
-
-  const ITEMS_PER_PAGE = 15;
+  const [auditAction, setAuditAction] = useState('ALL');
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState('');
+  const [auditRefresh, setAuditRefresh] = useState(0);
+  const [selectedAudit, setSelectedAudit] = useState<AuditLog | null>(null);
+  const mutationLock = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [usersRes, accessRes, advisorsRes] = await Promise.all([
-      supabase.from('dashboard_users').select('*').order('full_name'),
-      supabase.from('role_menu_access').select('*'),
-      supabase.from('advisors').select('name, home_location'),
-    ]);
-
-    const advisorMap = new Map<string, string>();
-    (advisorsRes.data || []).forEach((a: any) => {
-      if (a.name && a.home_location) {
-        advisorMap.set(a.name.toLowerCase().trim(), a.home_location);
-      }
-    });
-
-    let localMap: Record<string, string> = {};
     try {
-      localMap = JSON.parse(localStorage.getItem('user_store_assignments') || '{}');
-    } catch (e) {}
-
-    const mappedUsers = (usersRes.data || []).map((u: any) => {
-      const emailKey = u.email.toLowerCase().trim();
-      const nameKey = u.full_name.toLowerCase().trim();
-      const store = localMap[emailKey] || advisorMap.get(nameKey) || u.assigned_store || 'ALL';
-      return { ...u, assigned_store: store };
-    });
-
-    setUsers(mappedUsers);
-    setMenuAccess((accessRes.data || []) as MenuAccess[]);
-    setLoading(false);
+      const result = await loadUserAccessAction();
+      if (!result.ok) { setActor(null); setUsers([]); setNotice({ kind: 'error', text: result.error }); return; }
+      setUsers(result.data.users); setPermissions(result.data.permissions); setSavedPermissions(result.data.permissions); setActor(result.data.actor);
+    } catch { setActor(null); setNotice({ kind: 'error', text: 'Could not connect to the server. Please try again.' }); }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { void load(); }, [load]);
 
-  const loadAuditLogs = useCallback(async () => {
-    setAuditLoading(true);
-    let query = supabase
-      .from('audit_logs')
-      .select('*', { count: 'exact' });
-
-    if (auditSearch.trim()) {
-      query = query.ilike('user_email', `%${auditSearch.trim()}%`);
-    }
-
-    if (auditActionFilter !== 'ALL') {
-      query = query.eq('action_type', auditActionFilter);
-    }
-
-    const from = (auditPage - 1) * ITEMS_PER_PAGE;
-    const to = from + ITEMS_PER_PAGE - 1;
-
-    const { data, count, error } = await query
-      .order('created_at', { ascending: false })
-      .range(from, to);
-
-    if (!error) {
-      setAuditLogs(data || []);
-      setAuditTotal(count || 0);
-    }
-    setAuditLoading(false);
-  }, [auditPage, auditSearch, auditActionFilter]);
-
-  useEffect(() => { load(); }, [load]);
+  const changedRows = permissions.filter(row => !isFixedPermission(row.role, row.menu_path) && row.allowed !== (savedPermissions.find(saved => saved.role === row.role && saved.menu_path === row.menu_path)?.allowed ?? false));
+  const roleChanges = changedRows.filter(row => row.role === activeRole);
+  const dirty = changedRows.length > 0;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   useEffect(() => {
-    if (tab === 'audit') {
-      loadAuditLogs();
-    }
-  }, [tab, loadAuditLogs]);
+    if (tab !== 'audit' || !actor) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setAuditLoading(true); setAuditError('');
+      try {
+        const result = await loadAuditAction({ page: auditPage, search: auditSearch, action: auditAction });
+        if (cancelled) return;
+        if (!result.ok) { setAuditError(result.error); setAuditLogs([]); setAuditTotal(0); }
+        else { setAuditLogs(result.data.logs); setAuditTotal(result.data.total); }
+      } catch { if (!cancelled) { setAuditError('Could not load the audit trail. Please retry.'); setAuditLogs([]); setAuditTotal(0); } }
+      finally { if (!cancelled) setAuditLoading(false); }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [tab, actor, auditPage, auditSearch, auditAction, auditRefresh]);
 
-  const isAllowed = (role: PermRole, path: string) =>
-    menuAccess.some(m => m.role === role && m.menu_path === path && m.allowed);
+  async function mutate(work: () => Promise<void>) {
+    if (mutationLock.current) return;
+    mutationLock.current = true; setBusy(true); setNotice(null);
+    try { await work(); }
+    catch (error) { setNotice({ kind: 'error', text: error instanceof Error ? error.message : 'The request failed. Please try again.' }); }
+    finally { mutationLock.current = false; setBusy(false); }
+  }
+  const canManage = (user: DashboardUser) => actor?.role === 'super_admin' || user.role !== 'super_admin';
+  const allowed = (role: Role, path: string, rows = permissions) => hasMenuAccess(role, rows.filter(row => row.role === role && row.allowed).map(row => row.menu_path), path);
+  const visibleUsers = users.filter(user => `${user.full_name} ${user.email}`.toLowerCase().includes(search.toLowerCase().trim()) && (roleFilter === 'ALL' || user.role === roleFilter) && (statusFilter === 'ALL' || user.is_active === (statusFilter === 'active')));
+  const activeUsers = users.filter(user => user.is_active).length;
+  const openModal = (mode: 'create' | 'reset' | 'delete', user: DashboardUser | null = null) => { setNotice(null); setTarget(user); setModal(mode); };
+  const closeModal = () => { setModal(null); setTarget(null); };
+  const updateUser = (user: DashboardUser, changes: { role?: Role; assigned_store?: string; is_active?: boolean }) => void mutate(async () => {
+    const result = await updateUserAction(user.id, changes);
+    if (!result.ok) throw new Error(result.error);
+    setUsers(current => current.map(item => item.id === user.id ? result.data : item));
+    setNotice({ kind: 'success', text: `${user.full_name}'s account has been updated.` });
+    window.dispatchEvent(new Event('bvl-access-updated'));
+  });
+  const feedback = notice && <div role={notice.kind === 'error' ? 'alert' : 'status'} className={cn(styles.notice, notice.kind === 'error' ? styles.error : styles.success)}>{notice.kind === 'error' ? <AlertCircle size={17} /> : <CircleCheck size={17} />}<span>{notice.text}</span></div>;
 
-  const toggleAccess = (role: PermRole, path: string) => {
-    const exists = menuAccess.find(m => m.role === role && m.menu_path === path);
-    if (exists) {
-      setMenuAccess(prev => prev.map(m =>
-        m.role === role && m.menu_path === path ? { ...m, allowed: !m.allowed } : m
-      ));
-    } else {
-      setMenuAccess(prev => [...prev, { role, menu_path: path, allowed: true }]);
-    }
-  };
+  if (loading && !actor) return <div className={styles.state}><RefreshCw size={26} className="animate-spin" /><h2>Loading access configuration</h2><p>Verifying your administrator access.</p></div>;
+  if (!actor) return <div className={styles.state}><ShieldCheck size={32} /><h2>Access configuration is unavailable</h2>{feedback}<button className={styles.secondary} onClick={() => void load()}>Try again</button></div>;
 
-  const savePermissions = async () => {
-    setSaving(true);
-    const rows = menuAccess.filter(m => m.role === activeRole);
-    const { error } = await supabase
-      .from('role_menu_access')
-      .upsert(rows, { onConflict: 'role,menu_path' });
-    setSaving(false);
-    setSavedMsg(error ? 'Gagal menyimpan' : 'Tersimpan!');
-    setTimeout(() => setSavedMsg(''), 3000);
-  };
-
-  const addUser = async () => {
-    if (!newEmail.trim() || !newName.trim()) return;
-    setAddingUser(true);
-    try {
-      await createUserAction({
-        email: newEmail.trim().toLowerCase(),
-        fullName: newName.trim(),
-        role: newRole,
-        assignedStore: newAssignedStore,
-        password: newPassword.trim() || undefined,
-      });
-      setNewEmail('');
-      setNewName('');
-      setNewPassword('');
-      setNewAssignedStore('ALL');
-      setShowForm(false);
-      load();
-    } catch (err: any) {
-      alert('Gagal menambahkan user: ' + err.message);
-    } finally {
-      setAddingUser(false);
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!resetUser || !resetPassword.trim()) return;
-    setResetting(true);
-    try {
-      await resetUserPasswordAction(resetUser.id, resetPassword.trim());
-      alert('Password berhasil diubah!');
-      setResetUser(null);
-      setResetPassword('');
-      load();
-    } catch (err: any) {
-      alert('Gagal mengubah password: ' + err.message);
-    } finally {
-      setResetting(false);
-    }
-  };
-
-  const toggleUserActive = async (user: DashboardUser) => {
-    await supabase.from('dashboard_users').update({ is_active: !user.is_active }).eq('id', user.id);
-    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_active: !u.is_active } : u));
-  };
-
-  const changeUserRole = async (user: DashboardUser, role: Role) => {
-    await supabase.from('dashboard_users').update({ role }).eq('id', user.id);
-    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role } : u));
-  };
-
-  const changeUserStore = async (user: DashboardUser, assigned_store: string) => {
-    // 1. Optimistic UI update
-    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, assigned_store } : u));
-
-    // 2. Persist to localStorage for client cache
-    try {
-      const localMap = JSON.parse(localStorage.getItem('user_store_assignments') || '{}');
-      localMap[user.email.toLowerCase().trim()] = assigned_store;
-      localStorage.setItem('user_store_assignments', JSON.stringify(localMap));
-    } catch (e) {}
-
-    // 3. Sync to advisors table in Supabase
-    try {
-      const { data: advList } = await supabase.from('advisors').select('id, name');
-      const matchAdv = (advList || []).find((a: any) => a.name.toLowerCase().trim() === user.full_name.toLowerCase().trim());
-      if (matchAdv) {
-        await supabase.from('advisors').update({ home_location: assigned_store }).eq('id', matchAdv.id);
-      } else {
-        await supabase.from('advisors').insert({ name: user.full_name, home_location: assigned_store, is_active: true });
-      }
-    } catch (e) {}
-
-    // 4. Try updating dashboard_users
-    await supabase.from('dashboard_users').update({ assigned_store }).eq('id', user.id);
-  };
-
-  const deleteUser = async (id: number) => {
-    if (!confirm('Hapus user ini?')) return;
-    await supabase.from('dashboard_users').delete().eq('id', id);
-    setUsers(prev => prev.filter(u => u.id !== id));
-  };
-
-  // Roles selectable when assigning: non-super_admin can't assign super_admin
-  const assignableRoles = isSuperAdmin ? ALL_ROLES : ALL_ROLES.filter(r => r.value !== 'super_admin');
-
-  if (loading) return <BvlgariLoader message="Loading User Access Config..." />;
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <ShieldCheck className="w-5 h-5 text-indigo-600" />
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">User Access Configuration</h1>
-          </div>
-          <p className="text-slate-500 text-sm">Kelola pengguna dan hak akses menu per role</p>
-        </div>
-        <button type="button" onClick={load}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-bold rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
-      </div>
-
-      {/* Role Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {ALL_ROLES.map(r => {
-          const count = users.filter(u => u.role === r.value && u.is_active).length;
-          const menuCount = r.value === 'super_admin'
-            ? 999
-            : menuAccess.filter(m => m.role === r.value && m.allowed).length;
-          return (
-            <div key={r.value} className={cn('rounded-2xl border p-4 flex items-start gap-3', r.bg)}>
-              <div className="p-2 rounded-xl bg-white shadow-sm shrink-0">
-                {r.value === 'super_admin'
-                  ? <Crown className={cn('w-4 h-4', r.color)} />
-                  : <ShieldCheck className={cn('w-4 h-4', r.color)} />}
-              </div>
-              <div className="min-w-0">
-                <p className={cn('font-bold text-xs leading-tight', r.color)}>{r.label}</p>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  {count} user &middot; {r.value === 'super_admin' ? 'All access' : `${menuCount} menus`}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {(['users', 'permissions', 'audit'] as const).map(t => (
-          <button key={t} type="button" onClick={() => { setTab(t); if (t === 'audit') setAuditPage(1); }}
-            className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all',
-              tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
-            {t === 'users' && <span className="flex items-center gap-2"><Users className="w-4 h-4" />Users</span>}
-            {t === 'permissions' && <span className="flex items-center gap-2"><Lock className="w-4 h-4" />Permissions</span>}
-            {t === 'audit' && <span className="flex items-center gap-2"><ClipboardList className="w-4 h-4" />Audit Trail</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* ── TAB: USERS ─────────────────────────────────────────────── */}
-      {tab === 'users' && (
-        <div className="space-y-4">
-          {!showForm ? (
-            <button type="button" onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 shadow-sm transition-all">
-              <Plus className="w-4 h-4" /> Tambah User
-            </button>
-          ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="font-bold text-slate-800">Tambah User Baru</p>
-                <button type="button" aria-label="Close" onClick={() => setShowForm(false)}>
-                  <X className="w-4 h-4 text-slate-400 hover:text-slate-700" />
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                <input value={newName} onChange={e => setNewName(e.target.value)}
-                  placeholder="Full Name"
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
-                <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
-                  placeholder="Email address" type="email"
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
-                <input value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                  placeholder="Password" type="password"
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
-                <select value={newRole} onChange={e => setNewRole(e.target.value as Role)} aria-label="Select role"
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white">
-                  {assignableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-                <select value={newAssignedStore} onChange={e => setNewAssignedStore(e.target.value)} aria-label="Select store location"
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white font-medium text-slate-700">
-                  {STORE_LOCATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              <button type="button" onClick={addUser} disabled={addingUser || !newEmail || !newName}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50">
-                {addingUser ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Simpan
-              </button>
-            </div>
-          )}
-
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Nama</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Email</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Role</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Lokasi Store</th>
-                  <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-10 text-slate-400 text-sm italic">Belum ada user terdaftar</td></tr>
-                )}
-                {users.map(user => {
-                  const isSA = user.role === 'super_admin';
-                  const currentStore = user.assigned_store || 'ALL';
-                  return (
-                    <tr key={user.id} className={cn('hover:bg-slate-50 transition-colors', !user.is_active && 'opacity-50')}>
-                      <td className="px-4 py-3 font-medium text-slate-900 flex items-center gap-2">
-                        {isSA && <Crown className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
-                        {user.full_name}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{user.email}</td>
-                      <td className="px-4 py-3">
-                        {/* Super admin can only be changed by another super admin */}
-                        {isSA && !isSuperAdmin ? (
-                          <span className={cn('text-xs font-bold px-2 py-1 rounded-lg', ROLE_BADGE[user.role])}>
-                            {ROLE_LABEL[user.role]}
-                          </span>
-                        ) : (
-                          <select title="Change role" value={user.role} onChange={e => changeUserRole(user, e.target.value as Role)}
-                            className={cn('text-xs font-bold px-2 py-1 rounded-lg border-0 outline-none cursor-pointer', ROLE_BADGE[user.role])}>
-                            {assignableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                          </select>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <select title="Change store location" value={currentStore} onChange={e => changeUserStore(user, e.target.value)}
-                          className="text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 outline-none cursor-pointer hover:border-indigo-300">
-                          {STORE_LOCATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button type="button" onClick={() => toggleUserActive(user)}
-                          className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all',
-                            user.is_active
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                              : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200')}>
-                          {user.is_active ? <><Unlock className="w-3 h-3" />Active</> : <><Lock className="w-3 h-3" />Inactive</>}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-center flex justify-center gap-1">
-                        <button type="button" title="Reset password" onClick={() => setResetUser(user)}
-                          className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-500 transition-colors">
-                          <Key className="w-4 h-4" />
-                        </button>
-                        {/* Protect super_admin from deletion unless current user is super_admin */}
-                        {(!isSA || isSuperAdmin) && (
-                          <button type="button" title="Hapus user" onClick={() => deleteUser(user.id)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB: PERMISSIONS ──────────────────────────────────────── */}
-      {tab === 'permissions' && (
-        <div className="space-y-4">
-          {/* Super Admin info banner */}
-          <div className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl">
-            <Crown className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-rose-700">
-              <b>Super Admin</b> selalu mendapat akses ke semua menu — tidak perlu dikonfigurasi.
-              Atur permissions hanya untuk role di bawah ini.
-            </p>
-          </div>
-
-          {/* Role selector (exclude super_admin) */}
-          <div className="flex flex-wrap gap-2">
-            {PERM_ROLES.map(r => (
-              <button key={r.value} type="button" onClick={() => setActiveRole(r.value)}
-                className={cn('px-4 py-2 rounded-xl text-sm font-bold border transition-all',
-                  activeRole === r.value ? cn(r.bg, r.color, 'shadow-sm') : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}>
-                {r.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Permission matrix */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <p className="font-bold text-slate-800 text-sm">
-                Menu Access — <span className={PERM_ROLES.find(r => r.value === activeRole)?.color}>{ROLE_LABEL[activeRole]}</span>
-              </p>
-              <p className="text-xs text-slate-400">
-                {menuAccess.filter(m => m.role === activeRole && m.allowed).length} menus allowed
-              </p>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {MENU_GROUPS.map(group => (
-                <div key={group.title} className="px-5 py-3">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{group.title}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {group.items.map(item => {
-                      const allowed = isAllowed(activeRole, item.path);
-                      return (
-                        <button key={item.path} type="button" onClick={() => toggleAccess(activeRole, item.path)}
-                          className={cn(
-                            'flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all text-left',
-                            allowed ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
-                          )}>
-                          <div className={cn('w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all',
-                            allowed ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300')}>
-                            {allowed && <Check className="w-3 h-3 text-white" />}
-                          </div>
-                          <span className="flex-1">{item.label}</span>
-                          <code className="text-[10px] text-slate-400 font-mono hidden sm:inline">{item.path}</code>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={savePermissions} disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 shadow-sm">
-              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {saving ? 'Menyimpan...' : 'Simpan Permissions'}
-            </button>
-            {savedMsg && (
-              <span className={cn('text-sm font-bold flex items-center gap-1.5',
-                savedMsg.includes('Gagal') ? 'text-red-500' : 'text-emerald-600')}>
-                {!savedMsg.includes('Gagal') && <Check className="w-4 h-4" />}
-                {savedMsg}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB: AUDIT TRAIL ──────────────────────────────────────── */}
-      {tab === 'audit' && (
-        <div className="space-y-4">
-          {/* Filters and Search */}
-          <div className="flex flex-col sm:flex-row gap-3 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-            <div className="flex-1 relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-              <input
-                type="text"
-                placeholder="Cari berdasarkan email admin..."
-                value={auditSearch}
-                onChange={e => { setAuditSearch(e.target.value); setAuditPage(1); }}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 outline-none text-sm transition-all"
-              />
-            </div>
-            <div className="w-full sm:w-48">
-              <select
-                value={auditActionFilter}
-                onChange={e => { setAuditActionFilter(e.target.value); setAuditPage(1); }}
-                aria-label="Filter Action Type"
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 outline-none text-sm bg-white"
-              >
-                <option value="ALL">Semua Tindakan</option>
-                <option value="INSERT">INSERT (Tambah)</option>
-                <option value="UPDATE">UPDATE (Ubah)</option>
-                <option value="DELETE">DELETE (Hapus)</option>
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={loadAuditLogs}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition-all shrink-0"
-            >
-              Cari
-            </button>
-          </div>
-
-          {/* Audit Logs Table */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Waktu (WITA)</th>
-                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Admin</th>
-                    <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Aksi</th>
-                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Modul / Tabel</th>
-                    <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Record ID</th>
-                    <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Detail</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {auditLoading ? (
-                    <tr>
-                      <td colSpan={6} className="text-center py-10">
-                        <RefreshCw className="w-6 h-6 animate-spin text-indigo-600 mx-auto" />
-                        <p className="text-xs text-slate-400 mt-2 font-medium">Memuat log aktivitas...</p>
-                      </td>
-                    </tr>
-                  ) : auditLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-center py-10 text-slate-400 text-sm italic">
-                        Tidak ada log aktivitas admin ditemukan
-                      </td>
-                    </tr>
-                  ) : (
-                    auditLogs.map((log: any) => {
-                      let badgeColor = 'bg-slate-100 text-slate-700';
-                      if (log.action_type === 'INSERT') badgeColor = 'bg-emerald-100 text-emerald-800';
-                      else if (log.action_type === 'UPDATE') badgeColor = 'bg-amber-100 text-amber-800';
-                      else if (log.action_type === 'DELETE') badgeColor = 'bg-rose-100 text-rose-800';
-
-                      // Format date in WITA (Asia/Makassar) since Bvlgari outlets are in Bali and Jakarta
-                      const logDate = new Date(log.created_at).toLocaleString('id-ID', {
-                        timeZone: 'Asia/Makassar',
-                        dateStyle: 'short',
-                        timeStyle: 'medium'
-                      });
-
-                      return (
-                        <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3 text-slate-500 font-mono text-xs whitespace-nowrap">{logDate}</td>
-                          <td className="px-4 py-3 font-medium text-slate-800">{log.user_email}</td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={cn('text-[10px] font-black px-2 py-0.5 rounded-full', badgeColor)}>
-                              {log.action_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-slate-600 font-medium">
-                            {TABLE_LABEL[log.table_name] || log.table_name}
-                            <div className="text-[10px] text-slate-400 font-mono">{log.table_name}</div>
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 font-mono text-xs max-w-[150px] truncate hover:text-clip" title={log.record_id}>
-                            {log.record_id || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedAudit(log)}
-                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors inline-flex items-center gap-1 text-xs font-semibold"
-                            >
-                              <Eye className="w-4 h-4" /> Lihat
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination Controls */}
-            {auditTotal > ITEMS_PER_PAGE && (
-              <div className="bg-slate-50 px-4 py-3 border-t border-slate-100 flex items-center justify-between">
-                <p className="text-xs text-slate-500 font-medium">
-                  Menampilkan <span className="font-bold text-slate-800">{(auditPage - 1) * ITEMS_PER_PAGE + 1}</span> - <span className="font-bold text-slate-800">{Math.min(auditPage * ITEMS_PER_PAGE, auditTotal)}</span> dari <span className="font-bold text-slate-800">{auditTotal}</span> aktivitas
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={auditPage === 1 || auditLoading}
-                    onClick={() => setAuditPage(prev => Math.max(1, prev - 1))}
-                    className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-all shrink-0"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={auditPage * ITEMS_PER_PAGE >= auditTotal || auditLoading}
-                    onClick={() => setAuditPage(prev => prev + 1)}
-                    className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-all shrink-0"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Visual Diff Modal */}
-      {selectedAudit && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  Detail Log Perubahan
-                  <span className={cn(
-                    'text-[10px] font-black px-2 py-0.5 rounded-full',
-                    selectedAudit.action_type === 'INSERT' && 'bg-emerald-100 text-emerald-800',
-                    selectedAudit.action_type === 'UPDATE' && 'bg-amber-100 text-amber-800',
-                    selectedAudit.action_type === 'DELETE' && 'bg-rose-100 text-rose-800'
-                  )}>
-                    {selectedAudit.action_type}
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">Audit ID: #{selectedAudit.id}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedAudit(null)}
-                className="p-1.5 rounded-xl hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
-                <div>
-                  <p className="text-slate-400 text-xs font-semibold">ADMIN</p>
-                  <p className="font-bold text-slate-800">{selectedAudit.user_email}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-xs font-semibold">TANGGAL & WAKTU (WITA)</p>
-                  <p className="font-bold text-slate-800 font-mono text-xs">
-                    {new Date(selectedAudit.created_at).toLocaleString('id-ID', {
-                      timeZone: 'Asia/Makassar',
-                      dateStyle: 'long',
-                      timeStyle: 'medium'
-                    })}
-                  </p>
-                </div>
-                <div className="md:mt-2">
-                  <p className="text-slate-400 text-xs font-semibold">MODUL / TABEL</p>
-                  <p className="font-bold text-slate-800">
-                    {TABLE_LABEL[selectedAudit.table_name] || selectedAudit.table_name} 
-                    <span className="font-mono font-medium text-slate-400 text-xs ml-1">({selectedAudit.table_name})</span>
-                  </p>
-                </div>
-                <div className="md:mt-2">
-                  <p className="text-slate-400 text-xs font-semibold">RECORD ID</p>
-                  <p className="font-bold text-slate-800 font-mono text-xs">{selectedAudit.record_id || '-'}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Perbedaan Data (JSON Diff)</p>
-                {renderJSONDiff(selectedAudit.old_values, selectedAudit.new_values)}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-slate-50 px-6 py-3.5 border-t border-slate-100 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedAudit(null)}
-                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold rounded-xl transition-all"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reset Password Modal */}
-      {resetUser && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 flex flex-col gap-4 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <Key className="w-5 h-5 text-amber-500" />
-                <h3 className="font-bold text-slate-900 text-lg">Reset Password</h3>
-              </div>
-              <button type="button" aria-label="Close" onClick={() => setResetUser(null)}>
-                <X className="w-5 h-5 text-slate-400 hover:text-slate-600" />
-              </button>
-            </div>
-            <div>
-              <p className="text-slate-500 text-sm">
-                Masukkan password baru untuk user: <b>{resetUser.full_name}</b> ({resetUser.email})
-              </p>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-500">Password Baru</label>
-              <input value={resetPassword} onChange={e => setResetPassword(e.target.value)}
-                type="password" placeholder="Min. 6 karakter"
-                className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-indigo-400" />
-            </div>
-            <div className="flex justify-end gap-2 mt-2">
-              <button type="button" onClick={() => setResetUser(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-bold rounded-xl transition-all">
-                Batal
-              </button>
-              <button type="button" onClick={handleResetPassword} disabled={resetting || !resetPassword.trim()}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-all flex items-center gap-1.5">
-                {resetting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Simpan Password
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+  return <div className={styles.page} lang="en">
+    <header className={styles.header}>
+      <div><span className={styles.eyebrow}>ADMINISTRATION / ACCESS CONTROL</span><h1>User Access Configuration</h1><p>Manage your team, define access, and review account activity.</p></div>
+      <div className={styles.headerActions}><button type="button" disabled={loading || busy || dirty} onClick={() => { setNotice(null); void load(); setAuditRefresh(value => value + 1); }} className={styles.secondary} title={dirty ? 'Save or discard permission changes before refreshing' : 'Refresh data'}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} />Refresh</button><button type="button" className={styles.primary} disabled={busy} onClick={() => openModal('create')}><Plus size={16} />Add user</button></div>
+    </header>
+    {!modal && feedback}
+    <div className={styles.metrics}>
+      {[{ label: 'Total users', value: users.length, detail: 'Across all assigned stores', icon: Users }, { label: 'Active accounts', value: activeUsers, detail: `${users.length - activeUsers} inactive accounts`, icon: CircleCheck }, { label: 'Access roles', value: ROLES.length, detail: '2 configurable · 3 fixed policies', icon: ShieldCheck }, { label: 'Assigned stores', value: new Set(users.filter(user => user.assigned_store && user.assigned_store !== 'ALL').map(user => user.assigned_store)).size, detail: 'Individual store assignments', icon: Building2 }].map(metric => <div key={metric.label} className={styles.metric}><div><span>{metric.label}</span><strong>{metric.value}</strong><p>{metric.detail}</p></div><metric.icon size={20} /></div>)}
     </div>
-  );
-}
+    <div className={styles.tabBar}><div className={styles.tabs} role="tablist" aria-label="Access configuration">
+      {(['users', 'permissions', 'audit'] as const).map((value, index, tabs) => <button key={value} type="button" role="tab" id={`tab-${value}`} aria-selected={tab === value} aria-controls={`panel-${value}`} tabIndex={tab === value ? 0 : -1} onKeyDown={event => { if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return; event.preventDefault(); const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length]; setTab(next); document.getElementById(`tab-${next}`)?.focus(); }} onClick={() => setTab(value)} className={cn(styles.tab, tab === value && styles.selectedTab)}>{value === 'users' ? <Users size={16} /> : value === 'permissions' ? <Lock size={16} /> : <ShieldCheck size={16} />}{value === 'users' ? 'Team members' : value === 'permissions' ? 'Role permissions' : 'Audit trail'}{value === 'users' && <span>{users.length}</span>}{value === 'permissions' && dirty && <span>{changedRows.length}</span>}</button>)}
+    </div><span className={styles.adminBadge}><ShieldCheck size={13} />{ROLE_LABEL[actor.role]}</span></div>
 
-// ── JSON Diff Helper ───────────────────────────────────────────────────────
-function renderJSONDiff(oldVal: any, newVal: any) {
-  const allKeys = Array.from(new Set([
-    ...Object.keys(oldVal || {}),
-    ...Object.keys(newVal || {})
-  ])).sort();
+    {tab === 'users' && <section id="panel-users" role="tabpanel" aria-labelledby="tab-users" className={styles.card}>
+      <div className={styles.cardHeading}><div><h2>Team directory</h2><p>Control account status, role, and store assignment.</p></div><span>{visibleUsers.length} of {users.length} users</span></div>
+      <div className={styles.filters}><div className={styles.search}><Search size={17} /><input aria-label="Search users" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search by name or email..." /></div><select aria-label="Filter by role" value={roleFilter} onChange={event => setRoleFilter(event.target.value)}><option value="ALL">All roles</option>{ROLES.map(role => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}</select><select aria-label="Filter by status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="ALL">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+      <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Team member</th><th>Access role</th><th>Store assignment</th><th>Status</th><th className={styles.right}>Actions</th></tr></thead><tbody>
+        {visibleUsers.map(user => <tr key={user.id}>
+          <td><div className={styles.member}><span className={styles.avatar}>{user.full_name.trim().split(/\s+/).map(part => part[0]).slice(0, 2).join('').toUpperCase() || '?'}</span><div><strong>{user.full_name}{user.id === actor.id && <small>You</small>}</strong><span>{user.email}</span></div></div></td>
+          <td><select aria-label={`Role for ${user.full_name}`} disabled={busy || !canManage(user) || user.id === actor.id} value={user.role} onChange={event => updateUser(user, { role: event.target.value as Role })}>{ROLES.filter(role => actor.role === 'super_admin' || role !== 'super_admin' || user.role === role).map(role => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}</select></td>
+          <td><select aria-label={`Store for ${user.full_name}`} disabled={busy || !canManage(user)} value={user.assigned_store || 'ALL'} onChange={event => updateUser(user, { assigned_store: event.target.value })}>{STORES.map(store => <option key={store} value={store}>{store === 'ALL' ? 'All stores' : store}</option>)}</select></td>
+          <td><button type="button" className={cn(styles.status, user.is_active && styles.activeStatus)} disabled={busy || !canManage(user) || user.id === actor.id} aria-label={`${user.is_active ? 'Deactivate' : 'Activate'} ${user.full_name}`} onClick={() => updateUser(user, { is_active: !user.is_active })}><span />{user.is_active ? 'Active' : 'Inactive'}</button></td>
+          <td><div className={styles.rowActions}><button type="button" className={styles.iconButton} title="Reset password" aria-label={`Reset password for ${user.full_name}`} disabled={busy || !canManage(user)} onClick={() => openModal('reset', user)}><KeyRound size={16} /></button><button type="button" className={cn(styles.iconButton, styles.dangerIcon)} title="Delete account" aria-label={`Delete ${user.full_name}`} disabled={busy || !canManage(user) || user.id === actor.id} onClick={() => openModal('delete', user)}><Trash2 size={16} /></button></div></td>
+        </tr>)}
+        {!visibleUsers.length && <tr><td colSpan={5}><div className={styles.empty}><Users size={26} /><h3>{users.length ? 'No matching team members' : 'No team members yet'}</h3><p>{users.length ? 'Try a different name, role, or status.' : 'Add a user to get started.'}</p></div></td></tr>}
+      </tbody></table></div>
+      <div className={styles.tableFooter}><ShieldCheck size={14} />Your own role and account status are protected from accidental changes.</div>
+    </section>}
 
-  return (
-    <div className="border border-slate-200 rounded-2xl overflow-hidden text-xs font-mono max-h-[350px] overflow-y-auto bg-white shadow-sm">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase tracking-widest text-[9px]">
-            <th className="text-left px-4 py-2 font-bold">Kolom</th>
-            <th className="text-left px-4 py-2 font-bold bg-red-50/20 text-red-600">Sebelum (Old)</th>
-            <th className="text-left px-4 py-2 font-bold bg-emerald-50/20 text-emerald-600">Sesudah (New)</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {allKeys.map(key => {
-            if (key === 'created_at' || key === 'updated_at') return null;
+    {tab === 'permissions' && <section id="panel-permissions" role="tabpanel" aria-labelledby="tab-permissions" className={styles.permissionLayout}>
+      <aside className={styles.roleList}><span className={styles.eyebrow}>SELECT A ROLE</span>{ROLES.map(role => <button key={role} type="button" onClick={() => setActiveRole(role)} className={cn(styles.roleOption, activeRole === role && styles.selectedRole)}><ShieldCheck size={17} /><div><strong>{ROLE_LABEL[role]}</strong><span>{users.filter(user => user.role === role && user.is_active).length} active users · {paths.filter(path => allowed(role, path)).length} menus</span></div><ArrowUpRight size={14} /></button>)}</aside>
+      <div className={styles.card}>
+        <div className={styles.cardHeading}><div><h2>{ROLE_LABEL[activeRole]}</h2><p>{activeRole === 'super_admin' || activeRole === 'management_it' ? 'Full access is included in this role and cannot be restricted here.' : activeRole === 'finance' ? 'Finance uses a fixed policy for its approved operational and finance menus.' : 'Choose the menus this role can access. Locked permissions follow the system policy.'}</p></div><span className={styles.policyBadge}>{activeRole === 'operations_sales' || activeRole === 'crm' ? 'Configurable' : 'Fixed policy'}</span></div>
+        <div className={styles.filters}><div className={styles.search}><Search size={16} /><input aria-label="Search permissions" placeholder="Find a menu permission..." value={menuSearch} onChange={event => setMenuSearch(event.target.value)} /></div><span>{paths.filter(path => allowed(activeRole, path)).length} / {paths.length} enabled</span></div>
+        <div className={styles.permissionGroups}>{MENU_GROUPS.map(group => {
+          const items = group.items.filter(item => `${item.label} ${group.title}`.toLowerCase().includes(menuSearch.toLowerCase().trim()));
+          if (!items.length) return null;
+          return <div key={group.title} className={styles.permissionGroup}><h3>{group.title}</h3><div>{items.map(item => {
+            const enabled = allowed(activeRole, item.path);
+            const fixed = isFixedPermission(activeRole, item.path);
+            return <button type="button" key={item.path} role="switch" aria-checked={enabled} aria-label={`${item.label}${fixed ? ', fixed by policy' : ''}`} disabled={busy || fixed} className={cn(styles.permission, enabled && styles.permissionEnabled)} onClick={() => setPermissions(current => [...current.filter(row => !(row.role === activeRole && row.menu_path === item.path)), { role: activeRole, menu_path: item.path, allowed: !enabled }])}><span>{item.label}</span>{fixed ? <Lock size={13} /> : null}<span className={cn(styles.switch, enabled && styles.switchOn)}><span /></span></button>;
+          })}</div></div>;
+        })}{!MENU_GROUPS.some(group => group.items.some(item => `${item.label} ${group.title}`.toLowerCase().includes(menuSearch.toLowerCase().trim()))) && <div className={styles.empty}><p>No permissions match your search.</p></div>}</div>
+        <div className={styles.saveBar}><span>{roleChanges.length ? `${roleChanges.length} unsaved changes for this role` : 'No unsaved changes for this role'}</span><div><button type="button" className={styles.secondary} disabled={busy || !roleChanges.length} onClick={() => setPermissions(current => [...current.filter(row => row.role !== activeRole), ...savedPermissions.filter(row => row.role === activeRole)])}>Discard</button><button type="button" className={styles.primary} disabled={busy || !roleChanges.length} onClick={() => void mutate(async () => {
+          const result = await savePermissionsAction(activeRole, roleChanges.map(({ menu_path, allowed }) => ({ menu_path, allowed })));
+          if (!result.ok) throw new Error(result.error);
+          setSavedPermissions(current => [...current.filter(row => row.role !== activeRole), ...permissions.filter(row => row.role === activeRole)]);
+          setNotice({ kind: 'success', text: `${ROLE_LABEL[activeRole]} permissions saved.` });
+          window.dispatchEvent(new Event('bvl-access-updated'));
+        })}><Save size={15} />{busy ? 'Saving...' : 'Save changes'}</button></div></div>
+      </div>
+    </section>}
 
-            const oldRaw = oldVal ? oldVal[key] : undefined;
-            const newRaw = newVal ? newVal[key] : undefined;
+    {tab === 'audit' && <section id="panel-audit" role="tabpanel" aria-labelledby="tab-audit" className={styles.card}>
+      <div className={styles.cardHeading}><div><h2>Activity history</h2><p>Review recorded changes. Times shown in Jakarta time (WIB, UTC+7).</p></div><span>{auditTotal} records</span></div>
+      <div className={styles.filters}><div className={styles.search}><Search size={16} /><input aria-label="Search audit by actor email" maxLength={254} placeholder="Search actor email..." value={auditSearch} onChange={event => { setAuditSearch(event.target.value); setAuditPage(1); setAuditLoading(true); }} /></div><select aria-label="Filter audit action" value={auditAction} onChange={event => { setAuditAction(event.target.value); setAuditPage(1); setAuditLoading(true); }}><option value="ALL">All actions</option>{['INSERT', 'UPDATE', 'DELETE'].map(action => <option key={action}>{action}</option>)}</select><button type="button" className={styles.secondary} disabled={auditLoading} onClick={() => setAuditRefresh(value => value + 1)}><RefreshCw size={15} />Refresh</button></div>
+      {auditError && <div role="alert" className={cn(styles.notice, styles.error)}>{auditError}</div>}
+      <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Date & time · WIB</th><th>Actor</th><th>Action</th><th>Resource</th><th>Record</th><th>Details</th></tr></thead><tbody>
+        {auditLoading ? <tr><td colSpan={6}><div className={styles.empty} role="status"><RefreshCw className="animate-spin" size={22} /><p>Loading activity...</p></div></td></tr> : auditLogs.map(log => <tr key={log.id}><td className={styles.nowrap}>{date(log.created_at)}</td><td>{log.user_email || 'System'}</td><td><span className={cn(styles.auditBadge, log.action_type === 'DELETE' && styles.deleteBadge)}>{log.action_type}</span></td><td>{log.table_name.replaceAll('_', ' ')}</td><td className={styles.recordId}>{log.record_id || '—'}</td><td><button type="button" className={styles.iconButton} aria-label={`View audit record ${log.id}`} onClick={() => setSelectedAudit(log)}><Eye size={16} /></button></td></tr>)}
+        {!auditLoading && !auditLogs.length && <tr><td colSpan={6}><div className={styles.empty}><ShieldCheck size={25} /><h3>{auditError ? 'Activity could not be loaded' : 'No activity found'}</h3><p>{auditError ? 'Retry using Refresh.' : 'Try another email or action filter.'}</p></div></td></tr>}
+      </tbody></table></div>
+      <div className={styles.pagination}><span>{auditTotal ? `${(auditPage - 1) * 15 + 1}–${Math.min(auditPage * 15, auditTotal)} of ${auditTotal} records` : '0 records'}</span><div><button type="button" className={styles.iconButton} aria-label="Previous page" disabled={auditPage === 1 || auditLoading} onClick={() => { setAuditPage(page => page - 1); setAuditLoading(true); }}><ChevronLeft size={17} /></button><span>Page {auditPage}</span><button type="button" className={styles.iconButton} aria-label="Next page" disabled={auditPage * 15 >= auditTotal || auditLoading} onClick={() => { setAuditPage(page => page + 1); setAuditLoading(true); }}><ChevronRight size={17} /></button></div></div>
+    </section>}
 
-            const oStr = oldRaw !== undefined ? (typeof oldRaw === 'object' ? JSON.stringify(oldRaw) : String(oldRaw)) : undefined;
-            const nStr = newRaw !== undefined ? (typeof newRaw === 'object' ? JSON.stringify(newRaw) : String(newRaw)) : undefined;
-            const isDiff = oStr !== nStr;
-
-            return (
-              <tr key={key} className={cn(isDiff ? 'bg-amber-50/20' : 'hover:bg-slate-50/50')}>
-                <td className="px-4 py-2.5 font-bold text-slate-700 border-r border-slate-100">{key}</td>
-                <td className={cn(
-                  "px-4 py-2.5 text-slate-500 max-w-[250px] break-all border-r border-slate-100",
-                  isDiff && oStr !== undefined && "text-red-700 bg-red-50/40 font-bold"
-                )}>
-                  {oStr !== undefined ? oStr : <span className="text-slate-300 italic">none</span>}
-                </td>
-                <td className={cn(
-                  "px-4 py-2.5 text-slate-500 max-w-[250px] break-all",
-                  isDiff && nStr !== undefined && "text-emerald-700 bg-emerald-50/40 font-bold"
-                )}>
-                  {nStr !== undefined ? nStr : <span className="text-slate-300 italic">none</span>}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+    {modal && <Modal title={modal === 'create' ? 'Add team member' : modal === 'reset' ? 'Reset password' : 'Delete account'} busy={busy} onClose={closeModal}>
+      {feedback}
+      {modal === 'create' && <form className={styles.form} onSubmit={event => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate(async () => {
+        const result = await createUserAction({ fullName: String(form.get('name')), email: String(form.get('email')), password: String(form.get('password')), role: String(form.get('role')), assignedStore: String(form.get('store')) });
+        if (!result.ok) throw new Error(result.error);
+        setUsers(current => [...current, result.data].sort((a, b) => a.full_name.localeCompare(b.full_name))); closeModal(); setNotice({ kind: 'success', text: 'Team member created successfully.' });
+      }); }}><p>Give a team member access to the retail workspace.</p><label>Full name<input name="name" required maxLength={150} autoComplete="name" /></label><label>Email address<input name="email" type="email" required maxLength={254} autoComplete="email" /></label><label>Initial password<input name="password" type="password" required minLength={8} maxLength={128} autoComplete="new-password" /><small>8–128 characters. Share the password through your approved channel.</small></label><div className={styles.formGrid}><label>Role<select name="role" defaultValue="operations_sales">{ROLES.filter(role => actor.role === 'super_admin' || role !== 'super_admin').map(role => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}</select></label><label>Store assignment<select name="store">{STORES.map(store => <option key={store} value={store}>{store === 'ALL' ? 'All stores' : store}</option>)}</select></label></div><div className={styles.modalActions}><button type="button" className={styles.secondary} disabled={busy} onClick={closeModal}>Cancel</button><button className={styles.primary} disabled={busy} type="submit"><Plus size={16} />{busy ? 'Creating...' : 'Create account'}</button></div></form>}
+      {modal === 'reset' && target && <form className={styles.form} onSubmit={event => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate(async () => { const result = await resetUserPasswordAction(target.id, String(form.get('password'))); if (!result.ok) throw new Error(result.error); closeModal(); setNotice({ kind: 'success', text: 'Password updated successfully.' }); }); }}><p>Set a new password for <strong>{target.full_name}</strong> ({target.email}).</p><label>New password<input name="password" type="password" required minLength={8} maxLength={128} autoComplete="new-password" /><small>Use 8–128 characters.</small></label><div className={styles.modalActions}><button type="button" className={styles.secondary} onClick={closeModal} disabled={busy}>Cancel</button><button type="submit" className={styles.primary} disabled={busy}><KeyRound size={16} />{busy ? 'Updating...' : 'Update password'}</button></div></form>}
+      {modal === 'delete' && target && <div className={styles.form}><p>Delete the account for <strong>{target.full_name}</strong> ({target.email})? This cannot be undone. To keep the account, change its status to inactive instead.</p><div className={styles.modalActions}><button type="button" className={styles.secondary} disabled={busy} onClick={closeModal}>Cancel</button><button type="button" className={styles.danger} disabled={busy} onClick={() => void mutate(async () => { const result = await deleteUserAction(target.id); if (!result.ok) throw new Error(result.error); setUsers(current => current.filter(user => user.id !== target.id)); closeModal(); setNotice({ kind: 'success', text: 'Account deleted.' }); })}><Trash2 size={16} />{busy ? 'Deleting...' : 'Delete account'}</button></div></div>}
+    </Modal>}
+    {selectedAudit && <Modal title="Activity details" busy={false} onClose={() => setSelectedAudit(null)}><div className={styles.auditSummary}><strong>{selectedAudit.action_type} · {selectedAudit.table_name.replaceAll('_', ' ')}</strong><p>{selectedAudit.user_email} · {date(selectedAudit.created_at)} WIB</p></div><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>{Array.from(new Set([...Object.keys(selectedAudit.old_values || {}), ...Object.keys(selectedAudit.new_values || {})])).sort().map(key => {
+      const before = JSON.stringify(selectedAudit.old_values?.[key]); const after = JSON.stringify(selectedAudit.new_values?.[key]);
+      return <tr key={key} className={before !== after ? styles.diffRow : undefined}><td>{key}</td><td className={styles.diffValue}>{before ?? '—'}</td><td className={styles.diffValue}>{after ?? '—'}</td></tr>;
+    })}</tbody></table></div><p className={styles.hint}>Sensitive credential fields are redacted.</p></Modal>}
+  </div>;
 }

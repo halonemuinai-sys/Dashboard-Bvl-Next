@@ -11,7 +11,7 @@ export async function login(formData: FormData) {
   const password = formData.get('password') as string || ''
 
   if (!email || !password) {
-    return redirect('/login?error=Email dan password wajib diisi')
+    return redirect('/login?error=Email and password are required')
   }
 
   const supabase = await createClient()
@@ -24,22 +24,22 @@ export async function login(formData: FormData) {
     .single()
 
   if (error || !dbUser) {
-    return redirect('/login?error=Email tidak terdaftar')
+    return redirect('/login?error=Email is not registered')
   }
 
   if (!dbUser.is_active) {
-    return redirect('/login?error=Akun dinonaktifkan')
+    return redirect('/login?error=Your account has been deactivated')
   }
 
   // Jika password di database belum diset (null/kosong), tolak
   if (!dbUser.password) {
-    return redirect('/login?error=Password belum dikonfigurasi. Hubungi Admin.')
+    return redirect('/login?error=Your password has not been configured. Please contact your administrator.')
   }
 
   // Verifikasi password hash
   const isMatch = await verifyPassword(password, dbUser.password)
   if (!isMatch) {
-    return redirect('/login?error=Password salah')
+    return redirect('/login?error=Incorrect password')
   }
 
   // Generate session token

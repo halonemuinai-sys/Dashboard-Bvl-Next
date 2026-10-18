@@ -1,0 +1,54 @@
+.page { min-height: 100svh; display: grid; grid-template-columns: 47% 53%; background: #faf9f6; color: #22352f; }
+.brandPanel { position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 52px 11% 30px; background: radial-gradient(ellipse at 65% 35%, #214b3f 0%, #102f28 48%, #0b231e 100%); color: #f5f0e6; }
+.brand { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; }
+.wordmark { font-family: 'Palatino Linotype', Palatino, Georgia, serif; font-size: 43px; line-height: 1; letter-spacing: .16em; }
+.brandSubtitle { margin-top: 13px; padding-left: 3px; font-size: 9px; letter-spacing: .48em; color: #d3c39d; }
+.art { position: relative; height: clamp(230px, 34vh, 370px); margin: 30px 0 28px; }
+.arch { position: absolute; width: 230px; height: 280px; max-height: 100%; left: 50%; bottom: 0; transform: translateX(-50%); border: 1px solid #bfa77366; border-radius: 130px 130px 0 0; background: linear-gradient(115deg, #ffffff05, #bfa7730a, transparent); box-shadow: 0 0 0 17px #bfa77304, 0 0 0 18px #bfa77328, 0 0 0 35px #bfa77303, 0 0 0 36px #bfa77319; }
+.orbit { position: absolute; width: 280px; height: 105px; border: 1px solid #c8b17a66; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%, -30%) rotate(-28deg); }
+.gem { position: absolute; width: 90px; height: 90px; left: 50%; top: 47%; transform: translate(-50%, -50%) rotate(45deg); border: 1px solid #d5bf8c; background: conic-gradient(from 0deg, #c5ad7230, #dccba566, #153c31 25%, #b69b6240 50%, #dbc59470 75%, #c5ad7230); box-shadow: 0 0 55px #cbb78218; }
+.gem::after { content: ''; position: absolute; inset: 16px; border: 1px solid #d5bf8c88; }
+.artCaption { position: absolute; bottom: -13px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 7px; letter-spacing: .3em; background: #123128; padding: 8px 12px; color: #bda978; }
+.brandMessage { position: relative; margin-top: auto; padding-top: 15px; }
+.eyebrow { font-size: 9px; font-weight: 600; letter-spacing: .22em; color: #87734b; }
+.brandMessage .eyebrow { color: #ccb98d; }
+.brandMessage h1 { margin: 20px 0 18px; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(36px, 3.6vw, 56px); line-height: 1.15; letter-spacing: -.035em; font-weight: 400; }
+.brandMessage em { font-weight: 400; color: #d9cba9; }
+.brandMessage p { font-size: 12px; line-height: 1.9; color: #b5c6bd; }
+.brandFooter { display: flex; justify-content: space-between; margin-top: 43px; border-top: 1px solid #ffffff1c; padding-top: 20px; font-size: 8px; letter-spacing: .2em; color: #a8b9af; }
+.formPanel { display: flex; flex-direction: column; padding: 36px 8%; min-width: 0; }
+.formHeader, .formFooter { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #777c73; font-size: 8px; letter-spacing: .12em; }
+.internalBadge { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border: 1px solid #dfdfd5; border-radius: 20px; padding: 8px 10px; font-size: 7px; }
+.formContent { width: 100%; max-width: 390px; margin: auto; padding: 70px 0; }
+.formContent h2 { font-family: Georgia, 'Times New Roman', serif; font-size: clamp(30px, 2.7vw, 41px); font-weight: 400; letter-spacing: -.045em; line-height: 1.2; margin: 17px 0; }
+.intro { color: #777d76; font-size: 13px; line-height: 1.85; max-width: 340px; }
+.form { display: flex; flex-direction: column; gap: 24px; margin-top: 35px; }
+.form label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 10px; }
+.labelRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.labelRow a { font-size: 10px; color: #78643d; text-underline-offset: 4px; }
+.labelRow a:hover { text-decoration: underline; }
+.inputWrap { display: flex; align-items: center; position: relative; color: #899288; }
+.inputWrap > svg { position: absolute; left: 16px; pointer-events: none; }
+.inputWrap input { width: 100%; min-width: 0; height: 54px; padding: 0 46px; border: 1px solid #dddfd6; border-radius: 7px; background: #fffefa; color: #22352f; font-size: 12px; outline: none; transition: border-color .2s, box-shadow .2s; }
+.inputWrap input::placeholder { color: #92968e; }
+.inputWrap input:focus { border-color: #8e9d89; box-shadow: 0 0 0 3px #385d4010; }
+.passwordToggle { position: absolute; right: 4px; display: grid; place-items: center; width: 44px; height: 44px; cursor: pointer; border-radius: 5px; }
+.passwordToggle:hover { color: #22352f; }
+.page button:focus-visible, .page a:focus-visible { outline: 2px solid #9e8250; outline-offset: 4px; }
+.submit { margin-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 54px; padding: 14px 20px; border-radius: 7px; color: #fffaf0; background: #183e32; box-shadow: 0 5px 12px #183e3212; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .2s, transform .2s; }
+.submit:hover:not(:disabled) { background: #255440; transform: translateY(-1px); }
+.submit:disabled { opacity: .65; cursor: wait; }
+.accessNote { display: flex; align-items: flex-start; gap: 11px; border-top: 1px solid #e4e4dc; margin-top: 33px; padding-top: 24px; color: #788375; }
+.accessNote svg { flex-shrink: 0; margin-top: 1px; }
+.accessNote p { font-size: 10px; line-height: 1.9; }
+.accessNote span { color: #85887f; }
+.formFooter { font-size: 9px; letter-spacing: 0; }
+.notice { display: flex; gap: 10px; padding: 13px; margin-top: 20px; border: 1px solid; border-radius: 7px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.notice svg { flex-shrink: 0; margin-top: 1px; }
+.success { color: #226342; background: #eff8f1; border-color: #cbe4d2; }
+.error { color: #9c3343; background: #fff2f3; border-color: #f1d2d7; }
+.loading { margin: auto; padding: 80px 0; font-size: 13px; }
+@media (min-width: 1500px) { .brandPanel { padding-left: 14%; padding-right: 14%; } }
+@media (max-width: 1000px) { .formPanel { padding: 30px 7%; } .formHeader > span:first-child { max-width: 120px; line-height: 1.8; } .brandPanel { padding-left: 10%; padding-right: 10%; } }
+@media (max-width: 760px) { .page { grid-template-columns: 1fr; } .brandPanel { padding: 30px 26px; } .wordmark { font-size: 32px; } .brandSubtitle { font-size: 7px; margin-top: 9px; } .art, .brandFooter, .brandMessage .eyebrow, .brandMessage p { display: none; } .brandMessage { padding-top: 0; margin-top: 22px; } .brandMessage h1 { font-size: 29px; margin: 0; } .brandMessage h1 br { display: none; } .brandMessage em { margin-left: 6px; } .formPanel { padding: 24px; } .formHeader { display: none; } .formContent { padding: 18px 0 40px; max-width: 420px; } .formContent h2 { font-size: 33px; } .formFooter { max-width: 420px; width: 100%; align-self: center; padding-bottom: 5px; } }
+@media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; } }

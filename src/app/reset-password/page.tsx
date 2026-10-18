@@ -50,7 +50,7 @@ function ResetPasswordContent() {
   useEffect(() => {
     if (state?.success) {
       const timer = setTimeout(() => {
-        router.push('/login?success=Password berhasil diperbarui! Silakan masuk dengan password baru Anda.');
+        router.push('/login?success=Password updated successfully! Please sign in with your new password.');
       }, 2500);
       return () => clearTimeout(timer);
     }
