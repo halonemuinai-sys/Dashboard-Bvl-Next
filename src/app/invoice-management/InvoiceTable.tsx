@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useUserAccess } from '@/lib/user-access-context';
 import {
   ChevronDown,
   ChevronRight,
@@ -85,6 +86,9 @@ export default function InvoiceTable({
   savedItemIds,
   savingInvoiceNo,
 }: Props) {
+  // Card commission is finance data: only admin and finance see the amounts.
+  const { role } = useUserAccess();
+  const canViewCardComm = isAdmin || role === 'finance';
   const [editingCbTransNo, setEditingCbTransNo] = useState<string | null>(null);
   const [cbInputVal, setCbInputVal] = useState('');
 
@@ -117,7 +121,7 @@ export default function InvoiceTable({
             <th className="py-3 px-4 text-center">Item / Qty</th>
             <th className="py-3 px-4 text-right">Gross Sales</th>
             <th className="py-3 px-4 text-right">Discount</th>
-            <th className="py-3 px-4 text-right text-emerald-700">Total Comm</th>
+            <th className="py-3 px-4 text-right text-emerald-700">{canViewCardComm ? 'Total Comm' : 'POS Payment'}</th>
             <th className="py-3 px-4 text-right bg-blue-100/40 text-blue-800">Net Sales</th>
             <th className="py-3 px-3 text-center">Details</th>
             {isAdmin && <th className="py-3 px-3 text-center text-rose-500 w-12">Delete</th>}
@@ -313,7 +317,7 @@ export default function InvoiceTable({
                     {/* Total Commission (Sum of Items) */}
                     <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
                       <div className="flex items-center justify-end gap-1.5">
-                        {inv.total_comm > 0 ? <Amt value={inv.total_comm} /> : <span className="text-slate-300 font-normal">—</span>}
+                        {canViewCardComm && (inv.total_comm > 0 ? <Amt value={inv.total_comm} /> : <span className="text-slate-300 font-normal">—</span>)}
                         <button
                           type="button"
                           onClick={() => onOpenPayment(inv)}
@@ -393,7 +397,7 @@ export default function InvoiceTable({
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
                               <div className="text-[11px] text-slate-400 font-mono">
-                                Invoice subtotal: <strong className="text-blue-700"><Amt value={inv.total_net} /></strong> · Total Comm: <strong className="text-emerald-700"><Amt value={inv.total_comm} /></strong>
+                                Invoice subtotal: <strong className="text-blue-700"><Amt value={inv.total_net} /></strong>{canViewCardComm && <> · Total Comm: <strong className="text-emerald-700"><Amt value={inv.total_comm} /></strong></>}
                               </div>
                               <button
                                 type="button"
@@ -432,9 +436,9 @@ export default function InvoiceTable({
                                   <th className="py-2 px-3 text-right">Qty</th>
                                   <th className="py-2 px-3 text-right">Gross Price</th>
                                   <th className="py-2 px-3 text-right">Discount</th>
-                                  <th className={cn("py-2 px-3 text-right", isUnlocked ? "text-amber-600 font-bold" : "text-slate-500")}>
+                                  {canViewCardComm && (<th className={cn("py-2 px-3 text-right", isUnlocked ? "text-amber-600 font-bold" : "text-slate-500")}>
                                     Card Comm {isUnlocked ? '✎' : '🔒'}
-                                  </th>
+                                  </th>)}
                                   <th className="py-2 px-3 text-right font-bold text-blue-700">Net Sales</th>
                                 </tr>
                               </thead>
@@ -495,7 +499,8 @@ export default function InvoiceTable({
                                       <td className="py-2 px-3 text-right font-mono text-slate-600"><Amt value={it.gross_sales} /></td>
                                       <td className="py-2 px-3 text-right font-mono text-rose-500">{it.val_disc > 0 ? <Amt value={it.val_disc} /> : '—'}</td>
 
-                                      {/* Comm Edit Field (per item, old method) */}
+                                      {/* Comm Edit Field (per item, old method) — admin/finance only */}
+                                      {canViewCardComm && (
                                       <td className={cn("py-1.5 px-3 text-right", (!commVal || commVal === '0') && "bg-emerald-50/40")}>
                                         {isUnlocked ? (
                                           <input
@@ -528,6 +533,7 @@ export default function InvoiceTable({
                                           </span>
                                         )}
                                       </td>
+                                      )}
 
                                       <td className="py-2 px-3 text-right font-mono font-bold text-blue-700">
                                         <Amt value={it.net_sales} />

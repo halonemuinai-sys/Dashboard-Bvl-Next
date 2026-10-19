@@ -3,6 +3,7 @@
 import { Receipt, CalendarDays, RefreshCw, Lock, LockOpen, CloudDownload, FileSpreadsheet, FileDown, ChevronDown, Loader2, MapPin, Layers3, Package, CheckCircle2, ArrowUpRight } from 'lucide-react';
 import Amt from '@/components/Amt';
 import { cn } from '@/lib/utils';
+import { useUserAccess } from '@/lib/user-access-context';
 import styles from './InvoiceOverview.module.css';
 
 interface Props {
@@ -16,6 +17,9 @@ interface Props {
 const control = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40';
 
 export default function InvoiceOverview(p: Props) {
+  // Card commission totals are finance data: only admin and finance see them.
+  const { isAdmin, role } = useUserAccess();
+  const canViewCardComm = isAdmin || role === 'finance';
   const years = [...new Set([Number(p.year), new Date().getFullYear(), 2026, 2025, 2024, 2023])].sort((a, b) => b - a);
   const completed = p.summary.totalInvoices - p.missingCashBills;
   const progress = p.summary.totalInvoices ? Math.round(completed / p.summary.totalInvoices * 100) : 0;
@@ -65,6 +69,6 @@ export default function InvoiceOverview(p: Props) {
       <div className={cn(styles.card, "rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-200/30")}><div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-500">Units sold</p><Package size={17} className="text-blue-500" /></div><p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900"><span key={p.summary.totalQty} className={styles.value}>{p.summary.totalQty.toLocaleString('en-US')}</span></p><p className="mt-3 text-[11px] text-slate-400">Quantity across invoice items</p></div>
       <div className={cn(styles.card, "rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-200/30")}><div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-500">Cash bill coverage</p><CheckCircle2 size={17} className="text-emerald-500" /></div><div className="mt-2 flex items-baseline gap-2"><p className="text-2xl font-semibold tracking-tight text-slate-900"><span key={progress} className={styles.value}>{progress}%</span></p><span className="text-[11px] text-slate-400">{completed} of {p.summary.totalInvoices}</span></div><div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100"><div className={cn(styles.progress, "h-full rounded-full bg-emerald-500")} style={{ width: `${progress}%` }} /></div><p className="mt-2 text-[11px] text-slate-400">{p.missingCashBills ? `${p.missingCashBills} invoices need a cash bill number` : 'No missing cash bill numbers'}</p></div>
     </section>
-    <div className={cn(styles.totals, "flex flex-wrap items-center gap-x-7 gap-y-2 px-1 text-xs text-slate-500")}><span>Gross sales <strong className="ml-2 font-semibold text-slate-700"><Amt value={p.summary.totalGross} compact /></strong></span><span>Discounts <strong className="ml-2 font-semibold text-rose-600"><Amt value={p.summary.totalDisc} compact /></strong></span><span>Card commission <strong className="ml-2 font-semibold text-slate-700"><Amt value={p.summary.totalComm} compact /></strong></span><span className="ml-auto text-[10px] uppercase tracking-wider text-slate-400">Amounts in IDR</span></div>
+    <div className={cn(styles.totals, "flex flex-wrap items-center gap-x-7 gap-y-2 px-1 text-xs text-slate-500")}><span>Gross sales <strong className="ml-2 font-semibold text-slate-700"><Amt value={p.summary.totalGross} compact /></strong></span><span>Discounts <strong className="ml-2 font-semibold text-rose-600"><Amt value={p.summary.totalDisc} compact /></strong></span>{canViewCardComm && <span>Card commission <strong className="ml-2 font-semibold text-slate-700"><Amt value={p.summary.totalComm} compact /></strong></span>}<span className="ml-auto text-[10px] uppercase tracking-wider text-slate-400">Amounts in IDR</span></div>
   </>;
 }

@@ -15,6 +15,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { useUserAccess } from '@/lib/user-access-context';
 import { InvoiceHeader } from '@/services/dashboard/invoiceService';
 import {
   PAYMENT_TYPES,
@@ -57,6 +58,10 @@ export default function PosPaymentModal({
   const [creditConfig, setCreditConfig] = useState<CreditConfig | undefined>();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // MDR rates and card commission are finance data: store managers enter payments
+  // but only admin and finance see the computed MDR / commission figures.
+  const { isAdmin, role } = useUserAccess();
+  const canViewCardComm = isAdmin || role === 'finance';
 
   // Initialize or pre-populate splits when modal opens
   useEffect(() => {
@@ -271,11 +276,11 @@ export default function PosPaymentModal({
             </span>
             <div>
               <div className="text-sm font-bold flex items-center gap-2">
-                <span>Rincian Pembayaran POS & Card Comm</span>
+                <span>{canViewCardComm ? 'Rincian Pembayaran POS & Card Comm' : 'Rincian Pembayaran POS'}</span>
                 <span className="font-mono text-emerald-400 font-extrabold">{invoice.trans_no}</span>
               </div>
               <div className="text-[11px] text-slate-400">
-                SOP Point of Sale (POS) & Smart MDR Rule Engine — Butik {invoice.location || 'Bvlgari'}
+                {canViewCardComm ? 'SOP Point of Sale (POS) & Smart MDR Rule Engine' : 'SOP Point of Sale (POS)'} — Butik {invoice.location || 'Bvlgari'}
               </div>
             </div>
           </div>
@@ -318,7 +323,7 @@ export default function PosPaymentModal({
                 Tabel Opsi Pembayaran (POS Split Payment)
               </h3>
               <p className="text-[11px] text-slate-500">
-                Pilih kombinasi metode pembayaran sesuai struk fisik EDC. Sistem otomatis menentukan persentase MDR dan menghitung Card Comm.
+                Pilih kombinasi metode pembayaran sesuai struk fisik EDC.{canViewCardComm && ' Sistem otomatis menentukan persentase MDR dan menghitung Card Comm.'}
               </p>
             </div>
             <button
@@ -344,8 +349,12 @@ export default function PosPaymentModal({
                   <th className="py-2.5 px-3 min-w-[120px]">Bank</th>
                   <th className="py-2.5 px-3 min-w-[110px]">Card Type</th>
                   <th className="py-2.5 px-3 text-right min-w-[150px]">Amount (IDR)</th>
-                  <th className="py-2.5 px-3 text-center bg-emerald-50/70 text-emerald-950 border-l border-emerald-200 whitespace-nowrap min-w-[100px]">Auto MDR</th>
-                  <th className="py-2.5 px-4 text-right bg-emerald-50/70 text-emerald-950 whitespace-nowrap min-w-[160px]">Card Comm (IDR)</th>
+                  {canViewCardComm && (
+                    <>
+                      <th className="py-2.5 px-3 text-center bg-emerald-50/70 text-emerald-950 border-l border-emerald-200 whitespace-nowrap min-w-[100px]">Auto MDR</th>
+                      <th className="py-2.5 px-4 text-right bg-emerald-50/70 text-emerald-950 whitespace-nowrap min-w-[160px]">Card Comm (IDR)</th>
+                    </>
+                  )}
                   <th className="py-2.5 px-2 text-center w-8"></th>
                 </tr>
               </thead>
@@ -466,15 +475,19 @@ export default function PosPaymentModal({
                           />
                         </td>
 
-                        {/* Auto MDR % */}
-                        <td className="py-2.5 px-3 text-center font-mono font-extrabold text-emerald-950 bg-emerald-50/70 border-l border-emerald-200 min-w-[100px]">
-                          {(row.mdrPct * 100).toFixed(2)}%
-                        </td>
+                        {canViewCardComm && (
+                          <>
+                            {/* Auto MDR % */}
+                            <td className="py-2.5 px-3 text-center font-mono font-extrabold text-emerald-950 bg-emerald-50/70 border-l border-emerald-200 min-w-[100px]">
+                              {(row.mdrPct * 100).toFixed(2)}%
+                            </td>
 
-                        {/* Calculated Card Comm (IDR) */}
-                        <td className="py-2.5 px-4 text-right font-mono font-black text-slate-900 bg-emerald-50/70 min-w-[160px]">
-                          Rp {formatCurrency(row.cardComm)}
-                        </td>
+                            {/* Calculated Card Comm (IDR) */}
+                            <td className="py-2.5 px-4 text-right font-mono font-black text-slate-900 bg-emerald-50/70 min-w-[160px]">
+                              Rp {formatCurrency(row.cardComm)}
+                            </td>
+                          </>
+                        )}
 
                         {/* Remove Action */}
                         <td className="py-2.5 px-2 text-center">
@@ -493,7 +506,7 @@ export default function PosPaymentModal({
                       {/* Warning & Instructions Row (if any) */}
                       {(row.warningNote || row.processMethod === 'MANUAL_FORM') && (
                         <tr className="bg-slate-50 text-[10px]">
-                          <td colSpan={10} className="py-1 px-4 text-slate-600">
+                          <td colSpan={canViewCardComm ? 10 : 8} className="py-1 px-4 text-slate-600">
                             <div className="flex flex-wrap items-center gap-3">
                               {row.processMethod === 'MANUAL_FORM' && (
                                 <span className="inline-flex items-center gap-1 font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 border border-slate-300">
@@ -568,17 +581,19 @@ export default function PosPaymentModal({
 
             {/* Total Comm Output */}
             <div className="flex items-center gap-5 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0">
-              <div className="text-right">
-                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                  Total Card Comm Terhitung
+              {canViewCardComm && (
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    Total Card Comm Terhitung
+                  </div>
+                  <div className="text-lg font-mono font-black text-emerald-800">
+                    Rp {formatCurrency(totalComm)}
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    MDR Efektif: {effectiveMdr.toFixed(2)}%
+                  </div>
                 </div>
-                <div className="text-lg font-mono font-black text-emerald-800">
-                  Rp {formatCurrency(totalComm)}
-                </div>
-                <div className="text-[10px] text-slate-500">
-                  MDR Efektif: {effectiveMdr.toFixed(2)}%
-                </div>
-              </div>
+              )}
 
               <button
                 type="button"
@@ -590,7 +605,7 @@ export default function PosPaymentModal({
                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 hover:scale-[1.02] active:scale-[0.98]"
                     : "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
                 )}
-                title={!isBalanced ? "Jumlah pembayaran harus seimbang dengan total tagihan invoice" : "Simpan dan terapkan komisi ke item invoice"}
+                title={!isBalanced ? "Jumlah pembayaran harus seimbang dengan total tagihan invoice" : canViewCardComm ? "Simpan dan terapkan komisi ke item invoice" : "Simpan rincian pembayaran"}
               >
                 {saving && <Loader2 className="w-4 h-4 animate-spin text-white" />}
                 <span>Set Payment & Simpan</span>
@@ -611,7 +626,7 @@ export default function PosPaymentModal({
         {/* Modal Footer Controls */}
         <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 text-xs text-slate-500">
           <div>
-            * Nilai komisi akan dibagikan secara proporsional ke {invoice.items.length} item pada nota ini.
+            {canViewCardComm && <>* Nilai komisi akan dibagikan secara proporsional ke {invoice.items.length} item pada nota ini.</>}
           </div>
           <button
             type="button"

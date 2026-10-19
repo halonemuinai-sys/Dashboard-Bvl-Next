@@ -11,6 +11,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { useUserAccess } from '@/lib/user-access-context';
 import { InvoiceHeader } from '@/services/dashboard/invoiceService';
 import { PaymentSplitRow } from '@/services/dashboard/paymentEngine';
 
@@ -25,7 +26,11 @@ export default function InvoicePaymentSection({
   splits,
   onOpenPosPayment,
 }: Props) {
-  const [showInternalComm, setShowInternalComm] = useState(true);
+  const [showToggle, setShowInternalComm] = useState(true);
+  // Bank fees (MDR / card comm) are visible only to admin and finance; others never get the toggle.
+  const { isAdmin, role } = useUserAccess();
+  const canViewCardComm = isAdmin || role === 'finance';
+  const showInternalComm = canViewCardComm && showToggle;
 
   const hasSplits = Boolean(splits && splits.length > 0);
   const totalPaid = hasSplits ? splits!.reduce((acc, r) => acc + (r.amount || 0), 0) : 0;
@@ -64,10 +69,10 @@ export default function InvoicePaymentSection({
 
         {/* Action Controls (Screen Only) */}
         <div className="no-print-area flex items-center gap-2">
-          {hasSplits && (
+          {hasSplits && canViewCardComm && (
             <button
               type="button"
-              onClick={() => setShowInternalComm(!showInternalComm)}
+              onClick={() => setShowInternalComm(!showToggle)}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
               title="Show or hide bank fee details"
             >
@@ -217,9 +222,11 @@ export default function InvoicePaymentSection({
                 </div>
               </>
             ) : (
-              <div className="sm:col-span-2 flex items-center justify-end text-[11px] text-slate-400 italic">
-                Internal bank fees are hidden from this view and printout.
-              </div>
+              canViewCardComm ? (
+                <div className="sm:col-span-2 flex items-center justify-end text-[11px] text-slate-400 italic">
+                  Internal bank fees are hidden from this view and printout.
+                </div>
+              ) : null
             )}
           </div>
         </div>
@@ -235,8 +242,11 @@ export default function InvoicePaymentSection({
                 No POS payment details yet
               </div>
               <div className="text-[11px] text-slate-500">
-                Add payment methods, bank and EDC details. Currently recorded bank fees:{' '}
-                <strong className="font-mono text-slate-700">Rp {formatCurrency(invoice.total_comm || 0)}</strong>.
+                Add payment methods, bank and EDC details.
+                {canViewCardComm && (
+                  <> Currently recorded bank fees:{' '}
+                    <strong className="font-mono text-slate-700">Rp {formatCurrency(invoice.total_comm || 0)}</strong>.</>
+                )}
               </div>
             </div>
           </div>
