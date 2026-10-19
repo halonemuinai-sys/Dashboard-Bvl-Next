@@ -86,7 +86,6 @@ const menuGroups = [
       { name: 'Invoice Management',  icon: Receipt,         href: '/invoice-management', badge: 'POS', badgeColor: 'bg-blue-600' },
       { name: 'Installment & MDR Guide', icon: CreditCard,  href: '/installment-guide', badge: 'GUIDE', badgeColor: 'bg-emerald-600' },
       { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions', badge: 'INPUT', badgeColor: 'bg-blue-600' },
-      { name: 'DP & SVC Trans.',     icon: ClipboardList,   href: '/monthly-dps-svc', badge: 'NEW', badgeColor: 'bg-violet-500' },
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
       { name: 'Sales Journal',       icon: NotebookPen,     href: '/sales-journal', badge: 'NEW', badgeColor: 'bg-blue-600' },
       { name: 'Crossing Sales',      icon: Repeat,          href: '/crossing-sales' },

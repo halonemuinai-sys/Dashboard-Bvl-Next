@@ -12,6 +12,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { runSalesSync } from '@/lib/run-sales-sync';
+import DpSvcPanel from '@/app/monthly-dps-svc/DpSvcPanel';
 import { filterInvoices } from '@/lib/invoice-report-filters';
 import { useSearchParams } from 'next/navigation';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -46,7 +48,11 @@ export default function InvoiceManagementPage() {
 
 function InvoiceManagementContent() {
   const params = useSearchParams();
-  const { assignedStore, isAdmin, userEmail } = useUserAccess();
+  const { assignedStore, isAdmin, userEmail, canAccess } = useUserAccess();
+  // DP & SVC tab reuses the standalone page's panel; shown only to users allowed to open that page.
+  const canViewDpsSvc = canAccess('/monthly-dps-svc');
+  const [activeView, setActiveView] = useState<'invoices' | 'dps'>('invoices');
+  const [dpsRefreshKey, setDpsRefreshKey] = useState(0);
   const isStoreScoped = Boolean(assignedStore && assignedStore !== 'ALL');
 
   const today = new Date();
@@ -145,10 +151,12 @@ function InvoiceManagementContent() {
     setSyncResult(null);
     try {
       const monthNum = MONTHS.indexOf(month) + 1;
-      const res = await fetch(`/api/cron/sync-sales?month=${monthNum}&year=${year}`, { method: 'POST' });
-      const data = await res.json();
+      const data = await runSalesSync(monthNum, Number(year));
       setSyncResult(data);
-      if (data.success) await fetchData();
+      if (data.success) {
+        await fetchData();
+        setDpsRefreshKey(key => key + 1);
+      }
     } catch (err: any) {
       setSyncResult({ success: false, error: err.message });
     } finally {
@@ -519,8 +527,24 @@ function InvoiceManagementContent() {
         </div>
       )}
 
+      {canViewDpsSvc && (
+        <div role="tablist" aria-label="Invoice views" className="flex border-b border-slate-200">
+          {([['invoices', 'Sales invoices'], ['dps', 'DP & Service']] as const).map(([key, label]) => (
+            <button key={key} type="button" role="tab" aria-selected={activeView === key} onClick={() => setActiveView(key)}
+              className={cn('px-5 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors cursor-pointer',
+                activeView === key ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700')}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {canViewDpsSvc && activeView === 'dps' && (
+        <DpSvcPanel month={month} year={year} embedded refreshKey={dpsRefreshKey} />
+      )}
+
       {/* Main Table Container */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
+      {activeView === 'invoices' && <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div><div className="flex items-center gap-2.5"><h2 className="text-sm font-bold text-slate-900">Invoice register</h2><span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500">{filtered.length} invoices</span></div><p className="mt-1 text-xs text-slate-400">Expand an invoice to review its items, payments and supporting details.</p></div>
           <div className="flex items-center gap-1">
@@ -599,7 +623,7 @@ function InvoiceManagementContent() {
             </button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {depositInvoice && <InvoiceDepositModal key={depositInvoice.trans_no} invoice={depositInvoice} editable={isUnlocked} onClose={() => setDepositInvoice(null)} onChanged={links => {
         setInvoices(current => current.map(inv => inv.trans_no === depositInvoice.trans_no ? { ...inv, depositLinks: links } : inv));

@@ -772,7 +772,7 @@ export default function OperationsSalesPage() {
           {[
             { href: '/monthly-transactions', icon: ClipboardList, label: 'Monthly Trans.', sub: 'Input & Edit Sales', color: 'from-blue-500 to-cyan-600', shadow: 'shadow-blue-500/20' },
             { href: '/daily-report', icon: CalendarIcon, label: 'Daily Report', sub: 'Day-to-day Status', color: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-500/20' },
-            { href: '/monthly-dps-svc', icon: Layers, label: 'DP & SVC', sub: 'Down Payment & Service', color: 'from-teal-500 to-cyan-600', shadow: 'shadow-teal-500/20' },
+            { href: '/invoice-management', icon: Layers, label: 'Invoices', sub: 'Sales, DP & Service', color: 'from-teal-500 to-cyan-600', shadow: 'shadow-teal-500/20' },
             { href: '/crossing-sales', icon: Repeat, label: 'Crossing Sales', sub: 'Inter-store Transfers', color: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/20' },
             { href: '/advisor-setup', icon: Users, label: 'Setup Targets', sub: 'Store & Staff Targets', color: 'from-rose-500 to-pink-600', shadow: 'shadow-rose-500/20' },
           ].map(item => (
