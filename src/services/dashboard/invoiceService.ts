@@ -26,6 +26,7 @@ export interface InvoiceMeta {
   after_sales_support: string;
   dwa_no: string;
   other_remarks: string;
+  entitle?: string;
   updated_by?: string;
   updated_at?: string;
 }
@@ -96,6 +97,7 @@ export async function getInvoices(month: string, year: number): Promise<InvoiceH
         after_sales_support: m.after_sales_support || '',
         dwa_no: m.dwa_no || '',
         other_remarks: m.other_remarks || '',
+        entitle: m.entitle || '',
         updated_by: m.updated_by || '',
         updated_at: m.updated_at || '',
       });
@@ -209,6 +211,23 @@ export async function saveInvoiceMeta(
 
   if (error) throw error;
   return data as InvoiceMeta;
+}
+
+// ── Entitle dropdown: active Customer Advisors (managed in Setup & Targets) ──
+
+export interface EntitleAdvisor {
+  name: string;
+  home_location: string;
+}
+
+export async function getEntitleAdvisors(): Promise<EntitleAdvisor[]> {
+  const { data, error } = await supabase
+    .from('advisors')
+    .select('name, home_location')
+    .eq('is_active', true)
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return (data || []).map((a: any) => ({ name: a.name, home_location: a.home_location || '' }));
 }
 
 export async function updateInvoiceLocation(

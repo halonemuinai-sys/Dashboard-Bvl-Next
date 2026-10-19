@@ -828,6 +828,7 @@ export default function InvoiceManagementPage() {
         invoice={selectedInvoiceForView}
         isOpen={Boolean(selectedInvoiceForView)}
         onClose={() => setSelectedInvoiceForView(null)}
+        onMetaSaved={handleSaveMeta}
         onInvoiceUpdated={(updatedTransNo, newTotalComm) => {
           setInvoices(prev => prev.map(inv => {
             if (inv.trans_no === updatedTransNo) {

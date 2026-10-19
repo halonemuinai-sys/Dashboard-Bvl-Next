@@ -15,21 +15,24 @@ import {
   ShieldCheck,
   Tag,
   Phone,
-  CreditCard
+  CreditCard,
+  FileEdit
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
-import { InvoiceHeader } from '@/services/dashboard/invoiceService';
+import { InvoiceHeader, InvoiceMeta } from '@/services/dashboard/invoiceService';
 import { extractPaymentAndVerification } from '@/services/dashboard/paymentEngine';
 import { supabase } from '@/lib/supabase';
 import { useUserAccess } from '@/lib/user-access-context';
 import InvoicePaymentSection from './components/InvoicePaymentSection';
 import PosPaymentModal from './PosPaymentModal';
+import InvoiceMetaModal from './InvoiceMetaModal';
 
 interface Props {
   invoice: InvoiceHeader | null;
   isOpen: boolean;
   onClose: () => void;
   onInvoiceUpdated?: (updatedTransNo: string, newTotalComm: number) => void;
+  onMetaSaved?: (transNo: string, updatedMeta: InvoiceMeta) => void;
 }
 
 const STORE_INFO: Record<string, { title: string; subtitle: string; address: string[]; phone: string }> = {
@@ -86,10 +89,11 @@ const formatDateLong = (iso: string) => {
   });
 };
 
-export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceUpdated }: Props) {
+export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceUpdated, onMetaSaved }: Props) {
   const [copied, setCopied] = useState(false);
   const [activeInvoice, setActiveInvoice] = useState<InvoiceHeader | null>(invoice);
   const [isPosModalOpen, setIsPosModalOpen] = useState(false);
+  const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
   const { userEmail } = useUserAccess();
 
   useEffect(() => {
@@ -149,6 +153,11 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
     }
   };
 
+  const handleMetaSaved = (transNo: string, updatedMeta: InvoiceMeta) => {
+    setActiveInvoice(prev => (prev ? { ...prev, meta: updatedMeta } : prev));
+    onMetaSaved?.(transNo, updatedMeta);
+  };
+
   return (
     <div
       className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
@@ -205,6 +214,16 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsMetaModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              title="Edit Data Penunjang Faktur"
+            >
+              <FileEdit className="w-3.5 h-3.5" />
+              <span>Data Penunjang</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsPosModalOpen(true)}
@@ -305,12 +324,6 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                     <td className="py-1 text-slate-500 font-medium">Lokasi Boutique:</td>
                     <td className="py-1 font-bold text-slate-900">{activeInvoice.location || '—'}</td>
                   </tr>
-                  {activeInvoice.meta.dwa_no && (
-                    <tr>
-                      <td className="py-1 text-slate-500 font-medium">No. Approval DWA:</td>
-                      <td className="py-1 font-mono font-bold text-purple-700">{activeInvoice.meta.dwa_no}</td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -420,26 +433,48 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
             {/* Supporting Remarks / Notes */}
             <div className="space-y-3">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Catatan Penjualan & Layanan
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Data Penunjang
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMetaModalOpen(true)}
+                  className="no-print-area flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                >
+                  <FileEdit className="w-3 h-3" />
+                  Edit
+                </button>
               </div>
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
-                <div>
-                  <span className="font-semibold text-slate-600">Alasan Diskon: </span>
-                  <span className="text-slate-800">
-                    {activeInvoice.meta.discount_given_reason || '—'}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-semibold text-slate-600">Layanan After Sales: </span>
-                  <span className="text-slate-800">
-                    {activeInvoice.meta.after_sales_support || 'Standar Garansi Resmi Bvlgari'}
-                  </span>
-                </div>
-                {userNote && (
-                  <div>
-                    <span className="font-semibold text-slate-600">Catatan Lain: </span>
-                    <span className="text-slate-800">{userNote}</span>
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
+                <table className="w-full">
+                  <tbody>
+                    <tr>
+                      <td className="py-1 pr-2 text-slate-500 font-medium align-top w-36">Entitle (CA)</td>
+                      <td className="py-1 font-bold text-teal-800">{activeInvoice.meta.entitle || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 pr-2 text-slate-500 font-medium align-top">No. Approval DWA</td>
+                      <td className="py-1 font-mono font-bold text-purple-700">{activeInvoice.meta.dwa_no || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 pr-2 text-slate-500 font-medium align-top">Alasan Diskon</td>
+                      <td className="py-1 text-slate-800">{activeInvoice.meta.discount_given_reason || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 pr-2 text-slate-500 font-medium align-top">Layanan After Sales</td>
+                      <td className="py-1 text-slate-800">{activeInvoice.meta.after_sales_support || 'Standar Garansi Resmi Bvlgari'}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 pr-2 text-slate-500 font-medium align-top">Catatan Lain</td>
+                      <td className="py-1 text-slate-800 whitespace-pre-line">{userNote || '—'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {activeInvoice.meta.updated_by && (
+                  <div className="mt-2 pt-2 border-t border-slate-200 text-[10px] text-slate-400">
+                    Terakhir diubah oleh <span className="font-semibold text-slate-600">{activeInvoice.meta.updated_by}</span>
+                    {activeInvoice.meta.updated_at && <> · {new Date(activeInvoice.meta.updated_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</>}
                   </div>
                 )}
               </div>
@@ -516,6 +551,15 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
           userEmail={userEmail}
         />
       )}
+
+      {/* Data Penunjang editor, opened from within the invoice view */}
+      <InvoiceMetaModal
+        invoice={activeInvoice}
+        isOpen={isMetaModalOpen}
+        onClose={() => setIsMetaModalOpen(false)}
+        onSave={handleMetaSaved}
+        userEmail={userEmail}
+      />
     </div>
   );
 }

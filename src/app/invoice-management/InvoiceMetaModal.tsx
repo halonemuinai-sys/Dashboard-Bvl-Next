@@ -13,10 +13,13 @@ import {
   ShieldCheck,
   FileEdit,
   Clock,
-  User
+  User,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { InvoiceHeader, InvoiceMeta, saveInvoiceMeta } from '@/services/dashboard/invoiceService';
+import {
+  InvoiceHeader, InvoiceMeta, EntitleAdvisor, saveInvoiceMeta, getEntitleAdvisors,
+} from '@/services/dashboard/invoiceService';
 
 interface Props {
   invoice: InvoiceHeader | null;
@@ -56,16 +59,40 @@ export default function InvoiceMetaModal({
   const [discountReason, setDiscountReason] = useState('');
   const [afterSales, setAfterSales] = useState('');
   const [otherRemarks, setOtherRemarks] = useState('');
+  const [entitle, setEntitle] = useState('');
+  const [advisors, setAdvisors] = useState<EntitleAdvisor[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   useEffect(() => {
+    if (!isOpen) return;
+    getEntitleAdvisors().then(setAdvisors).catch(err => console.error('Failed to load advisors:', err));
+  }, [isOpen]);
+
+  // Group dropdown options by boutique so a CA is easy to find
+  const advisorGroups = advisors.reduce<Record<string, string[]>>((acc, a) => {
+    const store = a.home_location || 'Lainnya';
+    (acc[store] ||= []).push(a.name);
+    return acc;
+  }, {});
+
+  // other_remarks also stores machine blocks ([PAYMENT_SPLITS]/[FINANCE_VERIFY]) after the user's note;
+  // only the note is editable here, the system part is re-appended on save so POS splits aren't lost.
+  const [systemSuffix, setSystemSuffix] = useState('');
+
+  useEffect(() => {
     if (invoice && isOpen) {
+      const raw = invoice.meta.other_remarks || '';
+      const markerIdx = [raw.indexOf('[PAYMENT_SPLITS]:'), raw.indexOf('[FINANCE_VERIFY]:')]
+        .filter(i => i >= 0)
+        .reduce((min, i) => Math.min(min, i), raw.length);
       setCashBillNo(invoice.meta.cash_bill_no || '');
       setDwaNo(invoice.meta.dwa_no || '');
       setDiscountReason(invoice.meta.discount_given_reason || '');
       setAfterSales(invoice.meta.after_sales_support || '');
-      setOtherRemarks(invoice.meta.other_remarks || '');
+      setOtherRemarks(raw.slice(0, markerIdx).trim());
+      setSystemSuffix(raw.slice(markerIdx).trim());
+      setEntitle(invoice.meta.entitle || '');
       setSavedSuccess(false);
     }
   }, [invoice, isOpen]);
@@ -99,7 +126,8 @@ export default function InvoiceMetaModal({
           dwa_no: dwaNo.trim(),
           discount_given_reason: discountReason.trim(),
           after_sales_support: afterSales.trim(),
-          other_remarks: otherRemarks.trim(),
+          other_remarks: [otherRemarks.trim(), systemSuffix].filter(Boolean).join('\n'),
+          entitle,
         },
         userEmail
       );
@@ -187,6 +215,33 @@ export default function InvoiceMetaModal({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Section 1b: Entitle — additional data; the original Sales Advisor (salesman) stays unchanged */}
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+              <Users className="w-3.5 h-3.5 text-teal-600" />
+              Entitle (Customer Advisor)
+            </label>
+            <select
+              value={entitle}
+              onChange={e => setEntitle(e.target.value)}
+              aria-label="Pilih Customer Advisor entitle"
+              className="w-full text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition-all cursor-pointer"
+            >
+              <option value="">— Pilih Customer Advisor —</option>
+              {Object.entries(advisorGroups).map(([store, names]) => (
+                <optgroup key={store} label={store}>
+                  {names.map(n => <option key={n} value={n}>{n}</option>)}
+                </optgroup>
+              ))}
+              {entitle && !advisors.some(a => a.name === entitle) && (
+                <option value={entitle}>{entitle} (tidak aktif)</option>
+              )}
+            </select>
+            <p className="text-[10px] text-slate-400">
+              Data tambahan — Sales Advisor asli transaksi tetap: <span className="font-semibold text-slate-600">{invoice.salesman || '—'}</span>
+            </p>
           </div>
 
           {/* Section 2: Alasan Diskon (Discount Given Reason) */}
