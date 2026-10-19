@@ -16,7 +16,9 @@ import {
   ShoppingBag,
   User,
   MapPin,
-  CreditCard
+  CreditCard,
+  Link2,
+  CircleCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
@@ -31,6 +33,7 @@ interface Props {
   onEditMeta: (invoice: InvoiceHeader) => void;
   onViewInvoice: (invoice: InvoiceHeader) => void;
   onOpenPayment: (invoice: InvoiceHeader) => void;
+  onOpenDeposits: (invoice: InvoiceHeader) => void;
   onQuickSaveCashBill: (transNo: string, val: string) => void;
   onLocationChange: (transNo: string, newLocation: string) => void;
   onItemCommEdit: (itemId: number, val: string) => void;
@@ -64,6 +67,7 @@ export default function InvoiceTable({
   onEditMeta,
   onViewInvoice,
   onOpenPayment,
+  onOpenDeposits,
   onQuickSaveCashBill,
   onLocationChange,
   onItemCommEdit,
@@ -99,7 +103,7 @@ export default function InvoiceTable({
             <th className="py-3 px-4">No Transaksi (Invoice)</th>
             <th className="py-3 px-4">No Cash Bill (CB)</th>
             <th className="py-3 px-4">Customer</th>
-            <th className="py-3 px-4">Sales Advisor</th>
+            <th className="py-3 px-4">CA</th>
             <th className={isUnlocked && isAdmin ? 'text-amber-600 py-3 px-4' : 'text-slate-400 py-3 px-4'}>
               <span className="inline-flex items-center gap-1">
                 Lokasi {isUnlocked && isAdmin ? '✎' : <Lock className="w-2.5 h-2.5" />}
@@ -189,6 +193,13 @@ export default function InvoiceTable({
                         </button>
                         <button
                           type="button"
+                          onClick={() => onOpenDeposits(inv)}
+                          aria-label={inv.depositLinks?.length ? `View ${inv.depositLinks.length} applied DP for ${inv.trans_no}` : `Link sales DP to ${inv.trans_no}`}
+                          title={inv.depositLinks?.length ? `Applied DP: ${inv.depositLinks.map(dp => dp.transNo).join(', ')}` : 'Select sales down payments'}
+                          className={cn('inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-bold', inv.depositLinks?.length ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-blue-200 bg-blue-50 text-blue-700')}
+                        >{inv.depositLinks?.length ? <CircleCheck size={13} /> : <Link2 size={13} />}DP{inv.depositLinks?.length ? ` (${inv.depositLinks.length})` : ''}</button>
+                        <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             onViewInvoice(inv);
@@ -254,7 +265,7 @@ export default function InvoiceTable({
                           <select
                             aria-label="Edit invoice location"
                             value={inv.location || ''}
-                            disabled={isSavingLoc}
+                            disabled={isSavingLoc || Boolean(inv.depositLinks?.length)}
                             onChange={e => onLocationChange(inv.trans_no, e.target.value)}
                             className="text-[11px] font-bold px-2 py-0.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 cursor-pointer outline-none transition-all hover:bg-amber-100 focus:ring-1 focus:ring-amber-400 shadow-2xs"
                           >
@@ -338,7 +349,8 @@ export default function InvoiceTable({
                         <button
                           type="button"
                           onClick={() => onDeleteInvoice(inv.trans_no)}
-                          title="Hapus seluruh faktur ini"
+                          disabled={Boolean(inv.depositLinks?.length)}
+                          title={inv.depositLinks?.length ? 'Remove linked DP references before deleting' : 'Hapus seluruh faktur ini'}
                           className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-600 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

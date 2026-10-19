@@ -1,3 +1,4 @@
+import { depositLinkKey } from '@/lib/deposit-links';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -197,6 +198,11 @@ export async function updateDpsSvcTransaction(id: number | string, patch: { card
 }
 
 export async function deleteDpsSvcTransaction(id: number | string) {
+  const source = await supabase.from('bvlgari_sales').select('transaction_no').eq('id', id).single();
+  if (source.error) throw source.error;
+  const reference = await supabase.from('transaction_records_meta').select('trans_no').eq('trans_no', depositLinkKey(source.data.transaction_no)).maybeSingle();
+  if (reference.error) throw reference.error;
+  if (reference.data) throw new Error('This DP is linked to a sales invoice. Remove the reference in Invoice Management before deleting it.');
   const { error } = await supabase
     .from('bvlgari_sales')
     .delete()

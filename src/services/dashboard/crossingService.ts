@@ -1,6 +1,9 @@
 import { supabase } from '@/lib/supabase';
 import type { CrossingSalesData, CrossingRecord } from './types';
 import { MONTH_NAMES } from './constants';
+import { advisorHomeResolver, normalizeReportStore } from '@/lib/report-attribution';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
+import { monthBounds } from '@/lib/invoice-report-filters';
 
 /**
  * Crossing Sales — Replicates getCrossingSalesData() from GAS (5-API_Reports.gs)
@@ -11,28 +14,15 @@ export async function getCrossingSalesData(month: string, year: number): Promise
   const monthIndex = MONTH_NAMES.indexOf(month);
   if (monthIndex === -1) throw new Error(`Invalid month: ${month}`);
 
-  const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01T00:00:00`;
-  const mEnd   = new Date(year, monthIndex + 1, 0, 23, 59, 59).toISOString();
-
-  const [{ data: rows, error }, { data: advisorProfiles }, { data: rotationRows }] = await Promise.all([
-    supabase
-      .from('clean_master')
-      .select('salesman, location, net_sales, qty')
-      .gte('transaction_date', mStart)
-      .lte('transaction_date', mEnd),
-    supabase.from('advisors').select('name, home_location'),
-    supabase.from('advisor_rotations').select('advisor_name, assigned_location')
-      .eq('year', year).eq('month_number', monthIndex + 1)
+  const { start, end } = monthBounds(monthIndex + 1, year);
+  const [rows, advisorProfiles, rotationRows] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from('clean_master').select('id,salesman,location,net_sales,qty,collection,main_category')
+      .gte('transaction_date', start).lt('transaction_date', end).order('id').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('advisors').select('name,home_location').order('name').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('advisor_rotations').select('advisor_name,assigned_location')
+      .eq('year', year).eq('month_number', monthIndex + 1).order('advisor_name').range(from, to))
   ]);
-
-  if (error) throw error;
-
-  const homeLocMap: Record<string, string> = {};
-  advisorProfiles?.forEach(p => { homeLocMap[p.name.toLowerCase()] = p.home_location; });
-
-  // Rotation overrides for this month (takes precedence over home_location)
-  const rotationMap: Record<string, string> = {};
-  rotationRows?.forEach(r => { rotationMap[r.advisor_name.toLowerCase()] = r.assigned_location; });
+  const resolveHome = advisorHomeResolver(advisorProfiles || [], rotationRows || []);
 
   const validStores = ['plaza indonesia', 'plaza senayan', 'bali', 'bali boutique'];
   const normalize = (l: string) => {
@@ -55,11 +45,12 @@ export async function getCrossingSalesData(month: string, year: number): Promise
   const isHO = (l: string) => l === 'head office' || l === 'ho';
 
   (rows || []).forEach(row => {
+    if (['DPS', 'SVC', 'PACK'].includes((row.collection || '').trim().toUpperCase()) || ['DPS', 'SVC', 'PACK', 'PACKAGING'].includes((row.main_category || '').trim().toUpperCase())) return;
     const tLoc = (row.location || '').trim();
     const salesman = (row.salesman || '').trim();
-    const key = salesman.toLowerCase();
+
     // GAS fallback: if advisor not in master, use transaction location as home (no crossing detected)
-    const hLoc = (rotationMap[key] || homeLocMap[key] || tLoc).trim();
+    const hLoc = resolveHome(salesman, tLoc);
     const net = row.net_sales || 0;
     const qty = row.qty || 0;
 
@@ -85,7 +76,7 @@ export async function getCrossingSalesData(month: string, year: number): Promise
     if (storeStats[normT]) storeStats[normT].physical += net;
     if (storeStats[normH]) storeStats[normH].adjusted += net;
 
-    if (tLocLower !== hLocLower) {
+    if (normalizeReportStore(tLoc) !== normalizeReportStore(hLoc)) {
       totalNet += net;
       totalQty += qty;
       const key = `${salesman}||${normH}||${normT}`;

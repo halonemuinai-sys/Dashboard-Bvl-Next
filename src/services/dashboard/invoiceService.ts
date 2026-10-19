@@ -1,4 +1,8 @@
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
+import { monthBounds } from '@/lib/invoice-report-filters';
+import { readDepositLink, DEPOSIT_LINK_PREFIX, type DepositLink } from '@/lib/deposit-links';
 
 export interface InvoiceItem {
   id: number;
@@ -10,6 +14,8 @@ export interface InvoiceItem {
   collection: string;
   collection_code?: string;
   phone_no?: string;
+  description?: string;
+  serial_no?: string;
   qty: number;
   gross_sales: number;
   val_disc: number;
@@ -27,11 +33,14 @@ export interface InvoiceMeta {
   dwa_no: string;
   other_remarks: string;
   entitle?: string;
+  served_by?: string;
+  payment_splits?: unknown;
   updated_by?: string;
   updated_at?: string;
 }
 
 export interface InvoiceHeader {
+  depositLinks?: DepositLink[];
   trans_no: string;
   transaction_date: string;
   customer: string;
@@ -49,31 +58,23 @@ export interface InvoiceHeader {
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-export async function getInvoices(month: string, year: number): Promise<InvoiceHeader[]> {
+export async function getInvoices(month: string, year: number, db: SupabaseClient = supabase): Promise<InvoiceHeader[]> {
   const monthIndex = MONTHS.indexOf(month);
-  const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01T00:00:00`;
-  const mEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59).toISOString();
-
-  // Fetch clean_master items, bvlgari_sales enrichment, and transaction_records_meta
-  const [{ data: rawItems, error: itemsErr }, { data: salesData }, { data: metaData }] = await Promise.all([
-    supabase
-      .from('clean_master')
+  const { start, end } = monthBounds(monthIndex + 1, year);
+  // Use an exclusive month end and page through every source. Supabase's default
+  // row limit must never silently truncate invoices or their line items.
+  const [rawItems, salesData, metaData] = await Promise.all([
+    fetchAllRows((from, to) => db.from('clean_master')
       .select('id, trans_no, transaction_date, customer, salesman, location, main_category, collection, sap_code, catalogue_code, gross_sales, val_disc, disc_pct, net_sales, qty, cost, comm, type')
-      .gte('transaction_date', mStart)
-      .lte('transaction_date', mEnd)
-      .order('transaction_date', { ascending: false })
-      .order('trans_no', { ascending: true }),
-    supabase
-      .from('bvlgari_sales')
-      .select('transaction_no, collection, phone_no')
-      .gte('transaction_date', mStart)
-      .lte('transaction_date', mEnd),
-    supabase
-      .from('transaction_records_meta')
-      .select('*'),
+      .gte('transaction_date', start).lt('transaction_date', end)
+      .order('id', { ascending: true }).range(from, to)),
+    fetchAllRows((from, to) => db.from('bvlgari_sales')
+      .select('id, transaction_no, collection, phone_no, sap_code, catalogue_code, description')
+      .gte('transaction_date', start).lt('transaction_date', end)
+      .order('id', { ascending: true }).range(from, to)),
+    fetchAllRows((from, to) => db.from('transaction_records_meta').select('*')
+      .order('trans_no', { ascending: true }).range(from, to)),
   ]);
-
-  if (itemsErr) throw itemsErr;
 
   // Build lookup map for bvlgari_sales (collection_code, phone_no)
   const salesMap = new Map<string, { collection_code: string; phone_no: string }>();
@@ -85,6 +86,15 @@ export async function getInvoices(month: string, year: number): Promise<InvoiceH
       });
     }
   });
+
+  const rawItemMap = new Map<string, { serial_no: string; description: string }[]>();
+  for (const row of salesData) {
+    const key = JSON.stringify([String(row.transaction_no), String(row.sap_code || ''), String(row.catalogue_code || '')]);
+    const matches = rawItemMap.get(key) || [];
+    // Serial numbers are not supplied by the current sync schema.
+    matches.push({ serial_no: '', description: row.description || '' });
+    rawItemMap.set(key, matches);
+  }
 
   // Build lookup map for transaction_records_meta
   const metaMap = new Map<string, InvoiceMeta>();
@@ -98,10 +108,18 @@ export async function getInvoices(month: string, year: number): Promise<InvoiceH
         dwa_no: m.dwa_no || '',
         other_remarks: m.other_remarks || '',
         entitle: m.entitle || '',
+        served_by: m.served_by || '',
+        payment_splits: m.payment_splits,
         updated_by: m.updated_by || '',
         updated_at: m.updated_at || '',
       });
     }
+  });
+
+  const depositLinks = metaData.filter(row => row.trans_no?.startsWith(DEPOSIT_LINK_PREFIX)).map(row => {
+    const link = readDepositLink(row);
+    if (!link) throw new Error('A saved DP reference could not be read. Please contact your administrator.');
+    return link;
   });
 
   // Group clean_master rows by trans_no
@@ -128,6 +146,7 @@ export async function getInvoices(month: string, year: number): Promise<InvoiceH
     }
 
     const extra = salesMap.get(tNo) ?? { collection_code: '', phone_no: '' };
+    const rawExtra = rawItemMap.get(JSON.stringify([String(tNo), String(r.sap_code || ''), String(r.catalogue_code || '')]))?.shift();
     groupMap.get(tNo)!.items.push({
       id: r.id,
       trans_no: tNo,
@@ -138,7 +157,9 @@ export async function getInvoices(month: string, year: number): Promise<InvoiceH
       collection: r.collection || '',
       collection_code: extra.collection_code,
       phone_no: extra.phone_no,
-      qty: r.qty || 1,
+      serial_no: rawExtra?.serial_no || '',
+      description: rawExtra?.description || '',
+      qty: r.qty ?? 0,
       gross_sales: r.gross_sales || 0,
       val_disc: r.val_disc || 0,
       disc_pct: r.disc_pct || 0,
@@ -168,6 +189,7 @@ export async function getInvoices(month: string, year: number): Promise<InvoiceH
 
     result.push({
       trans_no: tNo,
+      depositLinks: depositLinks.filter(link => link.invoiceNo === tNo),
       transaction_date: grp.transaction_date,
       customer: grp.customer,
       salesman: grp.salesman,
@@ -235,6 +257,9 @@ export async function updateInvoiceLocation(
   newLocation: string,
   userEmail?: string
 ) {
+  const references = await fetchAllRows((from, to) => supabase.from('transaction_records_meta').select('trans_no,other_remarks')
+    .like('trans_no', `${DEPOSIT_LINK_PREFIX.replaceAll('_', '\\_')}%`).order('trans_no').range(from, to));
+  if (references.some(row => readDepositLink(row)?.invoiceNo === trans_no)) throw new Error('Remove linked DP references before changing the invoice store.');
   const { error } = await supabase
     .from('clean_master')
     .update({ location: newLocation })
@@ -329,6 +354,9 @@ export async function updateInvoiceItemType(
 }
 
 export async function deleteInvoice(trans_no: string, userEmail?: string) {
+  const references = await fetchAllRows((from, to) => supabase.from('transaction_records_meta').select('trans_no,other_remarks')
+    .like('trans_no', `${DEPOSIT_LINK_PREFIX.replaceAll('_', '\\_')}%`).order('trans_no').range(from, to));
+  if (references.some(row => readDepositLink(row)?.invoiceNo === trans_no)) throw new Error('Remove the linked DP references before deleting this invoice.');
   // Delete from clean_master
   const { error: delErr } = await supabase
     .from('clean_master')

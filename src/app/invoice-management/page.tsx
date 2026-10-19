@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import {
   Receipt,
   Calendar as CalendarIcon,
@@ -20,7 +20,9 @@ import {
   XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { filterInvoices } from '@/lib/invoice-report-filters';
 import Amt from '@/components/Amt';
+import { useSearchParams } from 'next/navigation';
 import { useUserAccess } from '@/lib/user-access-context';
 import {
   InvoiceHeader,
@@ -33,6 +35,7 @@ import {
   deleteInvoice,
 } from '@/services/dashboard/invoiceService';
 import InvoiceTable from './InvoiceTable';
+import InvoiceDepositModal from './InvoiceDepositModal';
 import InvoiceMetaModal from './InvoiceMetaModal';
 import SalesInvoiceModal from './SalesInvoiceModal';
 import PosPaymentModal from './PosPaymentModal';
@@ -46,17 +49,24 @@ const MONTHS = [
 const PAGE_SIZE = 25;
 
 export default function InvoiceManagementPage() {
+  return <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading invoices...</p>}><InvoiceManagementContent /></Suspense>;
+}
+
+function InvoiceManagementContent() {
+  const params = useSearchParams();
   const { assignedStore, isAdmin, userEmail } = useUserAccess();
   const isStoreScoped = Boolean(assignedStore && assignedStore !== 'ALL');
 
   const today = new Date();
-  const [month, setMonth] = useState(MONTHS[today.getMonth()]);
-  const [year, setYear] = useState(String(today.getFullYear()));
+  const initialMonth = Number(params.get('month'));
+  const initialYear = Number(params.get('year'));
+  const [month, setMonth] = useState(MONTHS[Number.isInteger(initialMonth) && initialMonth >= 1 && initialMonth <= 12 ? initialMonth - 1 : today.getMonth()]);
+  const [year, setYear] = useState(String(Number.isInteger(initialYear) && initialYear >= 2000 && initialYear <= 2100 ? initialYear : today.getFullYear()));
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<InvoiceHeader[]>([]);
 
   // Search and Filters
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(params.get('invoice') || '');
   const [filterLoc, setFilterLoc] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'multi' | 'single' | 'has_cb' | 'missing_cb'>('all');
 
@@ -75,6 +85,8 @@ export default function InvoiceManagementPage() {
 
   // Sales Invoice View/Print Modal state
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<InvoiceHeader | null>(null);
+
+  const [depositInvoice, setDepositInvoice] = useState<InvoiceHeader | null>(null);
 
   // POS Payment Breakdown Modal state
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceHeader | null>(null);
@@ -121,6 +133,9 @@ export default function InvoiceManagementPage() {
   const [savedItemIds, setSavedItemIds] = useState<Set<number>>(new Set());
   const [savingInvoiceNo, setSavingInvoiceNo] = useState<string | null>(null);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingDailyReport, setExportingDailyReport] = useState(false);
+  const [dailyReportError, setDailyReportError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Sync to API
   const [syncing, setSyncing] = useState(false);
@@ -156,11 +171,14 @@ export default function InvoiceManagementPage() {
   // Load Invoices
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await getInvoices(month, parseInt(year, 10));
       setInvoices(data);
     } catch (err) {
       console.error('Error fetching invoices:', err);
+      setInvoices([]);
+      setLoadError('Invoices could not be loaded. Please refresh before exporting.');
     } finally {
       setLoading(false);
     }
@@ -181,37 +199,9 @@ export default function InvoiceManagementPage() {
   }, [invoices]);
 
   // Filtered invoices
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return invoices.filter(inv => {
-      if (filterLoc && inv.location !== filterLoc) return false;
-
-      if (filterType === 'multi' && inv.item_count <= 1) return false;
-      if (filterType === 'single' && inv.item_count > 1) return false;
-      if (filterType === 'has_cb' && !inv.meta.cash_bill_no) return false;
-      if (filterType === 'missing_cb' && Boolean(inv.meta.cash_bill_no)) return false;
-
-      if (q) {
-        const matchTrans = inv.trans_no?.toLowerCase().includes(q);
-        const matchCust = inv.customer?.toLowerCase().includes(q);
-        const matchSales = inv.salesman?.toLowerCase().includes(q);
-        const matchCb = inv.meta?.cash_bill_no?.toLowerCase().includes(q);
-        const matchDwa = inv.meta?.dwa_no?.toLowerCase().includes(q);
-        const matchReason = inv.meta?.discount_given_reason?.toLowerCase().includes(q);
-        const matchAfter = inv.meta?.after_sales_support?.toLowerCase().includes(q);
-        const matchItems = inv.items?.some(it =>
-          it.collection?.toLowerCase().includes(q) ||
-          it.catalogue_code?.toLowerCase().includes(q) ||
-          it.sap_code?.toLowerCase().includes(q)
-        );
-
-        if (!matchTrans && !matchCust && !matchSales && !matchCb && !matchDwa && !matchReason && !matchAfter && !matchItems) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [invoices, search, filterLoc, filterType]);
+  const filtered = useMemo(() => filterInvoices(invoices, {
+    store: isStoreScoped ? assignedStore : filterLoc, search, filterType,
+  }), [invoices, assignedStore, isStoreScoped, search, filterLoc, filterType]);
 
   // KPI Summaries
   const summary = useMemo(() => {
@@ -395,7 +385,9 @@ export default function InvoiceManagementPage() {
       'Trans Date',
       'Cash Bill No',
       'Customer',
-      'Sales Advisor',
+      'CA',
+      'Served By',
+      'Entitle',
       'Location',
       'Items Count',
       'SAP Code',
@@ -423,6 +415,8 @@ export default function InvoiceManagementPage() {
           q(inv.meta.cash_bill_no),
           q(inv.customer),
           q(inv.salesman),
+          q(inv.meta.served_by),
+          q(inv.meta.entitle),
           q(inv.location),
           inv.item_count,
           q(it.sap_code),
@@ -453,6 +447,35 @@ export default function InvoiceManagementPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportDailyReport = async () => {
+    if (exportingDailyReport || loadError) return;
+    setExportingDailyReport(true);
+    setDailyReportError(null);
+    try {
+      const store = (isStoreScoped ? assignedStore : filterLoc) || 'ALL';
+      const params = new URLSearchParams({ month: String(MONTHS.indexOf(month) + 1), year, store });
+      const response = await fetch(`/api/invoice-management/export-daily-report?${params}`, { cache: 'no-store' });
+      if (!response.ok) {
+        const failure = await response.json().catch(() => ({}));
+        throw new Error(failure.error || 'The Daily Report could not be generated.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      const filename = response.headers.get('Content-Disposition')?.match(/filename\*=UTF-8''(.+)$/)?.[1];
+      anchor.download = filename ? decodeURIComponent(filename) : `DAILY SALES REPORT ${month} ${year}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setDailyReportError(error instanceof Error ? error.message : 'The Daily Report could not be generated.');
+    } finally {
+      setExportingDailyReport(false);
+    }
+  };
+
   // Export Executive Excel Report (Multi-Sheet)
   const handleExportExcel = async () => {
     if (filtered.length === 0) return;
@@ -477,6 +500,7 @@ export default function InvoiceManagementPage() {
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
+      {(loadError || dailyReportError) && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{loadError || dailyReportError}</div>}
       {/* Top Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
@@ -561,6 +585,17 @@ export default function InvoiceManagementPage() {
             </button>
           )}
 
+          <button
+            type="button"
+            onClick={handleExportDailyReport}
+            disabled={exportingDailyReport || Boolean(loadError) || filtered.length === 0}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            title="Full monthly workbook for the selected store: DS, DP, Service, IN, OUT and SPPR. Screen search and invoice filters are ignored."
+          >
+            {exportingDailyReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            {exportingDailyReport ? 'Generating Daily Report...' : 'Daily Report (Excel)'}
+          </button>
+
           {/* Download Executive Excel (.xlsx) */}
           <button
             type="button"
@@ -575,7 +610,7 @@ export default function InvoiceManagementPage() {
               <FileSpreadsheet className="w-4 h-4" />
             )}
             <span className="hidden sm:inline">
-              {exportingExcel ? 'Membuat Excel...' : 'Export Excel (.xlsx)'}
+              {exportingExcel ? 'Membuat Excel...' : 'Executive Report (.xlsx)'}
             </span>
           </button>
 
@@ -769,6 +804,7 @@ export default function InvoiceManagementPage() {
           onEditMeta={inv => setMetaModalInvoice(inv)}
           onViewInvoice={inv => setSelectedInvoiceForView(inv)}
           onOpenPayment={inv => setSelectedInvoiceForPayment(inv)}
+          onOpenDeposits={inv => setDepositInvoice(inv)}
           onQuickSaveCashBill={handleQuickSaveCashBill}
           onLocationChange={handleLocationChange}
           onItemCommEdit={(itemId, val) => setCommEdits(prev => ({ ...prev, [itemId]: val }))}
@@ -813,6 +849,11 @@ export default function InvoiceManagementPage() {
           </div>
         </div>
       </div>
+
+      {depositInvoice && <InvoiceDepositModal key={depositInvoice.trans_no} invoice={depositInvoice} editable={isUnlocked} onClose={() => setDepositInvoice(null)} onChanged={links => {
+        setInvoices(current => current.map(inv => inv.trans_no === depositInvoice.trans_no ? { ...inv, depositLinks: links } : inv));
+        setDepositInvoice(current => current ? { ...current, depositLinks: links } : current);
+      }} />}
 
       {/* Supporting Meta Modal */}
       <InvoiceMetaModal

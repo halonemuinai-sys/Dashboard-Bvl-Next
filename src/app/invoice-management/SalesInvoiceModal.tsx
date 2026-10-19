@@ -344,8 +344,21 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                     <td className="py-1 font-mono text-slate-700">{clientPhone || '—'}</td>
                   </tr>
                   <tr>
-                    <td className="py-1 text-slate-500 font-medium">Sales Advisor:</td>
+                    <td className="py-1 text-slate-500 font-medium">CA (Customer Advisor):</td>
                     <td className="py-1 font-bold text-slate-900">{activeInvoice.salesman || '—'}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 text-slate-500 font-medium">Served By:</td>
+                    <td className="py-1 font-bold text-teal-800">
+                      {activeInvoice.meta.served_by || '—'}
+                      <button
+                        type="button"
+                        onClick={() => setIsMetaModalOpen(true)}
+                        className="no-print-area ml-2 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                      >
+                        {activeInvoice.meta.served_by ? 'Ubah' : 'Isi'}
+                      </button>
+                    </td>
                   </tr>
                   <tr>
                     <td className="py-1 text-slate-500 font-medium">Mata Uang:</td>
@@ -450,7 +463,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                 <table className="w-full">
                   <tbody>
                     <tr>
-                      <td className="py-1 pr-2 text-slate-500 font-medium align-top w-36">Entitle (CA)</td>
+                      <td className="py-1 pr-2 text-slate-500 font-medium align-top w-36">Entitle (Customer Advisor)</td>
                       <td className="py-1 font-bold text-teal-800">{activeInvoice.meta.entitle || '—'}</td>
                     </tr>
                     <tr>
@@ -506,6 +519,14 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
               </div>
             </div>
           </div>
+
+          {Boolean(activeInvoice.depositLinks?.length) && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 text-xs">
+              <h4 className="mb-2 font-bold text-emerald-900">Applied Down Payments</h4>
+              {activeInvoice.depositLinks?.map(dp => <div key={dp.transNo} className="flex justify-between gap-4 py-1"><span className="font-mono">{dp.transNo}</span><span>Rp {formatCurrency(dp.amount)}</span></div>)}
+              <p className="mt-2 text-[10px] text-slate-500">DP settlement references. Payment totals are shown in the payment breakdown below.</p>
+            </div>
+          )}
 
           {/* Payment & Card Commission Settlement Section */}
           <InvoicePaymentSection

@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ClipboardList,
+  CircleCheck,
+  AlertCircle,
   Calendar as CalendarIcon,
   RefreshCw,
   Lock,
@@ -20,6 +22,8 @@ import { cn } from '@/lib/utils';
 import { dashboardService } from '@/services/dashboardService';
 import Amt from '@/components/Amt';
 import { useUserAccess } from '@/lib/user-access-context';
+import { getDepositLinksAction } from '@/app/invoice-management/deposit-actions';
+import type { DepositLink } from '@/lib/deposit-links';
 
 interface Row {
   id: number;
@@ -93,6 +97,8 @@ export default function MonthlyDpsSvcPage() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows]   = useState<Row[]>([]);
   const [activeTab, setActiveTab] = useState<'DPS' | 'SVC'>('DPS');
+  const [depositLinks, setDepositLinks] = useState<Record<string, DepositLink>>({});
+  const [depositLinkError, setDepositLinkError] = useState('');
 
   // Filters
   const [search, setSearch]       = useState('');
@@ -143,7 +149,7 @@ export default function MonthlyDpsSvcPage() {
   const [deleting, setDeleting] = useState(false);
 
   const handleDeleteRequest = (id: number, transNo: string) => {
-    if (!isAdmin) return;
+    if (!isAdmin || depositLinks[transNo] || (activeTab === 'DPS' && depositLinkError)) return;
     setDeleteTarget({ id, transNo });
   };
 
@@ -172,8 +178,19 @@ export default function MonthlyDpsSvcPage() {
     try {
       const data = await dashboardService.getDpsSvcTransactions(month, parseInt(year));
       setRows(data as Row[]);
+      setDepositLinkError('');
+      const numbers = [...new Set((data as Row[]).filter(row => row.collection === 'DPS').map(row => row.trans_no))];
+      const saved: DepositLink[] = [];
+      for (let index = 0; index < numbers.length; index += 500) {
+        const result = await getDepositLinksAction(numbers.slice(index, index + 500));
+        if (!result.ok) { setDepositLinks({}); setDepositLinkError(result.error); return; }
+        saved.push(...result.data);
+      }
+      setDepositLinks(Object.fromEntries(saved.map(link => [link.transNo, link])));
     } catch (e) {
       console.error(e);
+      setDepositLinks({});
+      setDepositLinkError('Could not verify DP settlement references. Refresh before changing records.');
     } finally {
       setLoading(false);
     }
@@ -204,10 +221,11 @@ export default function MonthlyDpsSvcPage() {
       if (q && !r.trans_no?.toLowerCase().includes(q)
             && !r.customer?.toLowerCase().includes(q)
             && !r.salesman?.toLowerCase().includes(q)
+            && !depositLinks[r.trans_no]?.invoiceNo.toLowerCase().includes(q)
             && !r.collection?.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [tabFilteredRows, search, filterLoc, filterCat, filterType]);
+  }, [tabFilteredRows, search, filterLoc, filterCat, filterType, depositLinks]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -325,6 +343,7 @@ export default function MonthlyDpsSvcPage() {
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
+      {depositLinkError && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{depositLinkError}<button type="button" onClick={() => void loadData()} className="ml-3 font-bold underline">Refresh DP status</button></div>}
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
@@ -335,6 +354,7 @@ export default function MonthlyDpsSvcPage() {
           <p className="text-slate-500 text-sm">Monitoring & card commission input for Down Payment (DPS) & Service (SVC)</p>
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void loadData()} disabled={loading} title="Refresh transactions and DP references" aria-label="Refresh transactions and DP references" className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 hover:bg-slate-50 disabled:opacity-40"><RefreshCw size={16} /></button>
           <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
             <CalendarIcon className="w-4 h-4 text-violet-600" />
             <select aria-label="Select month" value={month} onChange={e => setMonth(e.target.value)}
@@ -574,7 +594,12 @@ export default function MonthlyDpsSvcPage() {
                 return (
                   <tr key={i} className={cn("transition-colors text-xs", isSaved ? "bg-emerald-50/40" : "hover:bg-slate-50")}>
                     <td className="py-2.5 px-4 font-mono text-slate-500">{fmtDate(r.transaction_date)}</td>
-                    <td className="py-2.5 px-4 font-mono text-[11px] text-blue-600 font-bold">{r.trans_no}</td>
+                    <td className="py-2.5 px-4 font-mono text-[11px] text-blue-600 font-bold"><span className="inline-flex items-center gap-2">{r.trans_no}{r.collection === 'DPS' && depositLinks[r.trans_no] && <a
+                      href={`/invoice-management?invoice=${encodeURIComponent(depositLinks[r.trans_no].invoiceNo)}&month=${Number(depositLinks[r.trans_no].invoiceDate.slice(5, 7))}&year=${depositLinks[r.trans_no].invoiceDate.slice(0, 4)}`}
+                      title={`DP applied to sales invoice ${depositLinks[r.trans_no].invoiceNo}`}
+                      aria-label={`DP settled to invoice ${depositLinks[r.trans_no].invoiceNo}. Open sales invoice.`}
+                      className="rounded-full bg-emerald-50 p-1.5 text-emerald-600 hover:bg-emerald-100 focus:outline-2 focus:outline-emerald-600"
+                    ><CircleCheck size={16} /></a>}{r.collection === 'DPS' && depositLinkError && <span title="DP settlement status unavailable"><AlertCircle size={14} className="text-amber-500" /></span>}</span></td>
                     <td className="py-2.5 px-4 text-slate-700 max-w-[140px] truncate" title={r.customer}>{r.customer || '—'}</td>
                     <td className="py-2.5 px-4 font-bold text-slate-800">{r.salesman || '—'}</td>
                     <td className="py-2.5 px-4 text-slate-500">{r.location}</td>
@@ -654,8 +679,8 @@ export default function MonthlyDpsSvcPage() {
                         <button
                           type="button"
                           title="Hapus transaksi"
+                          disabled={isSaving || Boolean(depositLinks[r.trans_no]) || (r.collection === 'DPS' && Boolean(depositLinkError))}
                           onClick={() => handleDeleteRequest(r.id, r.trans_no)}
-                          disabled={isSaving}
                           className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-30">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

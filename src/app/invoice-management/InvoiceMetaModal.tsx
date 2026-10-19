@@ -60,6 +60,7 @@ export default function InvoiceMetaModal({
   const [afterSales, setAfterSales] = useState('');
   const [otherRemarks, setOtherRemarks] = useState('');
   const [entitle, setEntitle] = useState('');
+  const [servedBy, setServedBy] = useState('');
   const [advisors, setAdvisors] = useState<EntitleAdvisor[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -93,6 +94,7 @@ export default function InvoiceMetaModal({
       setOtherRemarks(raw.slice(0, markerIdx).trim());
       setSystemSuffix(raw.slice(markerIdx).trim());
       setEntitle(invoice.meta.entitle || '');
+      setServedBy(invoice.meta.served_by || '');
       setSavedSuccess(false);
     }
   }, [invoice, isOpen]);
@@ -128,6 +130,7 @@ export default function InvoiceMetaModal({
           after_sales_support: afterSales.trim(),
           other_remarks: [otherRemarks.trim(), systemSuffix].filter(Boolean).join('\n'),
           entitle,
+          served_by: servedBy,
         },
         userEmail
       );
@@ -217,30 +220,39 @@ export default function InvoiceMetaModal({
             </div>
           </div>
 
-          {/* Section 1b: Entitle — additional data; the original Sales Advisor (salesman) stays unchanged */}
+          {/* Section 1b: Served By + Entitle — additional data; the CA from the API (salesman) stays unchanged */}
           <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <Users className="w-3.5 h-3.5 text-teal-600" />
-              Entitle (Customer Advisor)
-            </label>
-            <select
-              value={entitle}
-              onChange={e => setEntitle(e.target.value)}
-              aria-label="Pilih Customer Advisor entitle"
-              className="w-full text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition-all cursor-pointer"
-            >
-              <option value="">— Pilih Customer Advisor —</option>
-              {Object.entries(advisorGroups).map(([store, names]) => (
-                <optgroup key={store} label={store}>
-                  {names.map(n => <option key={n} value={n}>{n}</option>)}
-                </optgroup>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {([
+                { label: 'Served By', value: servedBy, set: setServedBy, aria: 'Pilih Served By' },
+                { label: 'Entitle (Customer Advisor)', value: entitle, set: setEntitle, aria: 'Pilih Customer Advisor entitle' },
+              ] as const).map(field => (
+                <div key={field.label}>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1">
+                    <Users className="w-3.5 h-3.5 text-teal-600" />
+                    {field.label}
+                  </label>
+                  <select
+                    value={field.value}
+                    onChange={e => field.set(e.target.value)}
+                    aria-label={field.aria}
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="">— Pilih Customer Advisor —</option>
+                    {Object.entries(advisorGroups).map(([store, names]) => (
+                      <optgroup key={store} label={store}>
+                        {names.map(n => <option key={n} value={n}>{n}</option>)}
+                      </optgroup>
+                    ))}
+                    {field.value && !advisors.some(a => a.name === field.value) && (
+                      <option value={field.value}>{field.value} (tidak aktif)</option>
+                    )}
+                  </select>
+                </div>
               ))}
-              {entitle && !advisors.some(a => a.name === entitle) && (
-                <option value={entitle}>{entitle} (tidak aktif)</option>
-              )}
-            </select>
+            </div>
             <p className="text-[10px] text-slate-400">
-              Data tambahan — Sales Advisor asli transaksi tetap: <span className="font-semibold text-slate-600">{invoice.salesman || '—'}</span>
+              Data tambahan — CA transaksi dari API tetap: <span className="font-semibold text-slate-600">{invoice.salesman || '—'}</span>
             </p>
           </div>
 

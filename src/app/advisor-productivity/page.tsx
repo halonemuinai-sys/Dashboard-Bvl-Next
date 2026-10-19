@@ -7,7 +7,7 @@ import {
   RefreshCw, Filter, Layers, BarChart3
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { getAdvisorProductivity, type AdvisorMetrics, type DetailTransaction } from '@/services/dashboard/productivityService';
 import Amt from '@/components/Amt';
 import { useUserAccess } from '@/lib/user-access-context';
 
@@ -15,38 +15,6 @@ const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
-
-interface AdvisorMetrics {
-  advisor: string;
-  store: string;
-  totalNetSales: number;
-  totalQty: number;
-  totalInvoices: number;
-  newCustomerSales: number;
-  newCustomerCount: number;
-  pctNewSales: number;
-  existingCustomerSales: number;
-  existingCustomerCount: number;
-  pctExistingSales: number;
-  atv: number;
-  upt: number;
-  walkIn: number;
-  followUp: number;
-}
-
-interface DetailTransaction {
-  date: string;
-  transNo: string;
-  customer: string;
-  phone: string;
-  advisor: string;
-  store: string;
-  category: string;
-  collection: string;
-  qty: number;
-  netSales: number;
-  customerType: 'NEW' | 'EXISTING';
-}
 
 export default function AdvisorProductivityPage() {
   const { assignedStore } = useUserAccess();
@@ -70,190 +38,9 @@ export default function AdvisorProductivityPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const startDate = `${year}-${pad(month)}-01`;
-      const lastDay = new Date(year, month, 0).getDate();
-      const endDate = `${year}-${pad(month)}-${pad(lastDay)}`;
-
-      // 1. Fetch sales in period
-      const [
-        { data: cleanRows, error: cleanErr },
-        { data: salesPhoneData },
-        { data: masterRows },
-        { data: crmRows }
-      ] = await Promise.all([
-        supabase
-          .from('clean_master')
-          .select('id, trans_no, transaction_date, customer, salesman, location, main_category, collection, qty, net_sales')
-          .gte('transaction_date', `${startDate}T00:00:00`)
-          .lte('transaction_date', `${endDate}T23:59:59`)
-          .order('transaction_date', { ascending: true }),
-
-        supabase
-          .from('bvlgari_sales')
-          .select('transaction_no, phone_no')
-          .gte('transaction_date', startDate)
-          .lte('transaction_date', endDate),
-
-        // Customer master — first transaction date per phone
-        supabase
-          .from('customer_master')
-          .select('phone_no, first_txn_date'),
-
-        // CRM App Sheet — Walk In & Follow Up per advisor
-        supabase
-          .from('mirror_traffic')
-          .select('customer_advisor, status, akses_masuk')
-          .gte('transaction_date', startDate)
-          .lte('transaction_date', endDate),
-      ]);
-
-      if (cleanErr) throw cleanErr;
-
-      // 2. Build CRM Walk In / Follow Up map (keyed by normalized advisor name)
-      const crmMap = new Map<string, { walkIn: number; followUp: number }>();
-      const resolveStatusKey = (status: string, aksesmasuk: string): 'walkin' | 'followup' | 'other' => {
-        const check = (val: string): 'walkin' | 'followup' | 'other' => {
-          const l = (val || '').toLowerCase().replace(/ /g, ' ');
-          if (['walk in', 'walk-in', 'walkin'].some(m => l.includes(m))) return 'walkin';
-          if (['follow up', 'follow-up', 'followup'].some(m => l.includes(m))) return 'followup';
-          return 'other';
-        };
-        const k = check(status);
-        return k !== 'other' ? k : check(aksesmasuk);
-      };
-      (crmRows || []).forEach((r: any) => {
-        const key = (r.customer_advisor || '').trim().toLowerCase();
-        if (!key) return;
-        if (!crmMap.has(key)) crmMap.set(key, { walkIn: 0, followUp: 0 });
-        const sk = resolveStatusKey(r.status, r.akses_masuk);
-        const m = crmMap.get(key)!;
-        if (sk === 'walkin') m.walkIn++;
-        else if (sk === 'followup') m.followUp++;
-      });
-
-      // 3. Build phone lookup maps
-      const phoneMap = new Map<string, string>();
-      (salesPhoneData || []).forEach((s: any) => {
-        if (s.transaction_no && s.phone_no) {
-          phoneMap.set(s.transaction_no, s.phone_no.trim());
-        }
-      });
-
-      // customer_master: phone_no → first_txn_date
-      // NEW = belum pernah transaksi sebelum bulan ini (first_txn_date >= startDate atau tidak ada di master)
-      const masterMap = new Map<string, string>();
-      (masterRows || []).forEach((m: any) => {
-        if (m.phone_no) masterMap.set(m.phone_no.trim(), m.first_txn_date);
-      });
-
-      // 4. Process transactions and tag NEW vs EXISTING
-      const details: DetailTransaction[] = [];
-
-      (cleanRows || []).forEach((r: any) => {
-        const phone = phoneMap.get(r.trans_no) || '';
-        const custName = (r.customer || '').trim();
-
-        let isExisting = false;
-        if (phone) {
-          const firstTxn = masterMap.get(phone);
-          // EXISTING jika punya histori DAN first transaction sebelum bulan ini
-          isExisting = !!firstTxn && firstTxn < startDate;
-        }
-        const custType: 'NEW' | 'EXISTING' = isExisting ? 'EXISTING' : 'NEW';
-
-        details.push({
-          date: r.transaction_date ? r.transaction_date.substring(0, 10) : '',
-          transNo: r.trans_no || '',
-          customer: custName || 'Unknown Customer',
-          phone: phone || '—',
-          advisor: r.salesman || 'Unassigned',
-          store: r.location || 'Unknown Store',
-          category: r.main_category || 'General',
-          collection: r.collection || '',
-          qty: Number(r.qty || 1),
-          netSales: Number(r.net_sales || 0),
-          customerType: custType
-        });
-      });
-
-      setDetailTransactions(details);
-
-      // 5. Aggregate metrics by Store & Advisor
-      const groupedMap = new Map<string, {
-        advisor: string;
-        store: string;
-        totalNetSales: number;
-        totalQty: number;
-        invoiceSet: Set<string>;
-        newCustSet: Set<string>;
-        newCustSales: number;
-        existCustSet: Set<string>;
-        existCustSales: number;
-      }>();
-
-      details.forEach(d => {
-        const groupKey = `${d.store}___${d.advisor}`;
-        if (!groupedMap.has(groupKey)) {
-          groupedMap.set(groupKey, {
-            advisor: d.advisor,
-            store: d.store,
-            totalNetSales: 0,
-            totalQty: 0,
-            invoiceSet: new Set(),
-            newCustSet: new Set(),
-            newCustSales: 0,
-            existCustSet: new Set(),
-            existCustSales: 0
-          });
-        }
-
-        const g = groupedMap.get(groupKey)!;
-        g.totalNetSales += d.netSales;
-        g.totalQty += d.qty;
-        g.invoiceSet.add(d.transNo);
-
-        const custId = d.phone !== '—' ? d.phone : d.customer;
-        if (d.customerType === 'NEW') {
-          g.newCustSales += d.netSales;
-          g.newCustSet.add(custId);
-        } else {
-          g.existCustSales += d.netSales;
-          g.existCustSet.add(custId);
-        }
-      });
-
-      // 5. Convert to Array and calculate percentages
-      const metricsList: AdvisorMetrics[] = Array.from(groupedMap.values()).map(g => {
-        const totalInvoices = g.invoiceSet.size;
-        const pctNew = g.totalNetSales > 0 ? (g.newCustSales / g.totalNetSales) * 100 : 0;
-        const pctExist = g.totalNetSales > 0 ? (g.existCustSales / g.totalNetSales) * 100 : 0;
-        const atv = totalInvoices > 0 ? g.totalNetSales / totalInvoices : 0;
-        const upt = totalInvoices > 0 ? g.totalQty / totalInvoices : 0;
-        const crmData = crmMap.get(g.advisor.trim().toLowerCase()) || { walkIn: 0, followUp: 0 };
-
-        return {
-          advisor: g.advisor,
-          store: g.store,
-          totalNetSales: g.totalNetSales,
-          totalQty: g.totalQty,
-          totalInvoices,
-          newCustomerSales: g.newCustSales,
-          newCustomerCount: g.newCustSet.size,
-          pctNewSales: pctNew,
-          existingCustomerSales: g.existCustSales,
-          existingCustomerCount: g.existCustSet.size,
-          pctExistingSales: pctExist,
-          atv,
-          upt,
-          walkIn: crmData.walkIn,
-          followUp: crmData.followUp,
-        };
-      });
-
-      // Sort by Net Sales descending
-      metricsList.sort((a, b) => b.totalNetSales - a.totalNetSales);
-      setAdvisorData(metricsList);
+      const report = await getAdvisorProductivity(month, year);
+      setDetailTransactions(report.details);
+      setAdvisorData(report.metrics);
 
     } catch (err: any) {
       console.error('Error fetching productivity report:', err);
