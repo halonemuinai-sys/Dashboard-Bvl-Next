@@ -6,7 +6,7 @@ import {
   CheckCircle2, AlertCircle, Loader2, ArrowRightLeft
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
-import { syncService } from '@/services/syncService';
+import { runSalesSync } from '@/lib/run-sales-sync';
 import { supabase } from '@/lib/supabase';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -95,7 +95,7 @@ export default function SalesDpsSvcManagerPage() {
     setSyncError(null);
 
     try {
-      const result = await syncService.syncSalesData(month, year);
+      const result = await runSalesSync(month, year);
 
       if (result.success) {
         setSyncResult(
