@@ -2,26 +2,17 @@
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import {
-  Receipt,
-  Calendar as CalendarIcon,
   RefreshCw,
-  Lock,
-  LockOpen,
   ShieldAlert,
-  FileDown,
-  FileSpreadsheet,
-  Loader2,
   Trash2,
   Search,
   ChevronDown,
   ChevronUp,
-  CloudDownload,
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { filterInvoices } from '@/lib/invoice-report-filters';
-import Amt from '@/components/Amt';
 import { useSearchParams } from 'next/navigation';
 import { useUserAccess } from '@/lib/user-access-context';
 import {
@@ -35,6 +26,7 @@ import {
   deleteInvoice,
 } from '@/services/dashboard/invoiceService';
 import InvoiceTable from './InvoiceTable';
+import InvoiceOverview from './InvoiceOverview';
 import InvoiceDepositModal from './InvoiceDepositModal';
 import InvoiceMetaModal from './InvoiceMetaModal';
 import SalesInvoiceModal from './SalesInvoiceModal';
@@ -493,7 +485,7 @@ function InvoiceManagementContent() {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
         <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-slate-500 font-medium animate-pulse">Memuat data Invoice & Faktur...</p>
+        <p className="text-slate-500 font-medium animate-pulse">Loading invoices and payments…</p>
       </div>
     );
   }
@@ -501,154 +493,15 @@ function InvoiceManagementContent() {
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
       {(loadError || dailyReportError) && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{loadError || dailyReportError}</div>}
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Receipt className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Invoice Management</h1>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500 text-white tracking-widest">
-                  Header-Detail
-                </span>
-              </div>
-              <p className="text-slate-500 text-xs mt-0.5">
-                Kelola faktur, No Cash Bill (CB), rincian item, dan data penunjang transaksi — {month} {year}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Month Selector */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-2xs">
-            <CalendarIcon className="w-4 h-4 text-blue-600" />
-            <select
-              aria-label="Select month"
-              value={month}
-              onChange={e => setMonth(e.target.value)}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
-            >
-              {MONTHS.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Year Selector */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-2xs">
-            <CalendarIcon className="w-4 h-4 text-slate-400" />
-            <select
-              aria-label="Select year"
-              value={year}
-              onChange={e => setYear(e.target.value)}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
-            >
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-            </select>
-          </div>
-
-          {/* Refresh */}
-          <button
-            type="button"
-            onClick={fetchData}
-            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-all shadow-2xs cursor-pointer"
-            title="Muat ulang data"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-
-          {/* Sync to API — admin only */}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={handleSyncToApi}
-              disabled={syncing}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-blue-600 border-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              title={`Sync data dari Bvlgari API untuk ${month} ${year}`}
-            >
-              {syncing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <CloudDownload className="w-4 h-4" />
-              )}
-              <span className="hidden sm:inline">
-                {syncing ? 'Syncing...' : 'Sync to API'}
-              </span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleExportDailyReport}
-            disabled={exportingDailyReport || Boolean(loadError) || filtered.length === 0}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            title="Full monthly workbook for the selected store: DS, DP, Service, IN, OUT and SPPR. Screen search and invoice filters are ignored."
-          >
-            {exportingDailyReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            {exportingDailyReport ? 'Generating Daily Report...' : 'Daily Report (Excel)'}
-          </button>
-
-          {/* Download Executive Excel (.xlsx) */}
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            disabled={filtered.length === 0 || exportingExcel}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            title="Download Laporan Lengkap 5 Sheet: Sales by Location, Crossing Sales, Invoices, Items, dan Compliance"
-          >
-            {exportingExcel ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <FileSpreadsheet className="w-4 h-4" />
-            )}
-            <span className="hidden sm:inline">
-              {exportingExcel ? 'Membuat Excel...' : 'Executive Report (.xlsx)'}
-            </span>
-          </button>
-
-          {/* Download Quick CSV */}
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={filtered.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-white border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            title="Export data mentah format CSV"
-          >
-            <FileDown className="w-4 h-4 text-slate-500" />
-            <span className="hidden sm:inline">CSV</span>
-          </button>
-
-          {/* Lock / Unlock Toggle */}
-          {isUnlocked ? (
-            <button
-              type="button"
-              onClick={handleLock}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100 cursor-pointer"
-            >
-              <LockOpen className="w-4 h-4 text-amber-600" />
-              <span className="hidden sm:inline">Unlocked — Klik Lock</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleUnlock}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-bold border shadow-2xs transition-all bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200 cursor-pointer"
-            >
-              <Lock className="w-4 h-4 text-slate-400" />
-              <span className="hidden sm:inline">Locked</span>
-            </button>
-          )}
-        </div>
-      </div>
-
+      <InvoiceOverview
+        month={month} year={year} months={MONTHS} store={(isStoreScoped ? assignedStore : filterLoc) || 'All stores'}
+        isAdmin={isAdmin} isUnlocked={isUnlocked} syncing={syncing} exporting={exportingDailyReport}
+        exportingExecutive={exportingExcel} loadError={Boolean(loadError)} summary={summary}
+        missingCashBills={filtered.filter(invoice => !invoice.meta.cash_bill_no?.trim()).length}
+        onMonth={setMonth} onYear={setYear} onRefresh={fetchData} onSync={handleSyncToApi}
+        onExport={handleExportDailyReport} onExecutive={handleExportExcel} onCsv={exportCsv}
+        onLockToggle={isUnlocked ? handleLock : handleUnlock}
+      />
       {/* Sync Result Banner */}
       {syncResult && (
         <div className={cn(
@@ -661,139 +514,37 @@ function InvoiceManagementContent() {
             ? <CheckCircle2 className="w-4 h-4 shrink-0 text-blue-600" />
             : <XCircle className="w-4 h-4 shrink-0 text-red-600" />}
           {syncResult.success
-            ? `Sync selesai — ${syncResult.rawInserted ?? 0} baru dimasukkan, ${syncResult.normalizedInserted ?? 0} dinormalisasi, ${syncResult.skippedDuplicates ?? 0} duplikat dilewati`
-            : `Sync gagal: ${syncResult.error ?? 'Unknown error'}`}
+            ? `Sync complete — ${syncResult.rawInserted ?? 0} imported, ${syncResult.normalizedInserted ?? 0} normalized, ${syncResult.skippedDuplicates ?? 0} duplicates skipped`
+            : `Sync failed: ${syncResult.error ?? 'Unknown error'}`}
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Invoices</p>
-          <p className="text-base font-black text-slate-900 tracking-tight">
-            {summary.totalInvoices.toLocaleString('id-ID')}
-            <span className="text-xs font-semibold text-slate-400"> faktur</span>
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Multi-Item Trans</p>
-          <p className="text-base font-black text-blue-700 tracking-tight">
-            {summary.multiItemCount.toLocaleString('id-ID')}
-            <span className="text-xs font-semibold text-blue-400"> trans</span>
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Qty</p>
-          <p className="text-base font-black text-slate-800 tracking-tight">
-            {summary.totalQty.toLocaleString('id-ID')}
-            <span className="text-xs font-semibold text-slate-400"> pcs</span>
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Gross Sales</p>
-          <p className="text-base font-black text-slate-800 tracking-tight">
-            <Amt value={summary.totalGross} compact />
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-          <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mb-0.5">Total Diskon</p>
-          <p className="text-base font-black text-rose-600 tracking-tight">
-            <Amt value={summary.totalDisc} compact />
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-0.5">Total Comm</p>
-          <p className="text-base font-black text-emerald-700 tracking-tight">
-            <Amt value={summary.totalComm} compact />
-          </p>
-        </div>
-
-        <div className="bg-blue-50/50 border border-blue-200 rounded-xl p-3.5 shadow-2xs col-span-2 md:col-span-1">
-          <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-0.5">Net Sales</p>
-          <p className="text-base font-black text-blue-700 tracking-tight">
-            <Amt value={summary.totalNet} compact />
-          </p>
-        </div>
-      </div>
-
       {/* Main Table Container */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
-        {/* Filter Controls Bar */}
-        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-          {/* Search Box */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Cari No Invoice, No CB, Customer, Salesman, DWA..."
-              className="w-full pl-9 pr-3 py-2 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-            />
-          </div>
-
-          {/* Quick Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Store Location */}
-            <select
-              aria-label="Filter store location"
-              value={filterLoc}
-              disabled={isStoreScoped}
-              onChange={e => setFilterLoc(e.target.value)}
-              className={cn(
-                "text-xs font-semibold px-3 py-2 rounded-xl border outline-none cursor-pointer transition-all",
-                filterLoc ? "border-blue-300 bg-blue-50/40 text-blue-800" : "border-slate-200 bg-white text-slate-700",
-                isStoreScoped && "opacity-75 cursor-not-allowed bg-slate-50"
-              )}
-            >
-              <option value="">Semua Lokasi ({locations.length})</option>
-              {locations.map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
-              ))}
-            </select>
-
-            {/* Type Filter */}
-            <select
-              aria-label="Filter transaction type"
-              value={filterType}
-              onChange={e => setFilterType(e.target.value as any)}
-              className="text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 outline-none cursor-pointer"
-            >
-              <option value="all">Semua Tipe Transaksi</option>
-              <option value="multi">Hanya Multi-Item ({">"} 1 Item)</option>
-              <option value="single">Single Item (1 Item)</option>
-              <option value="has_cb">Ada No Cash Bill</option>
-              <option value="missing_cb">Belum Ada No Cash Bill</option>
-            </select>
-
-            {/* Accordion Expand / Collapse Buttons */}
-            <button
-              type="button"
-              onClick={expandAllMultiItems}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
-              title="Buka semua faktur yang memiliki lebih dari 1 item"
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-              <span>Buka Multi</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={collapseAll}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
-              title="Tutup semua rincian item"
-            >
-              <ChevronUp className="w-3.5 h-3.5" />
-              <span>Tutup Semua</span>
-            </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div><div className="flex items-center gap-2.5"><h2 className="text-sm font-bold text-slate-900">Invoice register</h2><span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500">{filtered.length} invoices</span></div><p className="mt-1 text-xs text-slate-400">Expand an invoice to review its items, payments and supporting details.</p></div>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={expandAllMultiItems} title="Expand invoices with multiple items" className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-blue-600"><ChevronDown size={14} />Expand multi-item</button>
+            <button type="button" onClick={collapseAll} title="Collapse all invoice items" className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-blue-600"><ChevronUp size={14} />Collapse</button>
           </div>
         </div>
-
+        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/40 p-4 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input aria-label="Search invoices" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search invoice, cash bill, customer or advisor…" className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-700 outline-none transition placeholder:text-xs placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select aria-label="Filter store location" value={filterLoc} disabled={isStoreScoped} onChange={e => setFilterLoc(e.target.value)} className="h-11 min-w-40 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 outline-none focus:border-blue-400 disabled:bg-slate-100 disabled:text-slate-500 lg:flex-none">
+              <option value="">All locations ({locations.length})</option>
+              {isStoreScoped && assignedStore && !locations.includes(assignedStore) && <option value={assignedStore}>{assignedStore}</option>}
+              {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+            </select>
+            <select aria-label="Filter invoice type" value={filterType} onChange={e => setFilterType(e.target.value as typeof filterType)} className="h-11 min-w-40 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 outline-none focus:border-blue-400 lg:flex-none">
+              <option value="all">All invoices</option><option value="multi">Multiple items</option><option value="single">Single item</option><option value="has_cb">Cash bill recorded</option><option value="missing_cb">Cash bill missing</option>
+            </select>
+            {(search || filterType !== 'all' || (!isStoreScoped && filterLoc)) && <button type="button" onClick={() => { setSearch(''); setFilterType('all'); if (!isStoreScoped) setFilterLoc(''); }} className="h-11 rounded-xl px-3 text-xs font-semibold text-blue-600 hover:bg-blue-50">Clear filters</button>}
+          </div>
+        </div>
         {/* Table View */}
         <InvoiceTable
           invoices={pagedInvoices}
@@ -820,8 +571,8 @@ function InvoiceManagementContent() {
         {/* Pagination Footer */}
         <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div>
-            Menampilkan <span className="font-bold text-slate-800">{pagedInvoices.length}</span> dari{' '}
-            <span className="font-bold text-slate-800">{filtered.length}</span> faktur ({invoices.length} total)
+            Showing <span className="font-bold text-slate-800">{pagedInvoices.length}</span> of{' '}
+            <span className="font-bold text-slate-800">{filtered.length}</span> matching invoices
           </div>
 
           <div className="flex items-center gap-1">
@@ -831,11 +582,11 @@ function InvoiceManagementContent() {
               disabled={page === 1}
               className="px-3 py-1.5 rounded-lg border border-slate-200 font-bold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              Sebelumnya
+              Previous
             </button>
 
             <span className="px-3 py-1.5 font-bold text-slate-700">
-              Halaman {page} / {totalPages}
+              Page {page} / {totalPages}
             </span>
 
             <button
@@ -844,7 +595,7 @@ function InvoiceManagementContent() {
               disabled={page === totalPages}
               className="px-3 py-1.5 rounded-lg border border-slate-200 font-bold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              Selanjutnya
+              Next
             </button>
           </div>
         </div>
@@ -939,12 +690,12 @@ function InvoiceManagementContent() {
                 <ShieldAlert className="w-5 h-5 text-amber-500" />
               </span>
               <div>
-                <h3 className="text-sm font-black text-slate-900">Buka Kunci Edit?</h3>
+                <h3 className="text-sm font-black text-slate-900">Enable invoice editing?</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">{month} {year}</p>
               </div>
             </div>
             <p className="text-xs text-slate-600 mb-5 leading-relaxed">
-              Data transaksi faktur bulan ini sebelumnya telah dikunci. Membuka kunci akan mengizinkan modifikasi No CB, commission item, dan data penunjang.
+              This month was previously locked. Enabling editing allows changes to cash bill numbers, item commissions and supporting details.
             </p>
             <div className="flex gap-2 justify-end">
               <button
@@ -952,14 +703,14 @@ function InvoiceManagementContent() {
                 onClick={() => setShowUnlockConfirm(false)}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"
               >
-                Batal
+                Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmUnlock}
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition-all shadow-2xs cursor-pointer"
               >
-                Ya, Buka Kunci
+                Enable editing
               </button>
             </div>
           </div>
@@ -978,12 +729,12 @@ function InvoiceManagementContent() {
                 <Trash2 className="w-5 h-5 text-rose-500" />
               </span>
               <div>
-                <h3 className="text-sm font-black text-slate-900">Hapus Invoice?</h3>
+                <h3 className="text-sm font-black text-slate-900">Delete this invoice?</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5 font-mono">{deleteTargetTransNo}</p>
               </div>
             </div>
             <p className="text-xs text-slate-600 mb-5 leading-relaxed">
-              Seluruh rincian item produk dan data penunjang di bawah nomor invoice ini akan dihapus secara permanen. Tindakan ini tidak bisa dibatalkan.
+              All items and supporting details for this invoice will be permanently deleted. This action cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
               <button
@@ -991,7 +742,7 @@ function InvoiceManagementContent() {
                 onClick={() => setDeleteTargetTransNo(null)}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"
               >
-                Batal
+                Cancel
               </button>
               <button
                 type="button"
@@ -1000,7 +751,7 @@ function InvoiceManagementContent() {
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
               >
                 {deleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
-                <span>Ya, Hapus Semua</span>
+                <span>Delete invoice</span>
               </button>
             </div>
           </div>

@@ -1,21 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import {
-  X,
-  FileText,
-  Save,
-  Loader2,
-  Check,
-  Receipt,
-  Tag,
-  Wrench,
-  ShieldCheck,
-  FileEdit,
-  Clock,
-  User,
-  Users
-} from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, FileText, Save, Loader2, Tag, Wrench, FileEdit, Clock, Users, Building2, AlertCircle, Plus, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   InvoiceHeader, InvoiceMeta, EntitleAdvisor, saveInvoiceMeta, getEntitleAdvisors,
@@ -47,338 +33,240 @@ const AFTER_SALES_PRESETS = [
   'Free Maintenance Service',
 ];
 
-export default function InvoiceMetaModal({
-  invoice,
-  isOpen,
-  onClose,
-  onSave,
-  userEmail,
-}: Props) {
-  const [cashBillNo, setCashBillNo] = useState('');
-  const [dwaNo, setDwaNo] = useState('');
-  const [discountReason, setDiscountReason] = useState('');
-  const [afterSales, setAfterSales] = useState('');
-  const [otherRemarks, setOtherRemarks] = useState('');
-  const [entitle, setEntitle] = useState('');
-  const [servedBy, setServedBy] = useState('');
+export default function InvoiceMetaModal({ invoice, isOpen, ...props }: Props) {
+  if (!isOpen || !invoice) return null;
+  return <InvoiceDetailsEditor key={invoice.trans_no} invoice={invoice} {...props} />;
+}
+
+function InvoiceDetailsEditor({
+  invoice, onClose, onSave, userEmail,
+}: Omit<Props, 'invoice' | 'isOpen'> & { invoice: InvoiceHeader }) {
+  // Keep payment and finance blocks separate from the editable note.
+  const raw = invoice.meta.other_remarks || '';
+  const markerIndex = [raw.indexOf('[PAYMENT_SPLITS]:'), raw.indexOf('[FINANCE_VERIFY]:')]
+    .filter(index => index >= 0)
+    .reduce((min, index) => Math.min(min, index), raw.length);
+  const [systemSuffix] = useState(() => raw.slice(markerIndex).trim());
+  const [cashBillNo, setCashBillNo] = useState(invoice.meta.cash_bill_no || '');
+  const [dwaNo, setDwaNo] = useState(invoice.meta.dwa_no || '');
+  const [discountReason, setDiscountReason] = useState(invoice.meta.discount_given_reason || '');
+  const [afterSales, setAfterSales] = useState(invoice.meta.after_sales_support || '');
+  const [otherRemarks, setOtherRemarks] = useState(() => raw.slice(0, markerIndex).trim());
+  const [entitle, setEntitle] = useState(invoice.meta.entitle || '');
+  const [servedBy, setServedBy] = useState(invoice.meta.served_by || '');
   const [advisors, setAdvisors] = useState<EntitleAdvisor[]>([]);
+  const [advisorsLoading, setAdvisorsLoading] = useState(true);
+  const [advisorsError, setAdvisorsError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const savingRef = useRef(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cashBillRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!isOpen) return;
-    getEntitleAdvisors().then(setAdvisors).catch(err => console.error('Failed to load advisors:', err));
-  }, [isOpen]);
+    let cancelled = false;
+    getEntitleAdvisors()
+      .then(data => { if (!cancelled) setAdvisors(data); })
+      .catch(() => { if (!cancelled) setAdvisorsError(true); })
+      .finally(() => { if (!cancelled) setAdvisorsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
-  // Group dropdown options by boutique so a CA is easy to find
-  const advisorGroups = advisors.reduce<Record<string, string[]>>((acc, a) => {
-    const store = a.home_location || 'Lainnya';
-    (acc[store] ||= []).push(a.name);
-    return acc;
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    cashBillRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!savingRef.current) onClose();
+      }
+      if (event.key === 'Tab') {
+        const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)'
+        ) || []).filter(element => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (!dialogRef.current?.contains(document.activeElement)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first)?.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  const advisorGroups = advisors.reduce<Record<string, string[]>>((groups, advisor) => {
+    (groups[advisor.home_location || 'Other'] ||= []).push(advisor.name);
+    return groups;
   }, {});
 
-  // other_remarks also stores machine blocks ([PAYMENT_SPLITS]/[FINANCE_VERIFY]) after the user's note;
-  // only the note is editable here, the system part is re-appended on save so POS splits aren't lost.
-  const [systemSuffix, setSystemSuffix] = useState('');
-
-  useEffect(() => {
-    if (invoice && isOpen) {
-      const raw = invoice.meta.other_remarks || '';
-      const markerIdx = [raw.indexOf('[PAYMENT_SPLITS]:'), raw.indexOf('[FINANCE_VERIFY]:')]
-        .filter(i => i >= 0)
-        .reduce((min, i) => Math.min(min, i), raw.length);
-      setCashBillNo(invoice.meta.cash_bill_no || '');
-      setDwaNo(invoice.meta.dwa_no || '');
-      setDiscountReason(invoice.meta.discount_given_reason || '');
-      setAfterSales(invoice.meta.after_sales_support || '');
-      setOtherRemarks(raw.slice(0, markerIdx).trim());
-      setSystemSuffix(raw.slice(markerIdx).trim());
-      setEntitle(invoice.meta.entitle || '');
-      setServedBy(invoice.meta.served_by || '');
-      setSavedSuccess(false);
-    }
-  }, [invoice, isOpen]);
-
-  if (!isOpen || !invoice) return null;
-
-  const handlePresetDiscount = (preset: string) => {
-    if (!discountReason) {
-      setDiscountReason(preset);
-    } else if (!discountReason.includes(preset)) {
-      setDiscountReason(prev => `${prev}; ${preset}`);
-    }
+  const addPreset = (value: string, preset: string, set: React.Dispatch<React.SetStateAction<string>>) => {
+    if (!value.includes(preset)) set(value ? value + '; ' + preset : preset);
   };
 
-  const handlePresetAfterSales = (preset: string) => {
-    if (!afterSales) {
-      setAfterSales(preset);
-    } else if (!afterSales.includes(preset)) {
-      setAfterSales(prev => `${prev}; ${preset}`);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
+    setSaveError('');
     try {
-      const updated = await saveInvoiceMeta(
-        invoice.trans_no,
-        {
-          cash_bill_no: cashBillNo.trim(),
-          dwa_no: dwaNo.trim(),
-          discount_given_reason: discountReason.trim(),
-          after_sales_support: afterSales.trim(),
-          other_remarks: [otherRemarks.trim(), systemSuffix].filter(Boolean).join('\n'),
-          entitle,
-          served_by: servedBy,
-        },
-        userEmail
-      );
+      const updated = await saveInvoiceMeta(invoice.trans_no, {
+        cash_bill_no: cashBillNo.trim(),
+        dwa_no: dwaNo.trim(),
+        discount_given_reason: discountReason.trim(),
+        after_sales_support: afterSales.trim(),
+        other_remarks: [otherRemarks.trim(), systemSuffix].filter(Boolean).join('\n'),
+        entitle,
+        served_by: servedBy,
+      }, userEmail);
       onSave(invoice.trans_no, updated);
-      setSavedSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 700);
-    } catch (err) {
-      console.error('Failed to save invoice meta:', err);
-      alert('Gagal menyimpan data penunjang faktur.');
+      onClose();
+    } catch {
+      setSaveError('Unable to save invoice details. Your changes are still here. Please try again.');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
+  const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400';
+  const labelClass = 'mb-2 block text-xs font-semibold text-slate-700';
+  const sectionClass = 'rounded-2xl border border-slate-200 bg-white p-4 sm:p-5';
+  const headingClass = 'mb-4 flex items-center gap-2 text-xs font-bold text-slate-800';
+
   return (
     <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-6 transition-all"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-md sm:p-5"
+      onClick={event => { if (event.target === event.currentTarget && !savingRef.current) onClose(); }}
     >
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* Header */}
-        <div className="p-5 sm:px-7 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-2xs">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900">Kelola Data Penunjang Faktur</h3>
-                <span className="text-[11px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                  {invoice.trans_no}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {invoice.customer} · {invoice.salesman} · {invoice.location}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5">
-          
-          {/* Section 1: Kasir & Referensi Dokumen */}
-          <div className="bg-slate-50/60 border border-slate-200/70 rounded-2xl p-4 space-y-3.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
-              <Receipt className="w-3.5 h-3.5 text-emerald-600" />
-              Dokumen Kasir & Referensi
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invoice-details-title"
+        className="flex max-h-[94dvh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/60 bg-slate-50 shadow-2xl"
+      >
+        <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-teal-100 bg-teal-50 text-teal-700"><FileEdit className="h-5 w-5" /></span>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  No Cash Bill (CB)
-                </label>
-                <input
-                  type="text"
-                  value={cashBillNo}
-                  onChange={e => setCashBillNo(e.target.value)}
-                  placeholder="Contoh: CB-2609-081"
-                  className="w-full text-xs font-mono font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  DWA Ref / No.
-                </label>
-                <input
-                  type="text"
-                  value={dwaNo}
-                  onChange={e => setDwaNo(e.target.value)}
-                  placeholder="Contoh: DWA-042/2026 atau No Approval"
-                  className="w-full text-xs font-mono font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
-                />
+                <h2 id="invoice-details-title" className="text-lg font-bold tracking-tight text-slate-900">Invoice details</h2>
+                <p className="mt-0.5 text-xs text-slate-500">Update references, advisor details and customer care.</p>
               </div>
             </div>
+            <button type="button" onClick={onClose} disabled={saving} aria-label="Close invoice details" className="cursor-pointer rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-teal-600 disabled:opacity-40"><X className="h-4 w-4" /></button>
           </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="break-all rounded-lg bg-slate-100 px-2.5 py-1.5 font-mono font-semibold text-slate-700">{invoice.trans_no}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 font-medium text-blue-700"><Building2 className="h-3.5 w-3.5" />{invoice.location || 'No boutique assigned'}</span>
+            <span className="break-words text-slate-500">{invoice.customer || 'Walk-in Guest'}</span>
+          </div>
+        </header>
 
-          {/* Section 1b: Served By + Entitle — additional data; the CA from the API (salesman) stays unchanged */}
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {([
-                { label: 'Served By', value: servedBy, set: setServedBy, aria: 'Pilih Served By' },
-                { label: 'Entitle (Customer Advisor)', value: entitle, set: setEntitle, aria: 'Pilih Customer Advisor entitle' },
-              ] as const).map(field => (
-                <div key={field.label}>
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1">
-                    <Users className="w-3.5 h-3.5 text-teal-600" />
-                    {field.label}
-                  </label>
-                  <select
-                    value={field.value}
-                    onChange={e => field.set(e.target.value)}
-                    aria-label={field.aria}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="">— Pilih Customer Advisor —</option>
-                    {Object.entries(advisorGroups).map(([store, names]) => (
-                      <optgroup key={store} label={store}>
-                        {names.map(n => <option key={n} value={n}>{n}</option>)}
-                      </optgroup>
-                    ))}
-                    {field.value && !advisors.some(a => a.name === field.value) && (
-                      <option value={field.value}>{field.value} (tidak aktif)</option>
-                    )}
-                  </select>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" aria-busy={saving}>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+            <fieldset disabled={saving} className="min-w-0 space-y-4">
+              <legend className="sr-only">Edit invoice supporting details</legend>
+              <section className={cn(sectionClass, 'border-teal-200')}>
+                <h3 className={headingClass}><FileText className="h-4 w-4 text-teal-600" />Document references</h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="invoice-details-cash-bill" className={labelClass}>Cash bill number <span className="font-normal text-slate-400">(CB)</span></label>
+                    <input ref={cashBillRef} id="invoice-details-cash-bill" value={cashBillNo} onChange={event => setCashBillNo(event.target.value)} placeholder="e.g. CB-2610-081" className={cn(inputClass, 'font-mono')} />
+                  </div>
+                  <div>
+                    <label htmlFor="invoice-details-dwa" className={labelClass}>DWA approval reference</label>
+                    <input id="invoice-details-dwa" value={dwaNo} onChange={event => setDwaNo(event.target.value)} placeholder="e.g. DWA-042/2026" className={cn(inputClass, 'font-mono')} />
+                  </div>
                 </div>
-              ))}
-            </div>
-            <p className="text-[10px] text-slate-400">
-              Data tambahan — CA transaksi dari API tetap: <span className="font-semibold text-slate-600">{invoice.salesman || '—'}</span>
-            </p>
-          </div>
+              </section>
 
-          {/* Section 2: Alasan Diskon (Discount Given Reason) */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <Tag className="w-3.5 h-3.5 text-indigo-600" />
-              Discount Given Reason (Alasan Pemberian Diskon)
-            </label>
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {DISCOUNT_PRESETS.map(preset => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => handlePresetDiscount(preset)}
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 transition-colors"
-                >
-                  + {preset}
-                </button>
-              ))}
-            </div>
-            <textarea
-              rows={2}
-              value={discountReason}
-              onChange={e => setDiscountReason(e.target.value)}
-              placeholder="Tulis alasan diskon atau klik tombol preset di atas..."
-              className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all resize-none"
-            />
-          </div>
+              <section className={sectionClass}>
+                <h3 className={headingClass}><Users className="h-4 w-4 text-indigo-500" />Advisor assignment</h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {([
+                    { id: 'invoice-details-served', label: 'Served by', value: servedBy, set: setServedBy },
+                    { id: 'invoice-details-entitle', label: 'Entitled advisor', value: entitle, set: setEntitle },
+                  ] as const).map(field => (
+                    <div key={field.id}>
+                      <label htmlFor={field.id} className={labelClass}>{field.label}</label>
+                      <select id={field.id} value={field.value} onChange={event => field.set(event.target.value)} disabled={advisorsLoading || advisorsError} className={cn(inputClass, 'cursor-pointer')}>
+                        <option value="">{advisorsLoading ? 'Loading advisors...' : 'Select an advisor'}</option>
+                        {Object.entries(advisorGroups).map(([store, names]) => (
+                          <optgroup key={store} label={store}>{names.map(name => <option key={name} value={name}>{name}</option>)}</optgroup>
+                        ))}
+                        {field.value && !advisors.some(advisor => advisor.name === field.value) && <option value={field.value}>{field.value} (current)</option>}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] text-slate-500">Transaction advisor: <span className="font-semibold text-slate-700">{invoice.salesman || '\u2014'}</span></p>
+                {advisorsError && <p role="status" className="mt-2 text-xs text-amber-700">Advisor options could not be loaded. Reopen this editor to try again.</p>}
+              </section>
 
-          {/* Section 3: After Sales Support */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <Wrench className="w-3.5 h-3.5 text-amber-600" />
-              After Sales Support (Layanan Purna Jual)
-            </label>
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {AFTER_SALES_PRESETS.map(preset => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => handlePresetAfterSales(preset)}
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-colors"
-                >
-                  + {preset}
-                </button>
-              ))}
-            </div>
-            <textarea
-              rows={2}
-              value={afterSales}
-              onChange={e => setAfterSales(e.target.value)}
-              placeholder="Contoh: Free resizing cincin ukuran 52, polishing gratis..."
-              className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition-all resize-none"
-            />
-          </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {([
+                  { id: 'invoice-details-discount', title: 'Discount reason', icon: Tag, value: discountReason, set: setDiscountReason, presets: DISCOUNT_PRESETS, placeholder: 'Describe the discount approval or select a suggestion.', tone: 'indigo' },
+                  { id: 'invoice-details-after-sales', title: 'After-sales support', icon: Wrench, value: afterSales, set: setAfterSales, presets: AFTER_SALES_PRESETS, placeholder: 'Add any agreed services or customer care.', tone: 'teal' },
+                ] as const).map(field => (
+                  <section key={field.id} className={sectionClass}>
+                    <label htmlFor={field.id} className={headingClass}><field.icon className={cn('h-4 w-4', field.tone === 'indigo' ? 'text-indigo-500' : 'text-teal-600')} />{field.title}</label>
+                    <textarea id={field.id} rows={3} value={field.value} onChange={event => field.set(event.target.value)} placeholder={field.placeholder} className={cn(inputClass, 'resize-y')} />
+                    <p className="mb-2 mt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Quick suggestions</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {field.presets.map(preset => {
+                        const selected = field.value.includes(preset);
+                        return (
+                          <button key={preset} type="button" disabled={selected} onClick={() => addPreset(field.value, preset, field.set)}
+                            className={cn('inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-teal-600', selected ? 'border-teal-200 bg-teal-50 text-teal-800' : 'cursor-pointer border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700')}>
+                            {selected ? <Check className="h-3 w-3 shrink-0" /> : <Plus className="h-3 w-3 shrink-0" />}{preset}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
 
-          {/* Section 4: Other Remarks */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <FileEdit className="w-3.5 h-3.5 text-slate-500" />
-              Other Remarks / Catatan Khusus
-            </label>
-            <textarea
-              rows={2}
-              value={otherRemarks}
-              onChange={e => setOtherRemarks(e.target.value)}
-              placeholder="Catatan tambahan internal transaksi ini..."
-              className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all resize-none"
-            />
-          </div>
-
-          {/* Audit Stamping Info */}
-          {invoice.meta.updated_at && (
-            <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 pt-3">
-              <span className="flex items-center gap-1">
-                <User className="w-3 h-3" />
-                Diperbarui oleh: {invoice.meta.updated_by || 'system'}
-              </span>
-              <span className="flex items-center gap-1 font-mono">
-                <Clock className="w-3 h-3" />
-                {new Date(invoice.meta.updated_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB
-              </span>
-            </div>
-          )}
-
-          {/* Footer Buttons */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 transition-all"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={saving || savedSuccess}
-              className={cn(
-                "flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-sm",
-                savedSuccess
-                  ? "bg-emerald-600 hover:bg-emerald-700"
-                  : "bg-blue-600 hover:bg-blue-700"
+              <section className={sectionClass}>
+                <label htmlFor="invoice-details-notes" className={headingClass}><FileEdit className="h-4 w-4 text-slate-500" />Additional notes</label>
+                <textarea id="invoice-details-notes" rows={2} value={otherRemarks} onChange={event => setOtherRemarks(event.target.value)} placeholder="Add any other transaction details..." className={cn(inputClass, 'resize-y')} />
+              </section>
+              {invoice.meta.updated_at && (
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[10px] text-slate-400">
+                  <Clock className="h-3 w-3" />Last updated by {invoice.meta.updated_by || 'system'} &middot; {new Date(invoice.meta.updated_at).toLocaleString('en-GB', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })} WIB
+                </p>
               )}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Menyimpan...
-                </>
-              ) : savedSuccess ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  Tersimpan!
-                </>
-              ) : (
-                <>
-                  <Save className="w-3.5 h-3.5" />
-                  Simpan Data Penunjang
-                </>
-              )}
-            </button>
+            </fieldset>
           </div>
 
+          <footer className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
+            {saveError && <p role="alert" className="mb-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" />{saveError}</p>}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[10px] text-slate-400">BVLGARI Intelligence / Aris Setiyono</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={onClose} disabled={saving} className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-teal-600 disabled:opacity-40">Cancel</button>
+                <button type="submit" disabled={saving} className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-teal-600 disabled:cursor-wait disabled:opacity-60">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 text-teal-300" />}{saving ? 'Saving...' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+          </footer>
         </form>
-
       </div>
     </div>
   );

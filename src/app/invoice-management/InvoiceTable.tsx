@@ -6,23 +6,22 @@ import {
   ChevronRight,
   Receipt,
   FileText,
+  FileCheck2,
+  FilePlus2,
   Lock,
   Trash2,
   Check,
   Loader2,
   Package,
-  Clock,
-  Sparkles,
   ShoppingBag,
   User,
-  MapPin,
   CreditCard,
   Link2,
   CircleCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
-import { InvoiceHeader, InvoiceItem } from '@/services/dashboard/invoiceService';
+import { InvoiceHeader } from '@/services/dashboard/invoiceService';
 
 interface Props {
   invoices: InvoiceHeader[];
@@ -47,8 +46,15 @@ interface Props {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  SMI:     'bg-blue-100 text-blue-700 border-blue-200',
-  Regular: 'bg-slate-100 text-slate-600 border-slate-200',
+  SMI:     'bg-violet-50 text-violet-700 border-violet-200',
+  Regular: 'bg-teal-50 text-teal-700 border-teal-200',
+};
+
+const STORE_COLORS: Record<string, string> = {
+  'Plaza Indonesia': 'border-blue-100 bg-blue-50/80 text-blue-700',
+  'Plaza Senayan': 'border-violet-100 bg-violet-50/80 text-violet-700',
+  Bali: 'border-teal-100 bg-teal-50/80 text-teal-700',
+  'Bali Boutique': 'border-teal-100 bg-teal-50/80 text-teal-700',
 };
 
 const fmtDate = (iso: string) => {
@@ -94,42 +100,44 @@ export default function InvoiceTable({
   };
 
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-[70vh] overflow-auto overscroll-contain">
       <table className="w-full text-left whitespace-nowrap">
-        <thead className="bg-slate-50/80 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100">
+        <thead className="sticky top-0 z-10 border-b border-blue-100 bg-linear-to-r from-slate-100 via-blue-50 to-slate-100 text-[10px] font-semibold uppercase tracking-wider text-slate-600 shadow-xs">
           <tr>
             <th className="py-3 px-3 w-8"></th>
-            <th className="py-3 px-4">Tgl</th>
-            <th className="py-3 px-4">No Transaksi (Invoice)</th>
-            <th className="py-3 px-4">No Cash Bill (CB)</th>
-            <th className="py-3 px-4">Customer</th>
-            <th className="py-3 px-4">CA</th>
+            <th className="py-3 px-4">Date</th>
+            <th className="py-3 px-4">Invoice</th>
+            <th className="py-3 px-4">Cash bill</th>
+            <th className="py-3 px-4">Customer / Advisor</th>
             <th className={isUnlocked && isAdmin ? 'text-amber-600 py-3 px-4' : 'text-slate-400 py-3 px-4'}>
               <span className="inline-flex items-center gap-1">
-                Lokasi {isUnlocked && isAdmin ? '✎' : <Lock className="w-2.5 h-2.5" />}
+                Store {isUnlocked && isAdmin ? '✎' : <Lock className="w-2.5 h-2.5" />}
               </span>
             </th>
             <th className="py-3 px-4 text-center">Item / Qty</th>
             <th className="py-3 px-4 text-right">Gross Sales</th>
-            <th className="py-3 px-4 text-right">Diskon</th>
+            <th className="py-3 px-4 text-right">Discount</th>
             <th className="py-3 px-4 text-right text-emerald-700">Total Comm</th>
-            <th className="py-3 px-4 text-right bg-slate-50/60 text-slate-800">Net Sales</th>
-            <th className="py-3 px-3 text-center">Data Penunjang</th>
-            {isAdmin && <th className="py-3 px-3 text-center text-rose-500 w-12">Hapus</th>}
+            <th className="py-3 px-4 text-right bg-blue-100/40 text-blue-800">Net Sales</th>
+            <th className="py-3 px-3 text-center">Details</th>
+            {isAdmin && <th className="py-3 px-3 text-center text-rose-500 w-12">Delete</th>}
           </tr>
         </thead>
 
         <tbody className="divide-y divide-slate-100 text-xs">
           {invoices.length === 0 ? (
             <tr>
-              <td colSpan={isAdmin ? 14 : 13} className="py-16 text-center text-slate-400 text-sm">
-                Tidak ada faktur transaksi ditemukan
+              <td colSpan={isAdmin ? 13 : 12} className="py-16 text-center text-slate-400 text-sm">
+                <Receipt size={28} strokeWidth={1.5} className="mx-auto mb-3 text-slate-300" />
+                <p className="font-semibold text-slate-600">No matching invoices</p>
+                <p className="mt-1 text-xs">Try another search, location or reporting period.</p>
               </td>
             </tr>
           ) : (
-            invoices.map((inv) => {
+            invoices.map((inv, index) => {
               const isExpanded = expandedTransNos.has(inv.trans_no);
               const isSavingLoc = savingInvoiceNo === inv.trans_no;
+              const cashBill = inv.meta.cash_bill_no?.trim();
               const hasMeta = Boolean(
                 inv.meta.cash_bill_no ||
                 inv.meta.discount_given_reason ||
@@ -143,10 +151,10 @@ export default function InvoiceTable({
                   {/* Parent Invoice Row */}
                   <tr
                     className={cn(
-                      "transition-colors group",
+                      "group transition-colors duration-150",
                       isExpanded
-                        ? "bg-slate-50/90 border-l-4 border-l-emerald-600"
-                        : "hover:bg-slate-50/80"
+                        ? "bg-blue-50/70"
+                        : index % 2 === 0 ? "bg-white hover:bg-blue-50/50" : "bg-slate-50/40 hover:bg-blue-50/50"
                     )}
                   >
                     {/* Expand Toggle */}
@@ -154,13 +162,15 @@ export default function InvoiceTable({
                       <button
                         type="button"
                         onClick={() => toggleExpand(inv.trans_no)}
+                        aria-expanded={isExpanded}
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} invoice ${inv.trans_no}`}
                         className={cn(
                           "w-6 h-6 rounded-lg flex items-center justify-center transition-all",
                           isExpanded
-                            ? "bg-emerald-600 text-white shadow-2xs"
-                            : "text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "bg-blue-50/70 text-blue-400 hover:bg-blue-100 hover:text-blue-700"
                         )}
-                        title={isExpanded ? "Tutup rincian item" : "Buka rincian item"}
+                        title={isExpanded ? "Collapse invoice items" : "Expand invoice items"}
                       >
                         {isExpanded ? (
                           <ChevronDown className="w-4 h-4" />
@@ -177,12 +187,13 @@ export default function InvoiceTable({
 
                     {/* Trans No */}
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-52 flex-wrap items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => toggleExpand(inv.trans_no)}
-                          className="font-mono text-xs font-bold text-blue-600 hover:underline flex items-center gap-1.5"
-                          title="Klik untuk membuka/menutup rincian item"
+                          className="mb-1 flex w-full items-center gap-2 font-mono text-xs font-semibold text-slate-800 hover:text-blue-600"
+                          aria-expanded={isExpanded}
+                          title="Expand or collapse invoice items"
                         >
                           {inv.trans_no}
                           {inv.item_count > 1 && (
@@ -196,7 +207,7 @@ export default function InvoiceTable({
                           onClick={() => onOpenDeposits(inv)}
                           aria-label={inv.depositLinks?.length ? `View ${inv.depositLinks.length} applied DP for ${inv.trans_no}` : `Link sales DP to ${inv.trans_no}`}
                           title={inv.depositLinks?.length ? `Applied DP: ${inv.depositLinks.map(dp => dp.transNo).join(', ')}` : 'Select sales down payments'}
-                          className={cn('inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-bold', inv.depositLinks?.length ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-blue-200 bg-blue-50 text-blue-700')}
+                          className={cn('inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-semibold transition-colors', inv.depositLinks?.length ? 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100' : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100')}
                         >{inv.depositLinks?.length ? <CircleCheck size={13} /> : <Link2 size={13} />}DP{inv.depositLinks?.length ? ` (${inv.depositLinks.length})` : ''}</button>
                         <button
                           type="button"
@@ -204,11 +215,11 @@ export default function InvoiceTable({
                             e.stopPropagation();
                             onViewInvoice(inv);
                           }}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
-                          title="Tampilkan Sales Invoice / Faktur Penjualan"
+                          className="inline-flex items-center gap-1 rounded-lg border border-blue-100 bg-blue-50/50 px-2 py-1 text-[10px] font-semibold text-blue-700 transition hover:border-blue-200 hover:bg-blue-100/60"
+                          title="View or print sales invoice"
                         >
-                          <FileText className="w-3 h-3 text-amber-700" />
-                          <span>Faktur</span>
+                          <FileText className="w-3 h-3" />
+                          <span>View invoice</span>
                         </button>
                       </div>
                     </td>
@@ -218,6 +229,7 @@ export default function InvoiceTable({
                       {editingCbTransNo === inv.trans_no ? (
                         <input
                           type="text"
+                          aria-label={`Cash bill number for ${inv.trans_no}`}
                           autoFocus
                           value={cbInputVal}
                           onChange={e => setCbInputVal(e.target.value)}
@@ -226,36 +238,35 @@ export default function InvoiceTable({
                             if (e.key === 'Enter') handleCbBlur(inv.trans_no);
                             if (e.key === 'Escape') setEditingCbTransNo(null);
                           }}
-                          placeholder="No CB..."
-                          className="w-28 text-xs font-mono font-bold px-2 py-0.5 rounded-lg border border-emerald-400 bg-white text-emerald-900 outline-none shadow-2xs"
+                          placeholder="Cash bill number…"
+                          className="h-8 w-36 rounded-lg border border-teal-400 bg-white px-2.5 font-mono text-xs font-semibold text-teal-900 outline-none ring-2 ring-teal-100"
                         />
                       ) : (
-                        <div
+                        <button
+                          type="button"
+                          disabled={!isUnlocked}
+                          aria-label={cashBill ? `Cash bill ${cashBill}${isUnlocked ? ', click to edit' : ''}` : isUnlocked ? `Add cash bill for ${inv.trans_no}` : `Cash bill missing for ${inv.trans_no}. Enable editing to add one.`}
                           onClick={() => startEditCb(inv.trans_no, inv.meta.cash_bill_no)}
                           className={cn(
-                            "cursor-pointer inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-lg transition-all",
-                            inv.meta.cash_bill_no
-                              ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-200/80 hover:bg-emerald-100"
+                            "inline-flex min-h-7 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 disabled:cursor-default",
+                            cashBill
+                              ? "border-teal-200/80 bg-teal-50 text-teal-800 enabled:hover:bg-teal-100"
                               : isUnlocked
-                              ? "bg-slate-100 text-slate-400 border border-dashed border-slate-300 hover:border-emerald-400 hover:text-emerald-700"
-                              : "text-slate-300"
+                              ? "border-dashed border-blue-200 bg-blue-50/60 text-blue-700 hover:border-blue-400 hover:bg-blue-100"
+                              : "border-amber-200/70 bg-amber-50/70 text-amber-700"
                           )}
-                          title={isUnlocked ? "Klik untuk edit No Cash Bill" : "Kunci terbuka untuk edit No CB"}
+                          title={isUnlocked ? "Edit cash bill number" : "Enable editing to update cash bill"}
                         >
-                          <Receipt className="w-3 h-3 text-emerald-600" />
-                          {inv.meta.cash_bill_no || (isUnlocked ? '+ No CB' : '—')}
-                        </div>
+                          {cashBill ? <FileCheck2 size={13} /> : isUnlocked ? <FilePlus2 size={13} /> : <FileText size={13} />}
+                          <span className={cashBill ? 'font-mono' : ''}>{cashBill || (isUnlocked ? 'Add cash bill' : 'Missing')}</span>
+                        </button>
                       )}
                     </td>
 
                     {/* Customer */}
-                    <td className="py-3 px-4 font-medium text-slate-800 max-w-[140px] truncate" title={inv.customer}>
-                      {inv.customer || '—'}
-                    </td>
-
-                    {/* Salesman */}
-                    <td className="py-3 px-4 font-semibold text-slate-700">
-                      {inv.salesman || '—'}
+                    <td className="min-w-44 max-w-56 px-4 py-4" title={`${inv.customer} · ${inv.salesman}`}>
+                      <span className="block truncate font-semibold text-slate-800">{inv.customer || '—'}</span>
+                      <span className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-400"><User size={11} />{inv.salesman || 'Unassigned'}</span>
                     </td>
 
                     {/* Location (Admin editable for whole invoice) */}
@@ -277,14 +288,14 @@ export default function InvoiceTable({
                           {isSavingLoc && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
                         </div>
                       ) : (
-                        <span className="text-slate-600 font-medium text-[11px]">{inv.location || '—'}</span>
+                        <span className={cn('inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-semibold', STORE_COLORS[inv.location] || 'border-slate-200 bg-slate-50 text-slate-600')}><span className="h-1 w-1 rounded-full bg-current opacity-60" />{inv.location || '—'}</span>
                       )}
                     </td>
 
                     {/* Item Count & Qty */}
                     <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                        <Package className="w-3 h-3 text-slate-400" />
+                      <span className="inline-flex items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50/70 px-2 py-1 text-[10px] font-semibold text-indigo-700">
+                        <Package className="w-3 h-3 text-indigo-400" />
                         {inv.item_count} ({inv.total_qty} pcs)
                       </span>
                     </td>
@@ -306,39 +317,41 @@ export default function InvoiceTable({
                         <button
                           type="button"
                           onClick={() => onOpenPayment(inv)}
-                          className="p-1 rounded-lg text-emerald-700 hover:bg-emerald-100 hover:text-emerald-950 transition-all cursor-pointer shadow-2xs border border-emerald-200/80 bg-emerald-50/50"
-                          title="Set Rincian Pembayaran POS & Hitung Card Comm"
+                          aria-label={`Manage POS payments for ${inv.trans_no}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-teal-200/80 bg-teal-50 px-2 py-1.5 text-[10px] font-semibold text-teal-700 transition hover:border-teal-300 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+                          title="Manage POS payments and card commission"
                         >
                           <CreditCard className="w-3.5 h-3.5" />
+                          <span>POS</span>
                         </button>
                       </div>
                     </td>
 
                     {/* Net Sales */}
-                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 bg-slate-50/60">
+                    <td className="border-l border-blue-100/50 bg-blue-50/40 py-3 px-4 text-right font-mono font-semibold text-blue-950">
                       <Amt value={inv.total_net} />
                     </td>
 
-                    {/* Data Penunjang Button */}
+                    {/* Details Button */}
                     <td className="py-3 px-3 text-center">
                       <button
                         type="button"
                         onClick={() => onEditMeta(inv)}
                         className={cn(
-                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all shadow-2xs",
+                          "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition-colors",
                           hasMeta
-                            ? "bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100"
-                            : "bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+                            ? "border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100"
+                            : "border-violet-100 bg-violet-50/70 text-violet-700 hover:border-violet-200 hover:bg-violet-100"
                         )}
-                        title="Lihat / Edit Dokumen Penunjang (No CB, Alasan Diskon, After Sales, DWA, Remarks)"
+                        title="View supporting details: cash bill, discount reason, after-sales support, DWA and remarks"
                       >
-                        <FileText className="w-3 h-3 text-emerald-700" />
+                        <FileText className="w-3 h-3" />
                         {hasMeta ? (
                           <span className="inline-flex items-center gap-1">
-                            Lengkap <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Recorded <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           </span>
                         ) : (
-                          <span>+ Data</span>
+                          <span>Add details</span>
                         )}
                       </button>
                     </td>
@@ -350,7 +363,7 @@ export default function InvoiceTable({
                           type="button"
                           onClick={() => onDeleteInvoice(inv.trans_no)}
                           disabled={Boolean(inv.depositLinks?.length)}
-                          title={inv.depositLinks?.length ? 'Remove linked DP references before deleting' : 'Hapus seluruh faktur ini'}
+                          title={inv.depositLinks?.length ? 'Remove linked DP references before deleting' : 'Delete this invoice'}
                           className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-600 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -362,7 +375,7 @@ export default function InvoiceTable({
                   {/* Sub-Table: Nested Breakdown of Items (when expanded) */}
                   {isExpanded && (
                     <tr className="bg-slate-50/90 border-b-2 border-slate-200">
-                      <td colSpan={isAdmin ? 14 : 13} className="p-3 sm:px-8 py-4">
+                      <td colSpan={isAdmin ? 13 : 12} className="p-3 sm:px-8 py-4">
                         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
                           
                           {/* Sub-table Header */}
@@ -370,35 +383,35 @@ export default function InvoiceTable({
                             <div className="flex items-center gap-2">
                               <ShoppingBag className="w-4 h-4 text-blue-600" />
                               <h4 className="text-xs font-bold text-slate-800">
-                                Rincian {inv.items.length} Barang pada Nota #{inv.trans_no}
+                                {inv.items.length} items · {inv.trans_no}
                               </h4>
                               {inv.meta.discount_given_reason && (
                                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 truncate max-w-xs">
-                                  Diskon: {inv.meta.discount_given_reason}
+                                  Discount: {inv.meta.discount_given_reason}
                                 </span>
                               )}
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
                               <div className="text-[11px] text-slate-400 font-mono">
-                                Subtotal Nota: <strong className="text-blue-700"><Amt value={inv.total_net} /></strong> · Total Comm: <strong className="text-emerald-700"><Amt value={inv.total_comm} /></strong>
+                                Invoice subtotal: <strong className="text-blue-700"><Amt value={inv.total_net} /></strong> · Total Comm: <strong className="text-emerald-700"><Amt value={inv.total_comm} /></strong>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => onOpenPayment(inv)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-all cursor-pointer"
-                                title="Set Rincian Pembayaran POS & Hitung Card Comm Otomatis"
+                                title="Manage POS payments and card commission Otomatis"
                               >
                                 <CreditCard className="w-3.5 h-3.5" />
-                                <span>Rincian Pembayaran (POS)</span>
+                                <span>POS payments</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => onViewInvoice(inv)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-2xs transition-all cursor-pointer"
-                                title="Lihat & Cetak Faktur Penjualan"
+                                title="View and print invoice"
                               >
                                 <FileText className="w-3.5 h-3.5" />
-                                <span>Lihat Faktur Invoice</span>
+                                <span>View invoice</span>
                               </button>
                             </div>
                           </div>
@@ -410,15 +423,15 @@ export default function InvoiceTable({
                                 <tr>
                                   <th className="py-2 px-3 w-8">No</th>
                                   <th className="py-2 px-3">SAP Code</th>
-                                  <th className="py-2 px-3">Deskripsi / Catalogue</th>
-                                  <th className="py-2 px-3">Kategori</th>
-                                  <th className="py-2 px-3">Koleksi</th>
+                                  <th className="py-2 px-3">Description / Catalogue</th>
+                                  <th className="py-2 px-3">Category</th>
+                                  <th className="py-2 px-3">Collection</th>
                                   <th className={cn("py-2 px-3", isUnlocked ? "text-amber-600" : "text-slate-400")}>
                                     Type {isUnlocked ? '✎' : '🔒'}
                                   </th>
                                   <th className="py-2 px-3 text-right">Qty</th>
                                   <th className="py-2 px-3 text-right">Gross Price</th>
-                                  <th className="py-2 px-3 text-right">Diskon</th>
+                                  <th className="py-2 px-3 text-right">Discount</th>
                                   <th className={cn("py-2 px-3 text-right", isUnlocked ? "text-amber-600 font-bold" : "text-slate-500")}>
                                     Card Comm {isUnlocked ? '✎' : '🔒'}
                                   </th>
@@ -488,7 +501,7 @@ export default function InvoiceTable({
                                           <input
                                             type="text"
                                             aria-label="Edit item comm"
-                                            placeholder="Isi Comm..."
+                                            placeholder="Commission…"
                                             value={commVal}
                                             disabled={isSaving}
                                             onChange={e => {

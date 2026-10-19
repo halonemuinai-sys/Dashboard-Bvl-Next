@@ -83,6 +83,8 @@ test('monthly workbook retains template details, emits all requested tabs and re
   const reopened = new ExcelJS.Workbook(); await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
   // Store totals live on the compact Summary sheet: B=Net, C=Regular, D=SMI, F=Achievement.
   const summary = reopened.getWorksheet('Summary');
+  assert.equal(reopened.worksheets[0].name, 'Summary');
+  assert.equal(summary.columnCount, 7);
   assert.equal(summary.getCell('B6').result, 320); assert.equal(summary.getCell('B7').result, 200); assert.equal(summary.getCell('B8').result, 125);
   assert.equal(summary.getCell('B10').result, 245); assert.equal(summary.getCell('C10').result, 245); assert.equal(summary.getCell('D10').result, 0);
   assert.equal(summary.getCell('F10').result, 245 / 1.11);
@@ -108,7 +110,7 @@ test('monthly workbook retains template details, emits all requested tabs and re
   }));
 });
 
-test('empty monthly report still contains the summary plus all six sheets and zero summary totals', () => {
+test('empty monthly report still contains the summary and all detail sheets with zero summary totals', () => {
   const report = buildStoreReportData([], [], [], 'Plaza Indonesia');
   const { workbook } = buildStoreDailyWorkbook(template, report, [], [], [], { metrics: [], details: [] }, { month: 2, year: 2024, store: 'Plaza Indonesia' });
   assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), ['Summary', 'DS', 'DP', 'Service', 'IN', 'OUT', 'SPPR_']);

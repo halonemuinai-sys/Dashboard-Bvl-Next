@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/lib/server-access';
 import { hasMenuAccess } from '@/lib/access-policy';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
-import { DEPOSIT_LINK_PREFIX, depositLinkKey, groupSalesDeposits, isDepositWithinInvoicePeriod, readDepositLink, type DepositSourceRow, type DepositLink } from '@/lib/deposit-links';
+import { DEPOSIT_LINK_PREFIX, depositLinkKey, groupSalesDeposits, isDepositWithinInvoicePeriod, rankSalesDeposits, readDepositLink, type DepositSourceRow, type DepositLink } from '@/lib/deposit-links';
 
 const SOURCE_FIELDS = 'id,transaction_no,transaction_date,customer_name,salesman,location,collection,qty,price,sub_total_discount,net_sales';
 async function access(path: '/invoice-management' | '/monthly-dps-svc') {
@@ -16,13 +16,13 @@ async function access(path: '/invoice-management' | '/monthly-dps-svc') {
 async function invoiceAccess(invoiceNo: string) {
   if (typeof invoiceNo !== 'string' || !invoiceNo.trim() || invoiceNo.length > 150) throw new Error('Invalid sales invoice.');
   const context = await access('/invoice-management');
-  const items = await fetchAllRows((from, to) => context.db.from('clean_master').select('id,trans_no,transaction_date,location,collection').eq('trans_no', invoiceNo).order('id').range(from, to));
+  const items = await fetchAllRows((from, to) => context.db.from('clean_master').select('id,trans_no,transaction_date,location,collection,customer').eq('trans_no', invoiceNo).order('id').range(from, to));
   if (!items.length || items.some(item => ['DPS', 'SVC', 'PACK'].includes((item.collection || '').toUpperCase()) || item.location?.toUpperCase().startsWith('RB'))) throw new Error('Select a regular sales invoice.');
   const locations = new Set(items.map(item => item.location));
   if (locations.size !== 1) throw new Error('This invoice has conflicting store locations. Correct it before linking a DP.');
   const location = items[0].location;
   if (context.user.assigned_store && context.user.assigned_store !== 'ALL' && context.user.assigned_store !== location) throw new Error('This invoice is outside your assigned store.');
-  return { ...context, location, invoiceDate: items[0].transaction_date as string };
+  return { ...context, location, invoiceDate: items[0].transaction_date as string, customer: items[0].customer || '' };
 }
 async function links(db: Awaited<ReturnType<typeof access>>['db']) {
   const rows = await fetchAllRows((from, to) => db.from('transaction_records_meta').select('trans_no,other_remarks')
@@ -41,16 +41,14 @@ async function result<T>(work: () => Promise<T>) {
 export async function searchSalesDepositsAction(invoiceNo: string, search: string) {
   return result(async () => {
     if (typeof search !== 'string' || search.length > 150) throw new Error('Search must be 150 characters or fewer.');
-    const { db, location, invoiceDate } = await invoiceAccess(invoiceNo);
+    const { db, location, invoiceDate, customer } = await invoiceAccess(invoiceNo);
     const [raw, saved] = await Promise.all([
       fetchAllRows((from, to) => db.from('bvlgari_sales').select(SOURCE_FIELDS).eq('collection', 'DPS').eq('location', location).order('id').range(from, to)),
       links(db),
     ]);
     const byDeposit = new Map(saved.map(link => [link.transNo, link]));
-    const q = search.trim().toLowerCase();
-    const matches = groupSalesDeposits(raw as DepositSourceRow[]).filter(dp => !byDeposit.has(dp.transNo) && isDepositWithinInvoicePeriod(dp.date, invoiceDate)
-      && (!q || `${dp.transNo} ${dp.customer} ${dp.salesman}`.toLowerCase().includes(q)))
-      .sort((a, b) => b.date.localeCompare(a.date) || a.transNo.localeCompare(b.transNo));
+    const eligible = groupSalesDeposits(raw as DepositSourceRow[]).filter(dp => !byDeposit.has(dp.transNo) && isDepositWithinInvoicePeriod(dp.date, invoiceDate));
+    const matches = rankSalesDeposits(eligible, search, customer);
     return { results: matches.slice(0, 100).map(dp => ({ ...dp, link: byDeposit.get(dp.transNo) || null })), total: matches.length, linked: saved.filter(link => link.invoiceNo === invoiceNo) };
   });
 }

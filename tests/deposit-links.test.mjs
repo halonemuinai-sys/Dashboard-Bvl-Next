@@ -159,3 +159,59 @@ test('malformed saved references fail closed', async () => {
   tables.transaction_records_meta.push({ trans_no: model.depositLinkKey('DP-1'), other_remarks: '{bad json' });
   assert.equal((await actions.linkSalesDepositsAction('INV-1', ['DP-1'])).ok, false);
 });
+
+test('customer name matching tolerates punctuation, accents, titles, reordered names and minor typos', () => {
+  assert.equal(model.customerNameSimilarity('Mrs. Karuna Karnani', 'KARNANI, Karuna'), 100);
+  assert.equal(model.customerNameSimilarity('Jose Setiyono', 'Jos\u00e9 Setiyono'), 100);
+  assert.equal(model.customerNameSimilarity("O'Connor Jane", 'Jane Oconnor'), 100);
+  assert.ok(model.customerNameSimilarity('Frandy Efendy', 'Frandi Effendy') >= 80);
+  assert.ok(model.customerNameSimilarity('Aris Setiyono', 'Aris Setiono') >= 80);
+  assert.ok(model.customerNameSimilarity('Aris Setiyono', 'Frandy Efendy') < 80);
+  assert.equal(model.customerNameSimilarity('Li', 'Lu'), 0);
+  assert.equal(model.customerNameSimilarity('', ''), 0);
+  assert.equal(model.customerNameSimilarity('Walk-in Guest', 'Walk in Guest'), 0);
+});
+
+test('default DP search suggests the invoice customer first without automatically claiming anything', async () => {
+  const { actions, tables } = harness();
+  tables.clean_master[0].customer = 'Aris Setiyono';
+  tables.bvlgari_sales[0].customer_name = 'Different Customer';
+  tables.bvlgari_sales[1].customer_name = 'Aris Setiono';
+  const found = await actions.searchSalesDepositsAction('INV-1', '');
+  assert.equal(found.ok, true);
+  assert.deepEqual(found.data.results.map(dp => dp.transNo), ['DP-2', 'DP-1']);
+  assert.ok(found.data.results[0].customerMatch >= 80);
+  assert.equal(found.data.results[1].customerMatch, null);
+  assert.equal(tables.transaction_records_meta.length, 0);
+});
+
+test('fuzzy search ranks exact names before similar names and keeps invoice/advisor search', async () => {
+  const { actions, tables } = harness();
+  tables.bvlgari_sales[0].customer_name = 'Frandi Effendy';
+  tables.bvlgari_sales[1].customer_name = 'Frandy Efendy';
+  const found = await actions.searchSalesDepositsAction('INV-1', 'Frandy Efendy');
+  assert.deepEqual(found.data.results.map(dp => dp.transNo), ['DP-2', 'DP-1']);
+  assert.equal(found.data.results[0].customerMatch, 100);
+  assert.ok(found.data.results[1].customerMatch < 100);
+  assert.equal((await actions.searchSalesDepositsAction('INV-1', 'dp-1')).data.results[0].matchKind, 'invoice');
+  assert.equal((await actions.searchSalesDepositsAction('INV-1', 'Advisor')).data.total, 2);
+  assert.equal((await actions.searchSalesDepositsAction('INV-1', 'Unrelated Name')).data.total, 0);
+});
+
+test('fuzzy customer matches still exclude claimed, expired, future, cross-store, service and return DP', async () => {
+  const { actions, tables } = harness();
+  tables.clean_master[0].customer = 'Aris Setiyono';
+  tables.bvlgari_sales[0].customer_name = 'Aris Setiyono';
+  tables.bvlgari_sales[1].customer_name = 'Aris Setiono';
+  await actions.linkSalesDepositsAction('INV-1', ['DP-1']);
+  const excluded = [
+    { transaction_date: '2025-09-30' }, { transaction_date: '2026-10-02' },
+    { location: 'Bali' }, { location: 'RBPlaza Indonesia' }, { collection: 'SVC' }, { qty: -1 },
+  ];
+  tables.bvlgari_sales.push(...excluded.map((patch, index) => source({ id: index + 3, transaction_no: `EXCLUDED-${index}`, customer_name: 'Aris Setiyono', ...patch })));
+  for (const query of ['', 'Aris Setiyono']) {
+    const found = await actions.searchSalesDepositsAction('INV-1', query);
+    assert.deepEqual(found.data.results.map(dp => dp.transNo), ['DP-2']);
+    assert.equal(found.data.linked.length, 1);
+  }
+});

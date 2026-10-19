@@ -1,23 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import {
-  X,
-  Printer,
-  FileText,
-  Copy,
-  Check,
-  Building2,
-  Calendar,
-  User,
-  Receipt,
-  Sparkles,
-  ShieldCheck,
-  Tag,
-  Phone,
-  CreditCard,
-  FileEdit
-} from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Printer, FileText, Copy, Check, Building2, UserRound, CreditCard, FileEdit, Package, Link2, ArrowUpRight } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { InvoiceHeader, InvoiceMeta } from '@/services/dashboard/invoiceService';
 import { extractPaymentAndVerification } from '@/services/dashboard/paymentEngine';
@@ -82,7 +66,7 @@ const formatDateLong = (iso: string) => {
   if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('id-ID', {
+  return d.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric'
@@ -91,14 +75,50 @@ const formatDateLong = (iso: string) => {
 
 export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceUpdated, onMetaSaved }: Props) {
   const [copied, setCopied] = useState(false);
-  const [activeInvoice, setActiveInvoice] = useState<InvoiceHeader | null>(invoice);
+  const [invoiceOverride, setInvoiceOverride] = useState<{ source: InvoiceHeader | null; value: InvoiceHeader } | null>(null);
+  const activeInvoice = invoiceOverride?.source === invoice ? invoiceOverride.value : invoice;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const [copyError, setCopyError] = useState(false);
   const [isPosModalOpen, setIsPosModalOpen] = useState(false);
   const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
   const { userEmail } = useUserAccess();
 
   useEffect(() => {
-    setActiveInvoice(invoice);
-  }, [invoice]);
+    if (!isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || isPosModalOpen || isMetaModalOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key === 'Tab') {
+        const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]'
+        ) || []).filter(element => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (!dialogRef.current?.contains(document.activeElement)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first)?.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isOpen, isPosModalOpen, isMetaModalOpen, onClose]);
 
   if (!isOpen || !activeInvoice) return null;
 
@@ -122,10 +142,15 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
     window.print();
   };
 
-  const handleCopyNo = () => {
-    navigator.clipboard.writeText(activeInvoice.trans_no);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyNo = async () => {
+    try {
+      await navigator.clipboard.writeText(activeInvoice.trans_no);
+      setCopyError(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyError(true);
+    }
   };
 
   const handlePosSuccess = async (transNo: string, newTotalComm: number) => {
@@ -137,14 +162,14 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
         .maybeSingle();
 
       if (metaRow && activeInvoice) {
-        setActiveInvoice({
+        setInvoiceOverride({ source: invoice, value: {
           ...activeInvoice,
           total_comm: newTotalComm,
           meta: {
             ...activeInvoice.meta,
             other_remarks: metaRow.other_remarks,
           },
-        });
+        } });
       }
     } catch {}
 
@@ -154,433 +179,223 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
   };
 
   const handleMetaSaved = (transNo: string, updatedMeta: InvoiceMeta) => {
-    setActiveInvoice(prev => (prev ? { ...prev, meta: updatedMeta } : prev));
+    setInvoiceOverride({ source: invoice, value: { ...activeInvoice, meta: updatedMeta } });
     onMetaSaved?.(transNo, updatedMeta);
   };
 
+  const hasPayments = Boolean(splits?.length);
+  const actionClass = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors cursor-pointer';
+  const detailClass = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-4 py-2.5';
+  const labelClass = 'text-slate-500';
+  const valueClass = 'min-w-0 break-words text-right font-semibold text-slate-800';
+
   return (
-    <div
-      className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
-      onClick={e => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      {/* Print-specific style */}
+    <div id="invoice-preview-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-md sm:p-5"
+      onClick={event => { if (event.target === event.currentTarget && !isPosModalOpen && !isMetaModalOpen) onClose(); }}>
       <style jsx global>{`
+        #bvlgari-sales-invoice-modal button:focus-visible { outline: 2px solid #0d9488; outline-offset: 3px; }
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          #bvlgari-sales-invoice-modal,
-          #bvlgari-sales-invoice-modal * {
-            visibility: visible;
+          @page { size: A4; margin: 12mm; }
+          body * { visibility: hidden; }
+          #bvlgari-sales-invoice-modal, #bvlgari-sales-invoice-modal * { visibility: visible; }
+          #invoice-preview-overlay {
+            position: absolute !important; inset: 0 auto auto 0 !important; display: block !important;
+            width: 100% !important; height: auto !important; padding: 0 !important;
+            background: white !important; backdrop-filter: none !important; overflow: visible !important;
           }
           #bvlgari-sales-invoice-modal {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-            border: none !important;
-            background: white !important;
+            display: block !important; width: 100% !important; max-width: none !important;
+            height: auto !important; max-height: none !important; overflow: visible !important;
+            margin: 0 !important; border: 0 !important; border-radius: 0 !important;
+            box-shadow: none !important; background: white !important;
           }
-          .no-print-area {
-            display: none !important;
+          #bvlgari-sales-invoice-modal .invoice-scroll, #bvlgari-sales-invoice-modal .invoice-paper {
+            display: block !important; overflow: visible !important; padding: 0 !important;
+            margin: 0 !important; border: 0 !important; border-radius: 0 !important;
+            box-shadow: none !important; background: white !important;
           }
+          #bvlgari-sales-invoice-modal .invoice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          #bvlgari-sales-invoice-modal .invoice-brand { flex-direction: row; }
+          #bvlgari-sales-invoice-modal .invoice-table-scroll { overflow: visible !important; }
+          #bvlgari-sales-invoice-modal table { min-width: 0 !important; font-size: 9px; }
+          #bvlgari-sales-invoice-modal th, #bvlgari-sales-invoice-modal td { padding: 7px 5px; }
+          #bvlgari-sales-invoice-modal thead { display: table-header-group; }
+          #bvlgari-sales-invoice-modal tr, #bvlgari-sales-invoice-modal .invoice-keep { break-inside: avoid; }
+          #bvlgari-sales-invoice-modal .invoice-total { background: #f0fdfa !important; color: #0f172a !important; }
+          #bvlgari-sales-invoice-modal .invoice-total * { color: #0f172a !important; }
+          #bvlgari-sales-invoice-modal .no-print-area { display: none !important; }
         }
       `}</style>
 
-      <div
-        id="bvlgari-sales-invoice-modal"
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden border border-slate-200 my-auto flex flex-col max-h-[92vh]"
-      >
-        {/* Top Control Bar (Screen Only) */}
-        <div className="no-print-area px-6 py-3.5 bg-slate-900 text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <Receipt className="w-4 h-4" />
-            </span>
-            <div>
-              <div className="text-xs font-bold tracking-wide flex items-center gap-2">
-                <span>Preview Faktur Penjualan</span>
-                <span className="font-mono text-amber-400 font-extrabold">{activeInvoice.trans_no}</span>
-              </div>
-              <div className="text-[10px] text-slate-400">
-                Official BVLGARI Luxury Sales Invoice
-              </div>
+      <div ref={dialogRef} id="bvlgari-sales-invoice-modal" role="dialog" aria-modal="true" aria-labelledby="invoice-preview-title"
+        className="flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/60 bg-slate-100 shadow-2xl">
+        <header className="no-print-area shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-teal-100 bg-teal-50 text-teal-700"><FileText className="h-5 w-5" /></span>
+              <div className="min-w-0"><h2 id="invoice-preview-title" className="text-base font-bold tracking-tight text-slate-900">Sales invoice</h2><p className="mt-0.5 break-all font-mono text-xs text-slate-500">{activeInvoice.trans_no}</p></div>
             </div>
+            <button ref={closeRef} type="button" onClick={onClose} aria-label="Close invoice preview" className="cursor-pointer rounded-xl border border-slate-200 p-2.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsMetaModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-              title="Edit Data Penunjang Faktur"
-            >
-              <FileEdit className="w-3.5 h-3.5" />
-              <span>Data Penunjang</span>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setIsMetaModalOpen(true)} className={cn(actionClass, 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}><FileEdit className="h-4 w-4 text-indigo-500" /> Invoice details</button>
+            <button type="button" onClick={() => setIsPosModalOpen(true)} className={cn(actionClass, 'border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100')}><CreditCard className="h-4 w-4" /> {hasPayments ? 'Edit POS payments' : 'Add POS payment'}</button>
+            <button type="button" onClick={handleCopyNo} className={cn(actionClass, 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50')}>
+              {copied ? <Check className="h-4 w-4 text-teal-600" /> : <Copy className="h-4 w-4" />}<span aria-live="polite">{copied ? 'Copied' : 'Copy number'}</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setIsPosModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-              title={splits && splits.length > 0 ? "Edit Rincian Pembayaran POS" : "Input Rincian Pembayaran POS"}
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>{splits && splits.length > 0 ? 'Edit Pembayaran' : 'Input Pembayaran POS'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopyNo}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Salin Nomor Transaksi"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Tersalin' : 'Salin No'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Cetak / Print</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <button type="button" onClick={handlePrint} className={cn(actionClass, 'border-slate-900 bg-slate-900 text-white hover:border-teal-800 hover:bg-teal-800 sm:ml-auto')}><Printer className="h-4 w-4" /> Print invoice <ArrowUpRight className="h-3.5 w-3.5 text-teal-300" /></button>
           </div>
-        </div>
+          {copyError && <p role="status" className="mt-2 text-xs text-amber-700">Unable to copy. Select the invoice number above to copy it manually.</p>}
+        </header>
 
-        {/* Printable Invoice Container */}
-        <div className="overflow-y-auto p-6 sm:p-10 space-y-6 bg-white text-slate-800 text-xs">
-          
-          {/* Header Brand */}
-          <div className="border-b-2 border-slate-900 pb-5">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="invoice-scroll min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6">
+          <article className="invoice-paper space-y-7 rounded-2xl border border-slate-200/80 bg-white p-5 text-xs text-slate-700 shadow-sm sm:p-8">
+            <div className="invoice-brand invoice-keep flex flex-col justify-between gap-6 border-b border-slate-200 pb-6 sm:flex-row">
               <div>
-                <h1 className="text-3xl sm:text-4xl font-serif font-black tracking-[0.3em] text-slate-950 uppercase">
-                  BVLGARI
-                </h1>
-                <div className="text-[11px] tracking-[0.4em] font-serif text-slate-600 mt-0.5 uppercase">
-                  ROMA
-                </div>
-                <div className="mt-2 text-[11px] text-slate-600 space-y-0.5">
-                  <div className="font-bold text-slate-900">{store.title} — {store.subtitle}</div>
-                  {store.address.map((line, idx) => (
-                    <div key={idx}>{line}</div>
-                  ))}
-                  <div>Tel: {store.phone}</div>
+                <h1 className="font-serif text-3xl font-semibold tracking-[0.24em] text-slate-950 sm:text-4xl">BVLGARI</h1>
+                <div className="mt-1 font-serif text-[10px] tracking-[0.5em] text-slate-500">ROMA</div>
+                <div className="mt-5 space-y-1 text-[11px] leading-relaxed text-slate-500">
+                  <div className="mb-2 font-semibold text-slate-800">{store.title} / {store.subtitle}</div>
+                  {store.address.map(line => <div key={line}>{line}</div>)}<div>Tel. {store.phone}</div>
                 </div>
               </div>
-
-              <div className="text-left sm:text-right flex flex-col sm:items-end justify-between">
-                <div className="inline-block px-3 py-1 rounded bg-slate-900 text-white font-mono text-[11px] tracking-widest font-bold uppercase mb-2">
-                  SALES INVOICE
-                </div>
-                <div className="text-[11px] text-slate-500 space-y-0.5">
-                  <div>Status: <span className="font-bold text-emerald-700 uppercase">Paid / Completed</span></div>
-                  <div>Dokumen Resmi Penjualan Butik</div>
-                </div>
+              <div className="sm:text-right">
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600"><FileText className="h-3.5 w-3.5" /> Sales invoice</span>
+                <p className="mt-4 break-all font-mono text-base font-bold text-slate-900">{activeInvoice.trans_no}</p>
+                <p className="mt-1.5 text-slate-500">{formatDateLong(activeInvoice.transaction_date)}</p>
+                <span className={cn('mt-4 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold', hasPayments ? 'border-teal-200 bg-teal-50 text-teal-800' : 'border-amber-200 bg-amber-50 text-amber-800')}>
+                  <span className={cn('h-1.5 w-1.5 rounded-full', hasPayments ? 'bg-teal-500' : 'bg-amber-500')} />{hasPayments ? 'POS payments recorded' : 'POS details pending'}
+                </span>
               </div>
             </div>
-          </div>
 
-          {/* Metadata Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200">
-            {/* Invoice Info */}
-            <div className="space-y-2">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Informasi Faktur
-              </div>
-              <table className="w-full text-xs">
-                <tbody>
-                  <tr>
-                    <td className="py-1 text-slate-500 w-32 font-medium">No. Invoice:</td>
-                    <td className="py-1 font-mono font-bold text-slate-900">{activeInvoice.trans_no}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1 text-slate-500 font-medium">No. Cash Bill (CB):</td>
-                    <td className="py-1 font-mono font-bold text-emerald-800">
-                      {activeInvoice.meta.cash_bill_no || '—'}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-1 text-slate-500 font-medium">Tanggal Transaksi:</td>
-                    <td className="py-1 font-semibold text-slate-800">{formatDateLong(activeInvoice.transaction_date)}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1 text-slate-500 font-medium">Lokasi Boutique:</td>
-                    <td className="py-1 font-bold text-slate-900">{activeInvoice.location || '—'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Customer & Advisor Info */}
-            <div className="space-y-2">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Informasi Pelanggan & Advisor
-              </div>
-              <table className="w-full text-xs">
-                <tbody>
-                  <tr>
-                    <td className="py-1 text-slate-500 w-32 font-medium">Nama Customer:</td>
-                    <td className="py-1 font-bold text-slate-900">{activeInvoice.customer || 'Walk-in Guest'}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1 text-slate-500 font-medium">No. Kontak / Phone:</td>
-                    <td className="py-1 font-mono text-slate-700">{clientPhone || '—'}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1 text-slate-500 font-medium">CA (Customer Advisor):</td>
-                    <td className="py-1 font-bold text-slate-900">{activeInvoice.salesman || '—'}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1 text-slate-500 font-medium">Served By:</td>
-                    <td className="py-1 font-bold text-teal-800">
-                      {activeInvoice.meta.served_by || '—'}
+            <div className="invoice-grid grid gap-4 md:grid-cols-2">
+              <section className="invoice-keep rounded-2xl border border-slate-200 p-5">
+                <h3 className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-800"><Building2 className="h-4 w-4 text-blue-600" /> Invoice information</h3>
+                <dl className="divide-y divide-slate-100">
+                  <div className={detailClass}>
+                    <dt className={labelClass}>Cash bill number</dt>
+                    <dd className={valueClass}>
                       <button
                         type="button"
                         onClick={() => setIsMetaModalOpen(true)}
-                        className="no-print-area ml-2 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                        title="Update cash bill number"
+                        aria-label={activeInvoice.meta.cash_bill_no ? 'Edit cash bill ' + activeInvoice.meta.cash_bill_no : 'Add cash bill number'}
+                        className="no-print-area inline-flex max-w-full cursor-pointer items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-teal-800 transition-colors hover:border-teal-400 hover:bg-teal-100"
                       >
-                        {activeInvoice.meta.served_by ? 'Ubah' : 'Isi'}
+                        <span className="break-all font-mono">{activeInvoice.meta.cash_bill_no || 'Add cash bill'}</span>
+                        <FileEdit className="h-3.5 w-3.5 shrink-0" />
                       </button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-1 text-slate-500 font-medium">Mata Uang:</td>
-                    <td className="py-1 font-semibold text-slate-800">IDR (Indonesian Rupiah)</td>
-                  </tr>
-                </tbody>
-              </table>
+                      <span className="hidden font-mono print:inline">{activeInvoice.meta.cash_bill_no || '\u2014'}</span>
+                    </dd>
+                  </div>
+                  <div className={detailClass}><dt className={labelClass}>Transaction date</dt><dd className={valueClass}>{formatDateLong(activeInvoice.transaction_date)}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>Boutique</dt><dd className={valueClass}>{activeInvoice.location || '\u2014'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>Currency</dt><dd className={valueClass}>IDR <span className="font-normal text-slate-500">&middot; Indonesian Rupiah</span></dd></div>
+                </dl>
+              </section>
+              <section className="invoice-keep rounded-2xl border border-indigo-100 bg-indigo-50/30 p-5">
+                <h3 className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-800"><UserRound className="h-4 w-4 text-indigo-500" /> Customer & advisor</h3>
+                <dl className="divide-y divide-indigo-100/60">
+                  <div className={detailClass}><dt className={labelClass}>Customer</dt><dd className={valueClass}>{activeInvoice.customer || 'Walk-in Guest'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>Phone number</dt><dd className={valueClass}>{clientPhone || '\u2014'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>Customer advisor</dt><dd className={valueClass}>{activeInvoice.salesman || '\u2014'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>Served by</dt><dd className={valueClass}>{activeInvoice.meta.served_by || '\u2014'}<button type="button" onClick={() => setIsMetaModalOpen(true)} className="no-print-area ml-2 cursor-pointer rounded text-[10px] font-semibold text-indigo-600 hover:underline">{activeInvoice.meta.served_by ? 'Edit' : 'Add'}</button></dd></div>
+                </dl>
+              </section>
             </div>
-          </div>
 
-          {/* Line Items Table */}
-          <div className="space-y-2">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>Rincian Barang / Purchased Items</span>
-              <span>{activeInvoice.items.length} Barang ({activeInvoice.total_qty} pcs)</span>
-            </div>
-
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100/90 text-[10px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
-                  <tr>
-                    <th className="py-2.5 px-3 w-8 text-center">#</th>
-                    <th className="py-2.5 px-3">Kode SAP / Catalogue</th>
-                    <th className="py-2.5 px-3">Kategori & Koleksi</th>
-                    <th className="py-2.5 px-2 text-center w-12">Qty</th>
-                    <th className="py-2.5 px-3 text-right">Harga Satuan</th>
-                    <th className="py-2.5 px-3 text-right">Diskon</th>
-                    <th className="py-2.5 px-3 text-right">Subtotal Net</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {activeInvoice.items.map((item, idx) => {
-                    const unitPrice = item.qty > 0 ? Math.round(item.gross_sales / item.qty) : item.gross_sales;
-                    return (
-                      <tr key={item.id || idx} className="hover:bg-slate-50/50">
-                        <td className="py-2.5 px-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                        <td className="py-2.5 px-3">
-                          <div className="font-mono font-bold text-slate-900">{item.sap_code}</div>
-                          {item.catalogue_code && item.catalogue_code !== item.sap_code && (
-                            <div className="text-[10px] text-slate-500 font-mono">{item.catalogue_code}</div>
-                          )}
-                          {item.type && (
-                            <span className={cn(
-                              "inline-block mt-0.5 text-[9px] font-bold px-1.5 py-0.2 rounded border",
-                              item.type === 'SMI' ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-50 text-slate-600 border-slate-200"
-                            )}>
-                              {item.type}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <div className="font-semibold text-slate-800">{item.main_category || '—'}</div>
-                          <div className="text-[10px] text-slate-500">{item.collection || '—'}</div>
-                        </td>
-                        <td className="py-2.5 px-2 text-center font-bold text-slate-800">
-                          {item.qty}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                          Rp {formatCurrency(unitPrice)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono">
-                          {item.val_disc > 0 ? (
-                            <div>
-                              <div className="text-rose-600 font-bold">-Rp {formatCurrency(item.val_disc)}</div>
-                              {item.disc_pct > 0 && (
-                                <div className="text-[10px] text-rose-500">({item.disc_pct}%)</div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                          Rp {formatCurrency(item.net_sales)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Financial Summary & Remarks Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-            {/* Supporting Remarks / Notes */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Data Penunjang
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsMetaModalOpen(true)}
-                  className="no-print-area flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                >
-                  <FileEdit className="w-3 h-3" />
-                  Edit
-                </button>
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-800"><Package className="h-4 w-4 text-blue-600" /> Purchased items</h3>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">{activeInvoice.items.length} items &middot; {activeInvoice.total_qty} pcs</span>
               </div>
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
-                <table className="w-full">
-                  <tbody>
-                    <tr>
-                      <td className="py-1 pr-2 text-slate-500 font-medium align-top w-36">Entitle (Customer Advisor)</td>
-                      <td className="py-1 font-bold text-teal-800">{activeInvoice.meta.entitle || '—'}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 pr-2 text-slate-500 font-medium align-top">No. Approval DWA</td>
-                      <td className="py-1 font-mono font-bold text-purple-700">{activeInvoice.meta.dwa_no || '—'}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 pr-2 text-slate-500 font-medium align-top">Alasan Diskon</td>
-                      <td className="py-1 text-slate-800">{activeInvoice.meta.discount_given_reason || '—'}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 pr-2 text-slate-500 font-medium align-top">Layanan After Sales</td>
-                      <td className="py-1 text-slate-800">{activeInvoice.meta.after_sales_support || 'Standar Garansi Resmi Bvlgari'}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 pr-2 text-slate-500 font-medium align-top">Catatan Lain</td>
-                      <td className="py-1 text-slate-800 whitespace-pre-line">{userNote || '—'}</td>
-                    </tr>
+              <div className="invoice-table-scroll overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full min-w-[700px] text-left text-xs">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <tr><th className="px-3 py-3 text-center">#</th><th className="px-3 py-3">SAP / Catalogue</th><th className="px-3 py-3">Category / Collection</th><th className="px-3 py-3 text-center">Qty</th><th className="px-3 py-3 text-right">Unit price</th><th className="px-3 py-3 text-right">Discount</th><th className="bg-teal-50/60 px-3 py-3 text-right text-teal-800">Net subtotal</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {activeInvoice.items.map((item, index) => {
+                      const unitPrice = item.qty > 0 ? Math.round(item.gross_sales / item.qty) : item.gross_sales;
+                      return (
+                        <tr key={item.id || index} className="hover:bg-slate-50/50">
+                          <td className="px-3 py-4 text-center text-slate-400">{String(index + 1).padStart(2, '0')}</td>
+                          <td className="px-3 py-4">
+                            <div className="font-mono font-semibold text-slate-900">{item.sap_code}</div>
+                            {item.catalogue_code && item.catalogue_code !== item.sap_code && <div className="mt-1 font-mono text-[10px] text-slate-500">{item.catalogue_code}</div>}
+                            {item.type && <span className={cn('mt-2 inline-flex rounded-md border px-1.5 py-0.5 text-[9px] font-semibold', item.type === 'SMI' ? 'border-violet-100 bg-violet-50 text-violet-700' : 'border-teal-100 bg-teal-50 text-teal-700')}>{item.type}</span>}
+                          </td>
+                          <td className="px-3 py-4"><div className="font-medium text-slate-800">{item.main_category || '\u2014'}</div><div className="mt-1 text-[10px] text-slate-500">{item.collection || '\u2014'}</div></td>
+                          <td className="px-3 py-4 text-center font-semibold tabular-nums">{item.qty}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-right tabular-nums">Rp {formatCurrency(unitPrice)}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-right tabular-nums">
+                            {item.val_disc > 0 ? <><div className="font-medium text-rose-600">-Rp {formatCurrency(item.val_disc)}</div>{item.disc_pct > 0 && <div className="mt-1 text-[10px] text-rose-500">{item.disc_pct}%</div>}</> : <span className="text-slate-400">&mdash;</span>}
+                          </td>
+                          <td className="whitespace-nowrap bg-teal-50/30 px-3 py-4 text-right font-bold tabular-nums text-slate-900">Rp {formatCurrency(item.net_sales)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
-                {activeInvoice.meta.updated_by && (
-                  <div className="mt-2 pt-2 border-t border-slate-200 text-[10px] text-slate-400">
-                    Terakhir diubah oleh <span className="font-semibold text-slate-600">{activeInvoice.meta.updated_by}</span>
-                    {activeInvoice.meta.updated_at && <> · {new Date(activeInvoice.meta.updated_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</>}
-                  </div>
-                )}
               </div>
-            </div>
+            </section>
 
-            {/* Calculations Box */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
-              <div className="flex justify-between py-1 text-slate-600">
-                <span>Subtotal Bruto (Gross):</span>
-                <span className="font-mono">Rp {formatCurrency(activeInvoice.total_gross)}</span>
-              </div>
-              {activeInvoice.total_disc > 0 && (
-                <div className="flex justify-between py-1 text-rose-600 font-medium">
-                  <span>Total Potongan Diskon:</span>
-                  <span className="font-mono">-Rp {formatCurrency(activeInvoice.total_disc)}</span>
+            <div className="invoice-grid grid items-start gap-5 md:grid-cols-2">
+              <section className="invoice-keep rounded-2xl border border-slate-200 p-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-800"><FileEdit className="h-4 w-4 text-indigo-500" /> Supporting details</h3>
+                  <button type="button" onClick={() => setIsMetaModalOpen(true)} className="no-print-area cursor-pointer rounded-lg bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100">Edit details</button>
                 </div>
-              )}
-              <div className="flex justify-between py-1 border-t border-slate-200 text-slate-600">
-                <span>Dasar Pengenaan Pajak (DPP):</span>
-                <span className="font-mono">Rp {formatCurrency(dpp)}</span>
-              </div>
-              <div className="flex justify-between py-1 text-slate-600">
-                <span>PPN 11% (Termasuk):</span>
-                <span className="font-mono">Rp {formatCurrency(ppn)}</span>
-              </div>
-              <div className="flex justify-between py-2 border-t-2 border-slate-900 text-slate-900 font-extrabold text-sm sm:text-base">
-                <span>GRAND TOTAL:</span>
-                <span className="font-mono text-slate-900">Rp {formatCurrency(activeInvoice.total_net)}</span>
-              </div>
+                <dl className="divide-y divide-slate-100">
+                  <div className={detailClass}><dt className={labelClass}>Entitled advisor</dt><dd className={valueClass}>{activeInvoice.meta.entitle || '\u2014'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>DWA approval no.</dt><dd className={cn(valueClass, 'font-mono')}>{activeInvoice.meta.dwa_no || '\u2014'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>Discount reason</dt><dd className={valueClass}>{activeInvoice.meta.discount_given_reason || '\u2014'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>After-sales support</dt><dd className={valueClass}>{activeInvoice.meta.after_sales_support || 'Standard Bvlgari warranty'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>Notes</dt><dd className={cn(valueClass, 'whitespace-pre-line font-normal')}>{userNote || '\u2014'}</dd></div>
+                </dl>
+                {activeInvoice.meta.updated_by && <p className="mt-3 border-t border-slate-100 pt-3 text-[10px] leading-relaxed text-slate-400">Updated by {activeInvoice.meta.updated_by}{activeInvoice.meta.updated_at && <> &middot; {new Date(activeInvoice.meta.updated_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</>}</p>}
+              </section>
+              <section className="invoice-keep overflow-hidden rounded-2xl border border-slate-200">
+                <div className="space-y-4 p-5">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800">Invoice summary</h3>
+                  <dl className="space-y-3">
+                    <div className="flex justify-between gap-4"><dt className="text-slate-500">Gross subtotal</dt><dd className="whitespace-nowrap font-medium tabular-nums">Rp {formatCurrency(activeInvoice.total_gross)}</dd></div>
+                    {activeInvoice.total_disc > 0 && <div className="flex justify-between gap-4 text-rose-600"><dt>Discount</dt><dd className="whitespace-nowrap font-medium tabular-nums">-Rp {formatCurrency(activeInvoice.total_disc)}</dd></div>}
+                    <div className="flex justify-between gap-4 border-t border-slate-100 pt-3"><dt className="text-slate-500">Tax base (DPP)</dt><dd className="whitespace-nowrap font-medium tabular-nums">Rp {formatCurrency(dpp)}</dd></div>
+                    <div className="flex justify-between gap-4"><dt className="text-slate-500">VAT 11% (included)</dt><dd className="whitespace-nowrap font-medium tabular-nums">Rp {formatCurrency(ppn)}</dd></div>
+                  </dl>
+                </div>
+                <div className="invoice-total border-t border-teal-800 bg-linear-to-br from-slate-900 to-teal-950 p-5 text-white">
+                  <div className="flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-200">Grand total</span><span className="rounded border border-white/20 px-1.5 py-0.5 text-[9px] text-teal-100">IDR</span></div>
+                  <p className="mt-2 break-words text-2xl font-bold tracking-tight tabular-nums">Rp {formatCurrency(activeInvoice.total_net)}</p>
+                  <p className="mt-2 text-[10px] text-slate-300">Including VAT &middot; Indonesian Rupiah</p>
+                </div>
+              </section>
             </div>
-          </div>
 
-          {Boolean(activeInvoice.depositLinks?.length) && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 text-xs">
-              <h4 className="mb-2 font-bold text-emerald-900">Applied Down Payments</h4>
-              {activeInvoice.depositLinks?.map(dp => <div key={dp.transNo} className="flex justify-between gap-4 py-1"><span className="font-mono">{dp.transNo}</span><span>Rp {formatCurrency(dp.amount)}</span></div>)}
-              <p className="mt-2 text-[10px] text-slate-500">DP settlement references. Payment totals are shown in the payment breakdown below.</p>
-            </div>
-          )}
-
-          {/* Payment & Card Commission Settlement Section */}
-          <InvoicePaymentSection
-            invoice={activeInvoice}
-            splits={splits}
-            onOpenPosPayment={() => setIsPosModalOpen(true)}
-          />
-
+            {Boolean(activeInvoice.depositLinks?.length) && (
+              <section className="invoice-keep rounded-2xl border border-teal-200 bg-teal-50/50 p-5">
+                <h3 className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-teal-900"><Link2 className="h-4 w-4" /> Applied down payments</h3>
+                {activeInvoice.depositLinks?.map(dp => <div key={dp.transNo} className="flex flex-wrap justify-between gap-2 py-1.5"><span className="break-all font-mono text-teal-900">{dp.transNo}</span><span className="font-semibold tabular-nums">Rp {formatCurrency(dp.amount)}</span></div>)}
+                <p className="mt-3 text-[10px] text-slate-500">DP settlement references. Payment totals are shown in the breakdown below.</p>
+              </section>
+            )}
+            <InvoicePaymentSection invoice={activeInvoice} splits={splits} onOpenPosPayment={() => setIsPosModalOpen(true)} />
+            <div className="flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-4 text-[9px] uppercase tracking-wider text-slate-400"><span>BVLGARI &middot; {store.subtitle}</span><span>Sales invoice &middot; IDR</span></div>
+          </article>
         </div>
 
-        {/* Modal Footer (Screen Only) */}
-        <div className="no-print-area px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
-          <div className="text-[11px] text-slate-500">
-            Tekan <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px] font-bold">Esc</kbd> untuk menutup
+        <footer className="no-print-area flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-3">
+          <p className="text-[10px] text-slate-400">BVLGARI Intelligence <span className="mx-1 text-slate-300">/</span> Aris Setiyono</p>
+          <div className="flex items-center gap-4">
+            <span className="hidden text-[10px] text-slate-400 sm:inline">Press <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono">Esc</kbd> to close</span>
+            <button type="button" onClick={onClose} className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Close preview</button>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition-all cursor-pointer"
-            >
-              Tutup
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Cetak Ringkasan Transaksi</span>
-            </button>
-          </div>
-        </div>
+        </footer>
       </div>
-
-      {/* POS Payment Breakdown & Card Comm Modal */}
-      {isPosModalOpen && activeInvoice && (
-        <PosPaymentModal
-          invoice={activeInvoice}
-          isOpen={isPosModalOpen}
-          onClose={() => setIsPosModalOpen(false)}
-          onSuccess={handlePosSuccess}
-          userEmail={userEmail}
-        />
-      )}
-
-      {/* Data Penunjang editor, opened from within the invoice view */}
-      <InvoiceMetaModal
-        invoice={activeInvoice}
-        isOpen={isMetaModalOpen}
-        onClose={() => setIsMetaModalOpen(false)}
-        onSave={handleMetaSaved}
-        userEmail={userEmail}
-      />
+      {isPosModalOpen && <PosPaymentModal invoice={activeInvoice} isOpen={isPosModalOpen} onClose={() => setIsPosModalOpen(false)} onSuccess={handlePosSuccess} userEmail={userEmail} />}
+      <InvoiceMetaModal invoice={activeInvoice} isOpen={isMetaModalOpen} onClose={() => setIsMetaModalOpen(false)} onSave={handleMetaSaved} userEmail={userEmail} />
     </div>
   );
 }

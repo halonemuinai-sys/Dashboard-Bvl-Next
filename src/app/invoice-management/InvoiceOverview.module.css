@@ -1,0 +1,96 @@
+.header {
+  position: relative;
+  z-index: 20;
+  animation: reveal 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.card {
+  animation: reveal 480ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+
+.card:nth-child(1) { animation-delay: 60ms; }
+.card:nth-child(2) { animation-delay: 120ms; }
+.card:nth-child(3) { animation-delay: 180ms; }
+.card:nth-child(4) { animation-delay: 240ms; }
+
+.value {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  animation: valueChange 340ms ease-out backwards;
+}
+
+.progress {
+  transform-origin: left;
+  animation: progressReveal 650ms cubic-bezier(0.22, 1, 0.36, 1) 260ms backwards;
+  transition: width 650ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.totals {
+  animation: reveal 420ms ease-out 280ms backwards;
+}
+
+.controls button,
+.controls summary {
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.refreshIcon {
+  transition: transform 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.controls button:active:not(:disabled),
+.controls summary:active {
+  transform: scale(0.98);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 24px -14px rgb(15 23 42 / 28%);
+  }
+
+  .controls button:hover:not(:disabled),
+  .controls summary:hover {
+    transform: translateY(-1px);
+  }
+
+  .controls button:hover:not(:disabled) .refreshIcon {
+    transform: rotate(180deg);
+  }
+}
+
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes valueChange {
+  from { opacity: 0.4; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes progressReveal {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce), print {
+  .header, .card, .value, .progress, .totals {
+    animation: none;
+    transition: none;
+  }
+
+  .controls button, .controls summary, .refreshIcon {
+    transition: none;
+  }
+
+  .card:hover,
+  .controls button:hover:not(:disabled),
+  .controls summary:hover,
+  .controls button:active:not(:disabled),
+  .controls summary:active,
+  .controls button:hover:not(:disabled) .refreshIcon {
+    transform: none;
+  }
+}

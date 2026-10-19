@@ -29,6 +29,60 @@ export interface SalesDeposit {
   transNo: string; date: string; customer: string; salesman: string; location: string;
   amount: number; netSales: number; sourceIds: number[];
 }
+export interface DepositSearchMatch extends SalesDeposit {
+  customerMatch: number | null;
+  matchKind: 'invoice' | 'customer' | 'advisor' | null;
+}
+
+function normalizeCustomerName(value: string): string {
+  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/['’]/g, '').replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/).filter(token => token && !['mr', 'mrs', 'ms', 'miss', 'bapak', 'ibu', 'pak', 'bu', 'dr'].includes(token)).join(' ');
+}
+
+// A name similarity score, never an identity check or permission to claim a DP.
+export function customerNameSimilarity(left: string, right: string): number {
+  const a = normalizeCustomerName(left);
+  const b = normalizeCustomerName(right);
+  const generic = new Set(['walk in', 'walk in guest', 'walkin', 'walkin guest', 'guest', 'customer', 'cash', 'unknown', 'na', 'n a']);
+  if (!a || !b || generic.has(a) || generic.has(b)) return 0;
+  if (a === b) return 100;
+  if (Math.min(a.length, b.length) < 4) return 0;
+  const sortedA = a.split(' ').sort().join(' ');
+  const sortedB = b.split(' ').sort().join(' ');
+  if (sortedA === sortedB) return 100;
+  const similarity = (first: string, second: string) => {
+    let previous = Array.from({ length: second.length + 1 }, (_, index) => index);
+    for (let i = 1; i <= first.length; i++) {
+      const current = [i];
+      for (let j = 1; j <= second.length; j++) {
+        current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + (first[i - 1] === second[j - 1] ? 0 : 1));
+      }
+      previous = current;
+    }
+    return 1 - previous[second.length] / Math.max(first.length, second.length);
+  };
+  return Math.round(100 * Math.max(similarity(a, b), similarity(sortedA, sortedB)));
+}
+
+export function rankSalesDeposits(deposits: SalesDeposit[], search: string, invoiceCustomer: string): DepositSearchMatch[] {
+  const query = search.trim().toLowerCase();
+  const normalizedQuery = normalizeCustomerName(query);
+  const matches = deposits.flatMap(dp => {
+    const score = customerNameSimilarity(query || invoiceCustomer, dp.customer);
+    const customerMatch = score >= 80 ? score : null;
+    const nameContainsQuery = Boolean(query && normalizedQuery && normalizeCustomerName(dp.customer).includes(normalizedQuery));
+    const matchKind: DepositSearchMatch['matchKind'] = query && dp.transNo.toLowerCase().includes(query) ? 'invoice'
+      : customerMatch !== null || nameContainsQuery ? 'customer'
+      : query && dp.salesman.toLowerCase().includes(query) ? 'advisor' : null;
+    if (query && !matchKind) return [];
+    return [{ ...dp, customerMatch, matchKind }];
+  });
+  const priority = (dp: DepositSearchMatch) => dp.matchKind === 'invoice' ? 3 : dp.matchKind === 'customer' ? 2 : dp.matchKind === 'advisor' ? 1 : 0;
+  return matches.sort((a, b) => priority(b) - priority(a) || (b.customerMatch || 0) - (a.customerMatch || 0)
+    || b.date.localeCompare(a.date) || a.transNo.localeCompare(b.transNo));
+}
+
 export interface DepositLink extends SalesDeposit {
   kind: 'sales_deposit_link'; version: 1; invoiceNo: string; invoiceDate: string;
   linkedAt: string; linkedBy: string;
