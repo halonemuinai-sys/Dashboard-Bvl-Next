@@ -16,13 +16,17 @@ export async function updateSession(request: NextRequest) {
     user = await verifySessionToken(token)
   }
 
-  // Protect routes
-  const isLoginPage = request.nextUrl.pathname.startsWith('/login')
-  const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
-  const isPublicRoute = request.nextUrl.pathname.startsWith('/public')
-  const isPublicFile = request.nextUrl.pathname.match(/\.(.*)$/)
-  const isApi = request.nextUrl.pathname.startsWith('/api')
-  const isMobileRoute = request.nextUrl.pathname.startsWith('/m')
+  // Protect routes. Match whole path segments: a bare startsWith('/m') also matched
+  // /monthly-transactions and /monthly-dps-svc and let them skip the login redirect.
+  const path = request.nextUrl.pathname
+  const isUnder = (prefix: string) => path === prefix || path.startsWith(prefix + '/')
+  const isLoginPage = isUnder('/login')
+  // Password recovery is for users who cannot log in (the emailed reset link has no session).
+  const isAuthPage = isUnder('/auth') || isUnder('/forgot-password') || isUnder('/reset-password')
+  const isPublicRoute = isUnder('/public')
+  const isPublicFile = path.match(/\.(.*)$/)
+  const isApi = isUnder('/api')
+  const isMobileRoute = isUnder('/m')
 
   // Jika tidak login, redirect ke halaman login
   if (!user && !isLoginPage && !isAuthPage && !isPublicRoute && !isPublicFile && !isApi && !isMobileRoute) {
