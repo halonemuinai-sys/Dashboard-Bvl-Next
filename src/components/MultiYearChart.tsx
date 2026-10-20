@@ -1,209 +1,80 @@
-"use client";
+'use client';
 
-import { useState, useMemo } from 'react';
-import {
-  ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine
-} from 'recharts';
-import { cn, formatCurrency, formatCompact, formatChartValue } from '@/lib/utils';
+import { useId, useState } from 'react';
+import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, type TooltipContentProps } from 'recharts';
+import { ChartNoAxesCombined, EyeOff, Check, Target } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import Amt from '@/components/Amt';
+import { useHideAmounts } from '@/lib/hide-amounts';
+import { useChartMotion } from '@/lib/use-chart-motion';
+import { businessDate, formatSalesAxis } from '@/lib/sales-chart-data';
 
-const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-const YEARS = [2026, 2025, 2024, 2023] as const;
-type Year = typeof YEARS[number];
-
-const YEAR_CONFIG: Record<Year, { line: string; gradientId: string; label: string }> = {
-  2026: { line: '#2563EB', gradientId: 'grad2026', label: '2026' },
-  2025: { line: '#DB2777', gradientId: 'grad2025', label: '2025' },
-  2024: { line: '#D97706', gradientId: 'grad2024', label: '2024' },
-  2023: { line: '#059669', gradientId: 'grad2023', label: '2023' },
-};
-
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const COLORS = ['#2563eb', '#0d9488', '#0f172a', '#f59e0b', '#e11d48'];
 interface Props {
   multiYearStats: Record<number, number[]>;
-  currentMonth: number; // 0-indexed, marks current month with ref line
+  multiYearTargets?: Record<number, number[]>;
+  currentMonth: number;
+  selectedYear?: number;
+  asOfDate?: string;
+}
+function SalesTooltip({ active, payload, label }: Partial<TooltipContentProps<number, string>>) {
+  if (!active || !payload?.length) return null;
+  return <div className="min-w-48 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-900/10">
+    <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">{label} / IDR</p>
+    {payload.filter(item => typeof item.value === 'number').map(item => <div key={String(item.dataKey)} className="flex items-center justify-between gap-6 py-1 text-xs"><span className="flex items-center gap-2 text-slate-500"><span className="h-2 w-2 rounded-full" style={{ background: item.color }} />{item.name}</span><strong className="font-semibold text-slate-900"><Amt value={Number(item.value)} /></strong></div>)}
+  </div>;
 }
 
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: any[];
-  label?: string;
-}
+export default function MultiYearChart({ multiYearStats, multiYearTargets, currentMonth, selectedYear, asOfDate = businessDate() }: Props) {
+  const years = Object.keys(multiYearStats).map(Number).filter(Number.isFinite).sort((a, b) => b - a);
+  const focusYear = selectedYear ?? years[0];
+  const [overrides, setOverrides] = useState<Record<number, boolean>>({});
+  const [showTarget, setShowTarget] = useState(false);
+  const id = useId().replace(/:/g, '');
+  const animate = useChartMotion();
+  const { hidden } = useHideAmounts();
+  const visibleYears = years.filter(year => overrides[year] ?? (year === focusYear || year === focusYear - 1));
+  const chartData = MONTHS.map((name, month) => {
+    const point: Record<string, string | number | null> = { name };
+    for (const [year, values] of Object.entries(multiYearStats)) {
+      const start = year + '-' + String(month + 1).padStart(2, '0') + '-01';
+      point['y' + year] = start > asOfDate ? null : values[month] ?? 0;
+    }
+    point.target = multiYearTargets?.[focusYear]?.[month] ?? null;
+    return point;
+  });
+  const color = (year: number) => COLORS[years.indexOf(year) % COLORS.length];
 
-function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
-  if (!active || !payload || payload.length === 0) return null;
-  const visible = payload.filter((p: any) => !p.hide && p.value > 0);
-  if (visible.length === 0) return null;
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-4 py-3 min-w-[160px]">
-      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">{label}</p>
-      {visible.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center justify-between gap-4 py-0.5">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[var(--dot-color)]" style={{ '--dot-color': p.color } as any} />
-            <span className="text-xs font-semibold text-slate-600">{p.name}</span>
-          </div>
-          <span className="text-xs font-bold text-slate-900">{formatCompact(p.value)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function MultiYearChart({ multiYearStats, currentMonth }: Props) {
-  const [hidden, setHidden] = useState<Set<Year>>(new Set([2023, 2024]));
-
-  const chartData = useMemo(() =>
-    MONTH_SHORT.map((name, i) => {
-      const point: Record<string, any> = { name, monthIdx: i };
-      YEARS.forEach(y => { point[`y${y}`] = multiYearStats[y]?.[i] ?? 0; });
-      return point;
-    }),
-  [multiYearStats]);
-
-  const toggle = (y: Year) => {
-    setHidden(prev => {
-      const next = new Set(prev);
-      next.has(y) ? next.delete(y) : next.add(y);
-      return next;
-    });
-  };
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-      {/* Header with Glassmorphism feel */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-1.5 h-6 bg-blue-600 rounded-full shadow-[0_0_12px_rgba(37,99,235,0.4)]" />
-          <div>
-            <h3 className="text-lg font-black text-slate-900 tracking-tight">Multi-Year Sales Trend</h3>
-            <p className="text-slate-400 font-medium text-xs">Retail Performance Comparison (Excl. HO)</p>
-          </div>
-        </div>
-
-      {/* Premium Year Toggles */}
-        <div className="flex flex-wrap gap-2 p-1 bg-slate-50 rounded-2xl border border-slate-100">
-          {YEARS.map(y => {
-            const cfg = YEAR_CONFIG[y];
-            const isHidden = hidden.has(y);
-            return (
-              <button
-                key={y}
-                type="button"
-                onClick={() => toggle(y)}
-                style={!isHidden ? { 
-                  '--toggle-bg': cfg.line,
-                  '--toggle-shadow': `${cfg.line}44`
-                } as any : undefined}
-                className={cn(
-                  "relative flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all duration-300 active:scale-95",
-                  isHidden
-                    ? "text-slate-400 hover:text-slate-600 hover:bg-white"
-                    : "text-white bg-[var(--toggle-bg)] shadow-[0_8px_16px_-4px_var(--toggle-shadow)]"
-                )}
-              >
-                <div className={cn(
-                  "w-2 h-2 rounded-full ring-2 transition-all duration-500",
-                  isHidden ? "bg-slate-300 ring-transparent" : "bg-white ring-white/30 animate-pulse"
-                )} />
-                <span>{y}</span>
-              </button>
-            );
-          })}
-        </div>
+  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="flex flex-col justify-between gap-4 border-b border-slate-100 p-5 sm:p-6 lg:flex-row lg:items-center">
+      <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><ChartNoAxesCombined size={20} /></span><div><h3 className="text-base font-bold tracking-tight text-slate-900">Sales across the years</h3><p className="mt-1 text-[11px] text-slate-500">Monthly actual sales / boutiques only / IDR</p></div></div>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Visible chart years">
+        {years.map(year => { const active = visibleYears.includes(year); return <button key={year} type="button" aria-pressed={active} onClick={() => setOverrides(previous => ({ ...previous, [year]: !active }))} className={cn('inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-blue-500', active ? 'border-slate-200 bg-slate-50 text-slate-800' : 'border-transparent text-slate-400 hover:bg-slate-50')}><span className="h-2 w-2 rounded-full" style={{ background: active ? color(year) : '#cbd5e1' }} />{year}{active && <Check size={12} />}</button>; })}
+        {multiYearTargets?.[focusYear] && <button type="button" aria-pressed={showTarget} onClick={() => setShowTarget(value => !value)} className={cn('inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold', showTarget ? 'border-slate-300 bg-slate-100 text-slate-800' : 'border-slate-200 text-slate-500')}><Target size={13} />{focusYear} target</button>}
       </div>
-
-      {/* Chart Container with Reveal Animation */}
-      <div className="h-[360px] chart-reveal" key={Array.from(hidden).join(',')}>
+    </div>
+    <div className="p-4 sm:p-6">
+      {hidden ? <div className="flex h-80 items-center justify-center gap-2 text-sm text-slate-400"><EyeOff size={18} />Sales chart hidden while amounts are hidden.</div> : !visibleYears.length && !showTarget ? <div className="flex h-80 items-center justify-center text-sm text-slate-400">Select a year above to show its sales.</div> :
+      <div className="h-80 sm:h-96">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-            <defs>
-              {YEARS.map(y => (
-                <linearGradient key={y} id={YEAR_CONFIG[y].gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={YEAR_CONFIG[y].line} stopOpacity={0.15} />
-                  <stop offset="60%" stopColor={YEAR_CONFIG[y].line} stopOpacity={0.05} />
-                  <stop offset="100%" stopColor={YEAR_CONFIG[y].line} stopOpacity={0} />
-                </linearGradient>
-              ))}
-            </defs>
-
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-
-            <XAxis
-              dataKey="name"
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }}
-              dy={8}
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: '#94a3b8', fontSize: 11 }}
-              tickFormatter={v => v === 0 ? '0' : formatChartValue(v)}
-              width={60}
-            />
-
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 1.5, strokeDasharray: '4 2' }} />
-
-            {/* Reference line for current month */}
-            <ReferenceLine
-              x={MONTH_SHORT[currentMonth]}
-              stroke="#94a3b8"
-              strokeDasharray="4 3"
-              strokeWidth={1.5}
-              label={{ value: 'Now', position: 'top', fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
-            />
-
-            {/* Render oldest years first so newer ones draw on top */}
-            {([2023, 2024, 2025, 2026] as Year[]).map((y, i) => {
-              const cfg = YEAR_CONFIG[y];
-              const isHidden = hidden.has(y);
-              return (
-                <Area
-                  key={y}
-                  type="monotone"
-                  dataKey={`y${y}`}
-                  name={cfg.label}
-                  stroke={cfg.line}
-                  strokeWidth={isHidden ? 0 : 3.5}
-                  strokeOpacity={isHidden ? 0 : 1}
-                  fill={`url(#${cfg.gradientId})`}
-                  fillOpacity={isHidden ? 0 : 1}
-                  dot={false}
-                    activeDot={isHidden ? false : {
-                      r: 6, 
-                      strokeWidth: 3, 
-                      stroke: '#fff',
-                      fill: cfg.line
-                    }}
-                  legendType={isHidden ? 'none' : 'line'}
-                  animationBegin={i * 150}
-                  animationDuration={1200}
-                  animationEasing="ease-in-out"
-                  isAnimationActive
-                />
-              );
-            })}
+          <ComposedChart accessibilityLayer data={chartData} margin={{ top: 20, right: 12, bottom: 8, left: 2 }}>
+            <defs>{years.map(year => <linearGradient key={year} id={id + '-year-' + year} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color(year)} stopOpacity={0.18} /><stop offset="100%" stopColor={color(year)} stopOpacity={0.01} /></linearGradient>)}</defs>
+            <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 5" vertical={false} />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={8} minTickGap={20} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={formatSalesAxis} width={58} />
+            <Tooltip content={<SalesTooltip />} cursor={{ stroke: '#cbd5e1', strokeDasharray: '4 4' }} />
+            <ReferenceLine y={0} stroke="#cbd5e1" />
+            <ReferenceLine x={MONTHS[currentMonth]} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: 'Selected', position: 'top', fill: '#64748b', fontSize: 10 }} />
+            {[...visibleYears].reverse().map(year => <Area key={year} dataKey={'y' + year} name={String(year) + ' actual'} type="monotone" stroke={color(year)} strokeWidth={year === focusYear ? 3 : 2} fill={'url(#' + id + '-year-' + year + ')'} dot={false} activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }} connectNulls={false} isAnimationActive={animate} animationDuration={700} />)}
+            {showTarget && <Line dataKey="target" name={focusYear + ' target'} stroke="#64748b" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls={false} isAnimationActive={animate} animationDuration={500} />}
           </ComposedChart>
         </ResponsiveContainer>
+      </div>}
+      <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 xl:grid-cols-4">
+        {visibleYears.map(year => <div key={year} className="rounded-xl bg-slate-50 px-4 py-3"><p className="flex items-center gap-2 text-[10px] font-medium text-slate-500"><span className="h-2 w-2 rounded-full" style={{ background: color(year) }} />{year} recorded sales</p><p className="mt-1 text-sm font-semibold text-slate-800"><Amt value={(multiYearStats[year] || []).reduce((total, value) => total + value, 0)} compact /></p></div>)}
       </div>
-
-      {/* Bottom legend summary */}
-      <div className="flex flex-wrap gap-x-6 gap-y-1 mt-4 pt-4 border-t border-slate-100">
-        {YEARS.filter(y => !hidden.has(y)).map(y => {
-          const total = multiYearStats[y]?.reduce((s, v) => s + v, 0) ?? 0;
-          const cfg = YEAR_CONFIG[y];
-          return (
-            <div key={y} className="flex items-center gap-2">
-              <div className="w-3 h-0.5 rounded-full bg-[var(--line-color)]" style={{ '--line-color': cfg.line } as any} />
-              <span className="text-[11px] text-slate-500 font-medium">{y}</span>
-              <span className="text-[11px] font-bold text-slate-700">{formatCompact(total)}</span>
-            </div>
-          );
-        })}
-      </div>
+      <p className="mt-3 text-[10px] leading-relaxed text-slate-400">Actuals through {asOfDate}. Future periods remain blank. The optional dashed line shows targets separately; totals contain actual sales only.</p>
     </div>
-  );
+  </section>;
 }

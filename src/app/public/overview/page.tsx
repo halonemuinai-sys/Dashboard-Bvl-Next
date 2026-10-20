@@ -163,13 +163,13 @@ export default function PublicMonthlyOverviewPage() {
 
       {/* Row 4: Multi-Year Comparison Chart */}
       <MultiYearChart
-        multiYearStats={data.multiYearStats}
+        multiYearStats={data.multiYearStats} multiYearTargets={data.multiYearTargets} selectedYear={Number(year)} asOfDate={data.asOfDate}
         currentMonth={MONTHS.indexOf(month)}
       />
 
       {/* Row 5: Daily Trend — full width */}
       <DailySalesChart
-        dailyData={data.dailyTrendData}
+        dailyData={data.dailyTrendData} asOfDate={data.asOfDate}
         month={month}
         year={parseInt(year)}
       />

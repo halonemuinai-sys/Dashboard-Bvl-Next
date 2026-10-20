@@ -73,6 +73,8 @@ export interface MonthlyOverviewData {
   };
   trendData: TrendDataPoint[];        // 12 months current year
   multiYearStats: { [year: number]: number[] }; // year -> 12 monthly totals
+  multiYearTargets?: { [year: number]: number[] }; // separate from actual sales
+  asOfDate?: string; // business date in Asia/Jakarta
   categoryTrend: CategoryTrendData;
   advisorData: AdvisorRecord[];
   dailyTrendData: { net: number; qty: number }[];

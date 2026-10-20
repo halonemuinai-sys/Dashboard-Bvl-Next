@@ -1,87 +1,81 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
+import { advisorHomeResolver, normalizeReportStore, isReportCrossing, type AdvisorHome, type AdvisorRotation } from '@/lib/report-attribution';
+import { businessDate, salesDate } from '@/lib/sales-chart-data';
 import type { MonthlyOverviewData, CategoryTrendData, StorePerformanceRow } from './types';
 import { MONTH_NAMES } from './constants';
 
-/**
- * Monthly Overview — Replicates getDashboardData() + aggregateOverview() from GAS
- */
+const isHeadOffice = (value: string) => {
+  const key = (value || '').trim().toLowerCase();
+  return key.includes('head office') || key === 'ho';
+};
+const overviewStore = (value: string) => isHeadOffice(value) ? 'Head Office' : normalizeReportStore(value);
+
+export interface OverviewSale {
+  transaction_date: string; location: string; net_sales: number; gross_sales: number;
+  val_disc: number; cost: number; qty: number; main_category: string;
+  trans_no: string; customer: string; salesman: string; comm: number;
+}
+export interface OverviewSources {
+  sales: OverviewSale[];
+  targets: { year: number; month_number: number; target_value: number; store_name: string }[];
+  advisors: AdvisorHome[];
+  rotations: AdvisorRotation[];
+}
 export async function getMonthlyOverview(month: string, year: number): Promise<MonthlyOverviewData> {
   const monthIndex = MONTH_NAMES.indexOf(month);
-  if (monthIndex === -1) throw new Error(`Invalid month: ${month}`);
-
-  // --- 2. Fetch Multi-Year Data (2023-2026) for Comparison & Projection ---
-  const startRange = `2023-01-01T00:00:00`;
-  const endRange   = `2026-12-31T23:59:59`;
-
-  const [
-    { data: multiYearRows, error: multiYearErr },
-    { data: allTargetRows },
-    { data: advisorProfiles },
-    { data: rotationRows }
-  ] = await Promise.all([
-    supabase
-      .from('clean_master')
-      .select('transaction_date, location, net_sales, gross_sales, val_disc, cost, qty, main_category, trans_no, customer, salesman, comm')
-      .gte('transaction_date', startRange)
-      .lte('transaction_date', endRange),
-    supabase
-      .from('targets')
-      .select('year, month_number, target_value, store_name')
-      .gte('year', 2023)
-      .lte('year', 2026),
-    supabase.from('advisors').select('name, home_location'),
-    supabase.from('advisor_rotations').select('advisor_name, assigned_location')
-      .eq('year', year)
-      .eq('month_number', monthIndex + 1)
+  if (monthIndex < 0 || !Number.isInteger(year) || year < 2000 || year > 2100) throw new Error('Invalid reporting period.');
+  const now = new Date();
+  const currentYear = Number(businessDate(now).slice(0, 4));
+  const fromYear = Math.min(2023, year - 1);
+  const toYear = Math.max(currentYear, year);
+  const [sales, targets, advisors, rotations] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from('clean_master')
+      .select('transaction_date,location,net_sales,gross_sales,val_disc,cost,qty,main_category,trans_no,customer,salesman,comm')
+      .gte('transaction_date', fromYear + '-01-01T00:00:00+07:00')
+      .lt('transaction_date', (toYear + 1) + '-01-01T00:00:00+07:00').order('id').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('targets').select('year,month_number,target_value,store_name')
+      .gte('year', fromYear).lte('year', toYear).order('year').order('month_number').order('store_name').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('advisors').select('name,home_location').order('name').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('advisor_rotations').select('advisor_name,assigned_location')
+      .eq('year', year).eq('month_number', monthIndex + 1).order('advisor_name').range(from, to)),
   ]);
+  return aggregateMonthlyOverview(month, year, { sales, targets, advisors, rotations }, now);
+}
 
-  if (multiYearErr) throw multiYearErr;
-
-  // --- 3. Process Multi-Year Stats & Projections ---
-  const currentYear = new Date().getFullYear();
-  const currentMonthIdx = new Date().getMonth();
-  const multiYearStats: Record<number, number[]> = {
-    2023: new Array(12).fill(0),
-    2024: new Array(12).fill(0),
-    2025: new Array(12).fill(0),
-    2026: new Array(12).fill(0)
-  };
-
-  // A. Fill with Actual Sales (Retail only — exclude HO)
-  multiYearRows?.forEach(row => {
-    const loc = (row.location || '').trim().toLowerCase();
-    if (loc.includes('head office')) return;
-    const d = new Date(row.transaction_date);
-    const rYear = d.getFullYear();
-    const rMonth = d.getMonth();
-    if (multiYearStats[rYear]) {
-      multiYearStats[rYear][rMonth] += (row.net_sales || 0);
-    }
+export function aggregateMonthlyOverview(month: string, year: number, sources: OverviewSources, now = new Date()): MonthlyOverviewData {
+  const monthIndex = MONTH_NAMES.indexOf(month);
+  if (monthIndex < 0) throw new Error('Invalid reporting month.');
+  const today = businessDate(now);
+  const [currentYear, currentMonthNumber, currentDay] = today.split('-').map(Number);
+  const currentMonthIdx = currentMonthNumber - 1;
+  // Normalise every timestamp to its Jakarta calendar date once; the code below reads slice(0, 10).
+  const multiYearRows = sources.sales.map(row => ({ ...row, transaction_date: salesDate(row.transaction_date) })).filter(row => {
+    const date = row.transaction_date;
+    const parsed = new Date(date + 'T00:00:00Z');
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(parsed.getTime())
+      && parsed.toISOString().slice(0, 10) === date && date <= today;
   });
-
-  // B. Fill Projection for 2026 (Current Year)
-  // For future months, we use Target as the "Projection"
-  const monthlyTargetTotals: Record<number, Record<number, number>> = {};
-  allTargetRows?.forEach(t => {
-    if (!monthlyTargetTotals[t.year]) monthlyTargetTotals[t.year] = {};
-    if (!monthlyTargetTotals[t.year][t.month_number - 1]) monthlyTargetTotals[t.year][t.month_number - 1] = 0;
-
-    // Exclude HO from target projection if needed (usually retail focus)
-    if (!t.store_name.toLowerCase().includes('head office')) {
-      monthlyTargetTotals[t.year][t.month_number - 1] += (t.target_value || 0);
-    }
-  });
-
-  // Apply projection to 2026 future months
-  for (let m = 0; m < 12; m++) {
-    // If it's a future month in the current year, or current year has 0 sales for that month
-    if (m > currentMonthIdx || (multiYearStats[currentYear][m] === 0 && m >= currentMonthIdx)) {
-      const targetForMonth = monthlyTargetTotals[currentYear]?.[m] || 0;
-      if (targetForMonth > 0) {
-        multiYearStats[currentYear][m] = targetForMonth;
-      }
-    }
+  const allTargetRows = sources.targets;
+  const advisorProfiles = sources.advisors;
+  const rotationRows = sources.rotations;
+  const multiYearStats: Record<number, number[]> = {};
+  const multiYearTargets: Record<number, number[]> = {};
+  for (let y = Math.min(2023, year); y <= Math.max(currentYear, year); y++) {
+    multiYearStats[y] = new Array(12).fill(0);
+    multiYearTargets[y] = new Array(12).fill(0);
   }
+  multiYearRows.forEach(row => {
+    if (isHeadOffice(row.location)) return;
+    const date = new Date(row.transaction_date.slice(0, 10) + 'T00:00:00Z');
+    if (multiYearStats[date.getUTCFullYear()]) multiYearStats[date.getUTCFullYear()][date.getUTCMonth()] += row.net_sales || 0;
+  });
+  allTargetRows.forEach(target => {
+    if (multiYearTargets[target.year] && target.month_number >= 1 && target.month_number <= 12
+      && !isHeadOffice(target.store_name)) {
+      multiYearTargets[target.year][target.month_number - 1] += target.target_value || 0;
+    }
+  });
 
   // --- 4. Fetch Targets for the selected month (UI Cards) ---
   const targetMap: Record<string, number> = {};
@@ -89,17 +83,18 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
 
   allTargetRows?.forEach(t => {
     if (t.year === year) {
-      const isHO = t.store_name.toLowerCase().includes('head office');
+      const isHO = isHeadOffice(t.store_name);
       if (!isHO) annualTargetExcHO += (t.target_value || 0);
       if (t.month_number === (monthIndex + 1)) {
-        targetMap[t.store_name] = (t.target_value || 0);
+        const store = overviewStore(t.store_name || '');
+        targetMap[store] = (targetMap[store] || 0) + (t.target_value || 0);
       }
     }
   });
 
   // --- 5. SINGLE PASS AGGREGATION for Monthly Overview ---
   // (We filter the multiYearRows for the specific year and month to get the detailed KPIs)
-  const yearData = multiYearRows?.filter(r => new Date(r.transaction_date).getFullYear() === year) || [];
+  const yearData = multiYearRows?.filter(r => new Date(r.transaction_date.slice(0, 10) + 'T00:00:00Z').getUTCFullYear() === year) || [];
   const rows = yearData;
   let annualSalesExcHO = 0;
   const crossingRecordMap = new Map<string, { salesman: string; baseLoc: string; crossingLoc: string; net: number; qty: number }>();
@@ -114,17 +109,7 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
     records: [] as { salesman: string; baseLoc: string; crossingLoc: string; net: number; qty: number }[]
   };
 
-  const validStores = ["plaza indonesia", "plaza senayan", "bali", "bali boutique"];
-
-  const advisorMap = (advisorProfiles || []).reduce((acc: any, curr: any) => {
-    acc[curr.name.toLowerCase()] = curr.home_location;
-    return acc;
-  }, {});
-
-  const rotationMap = (rotationRows || []).reduce((acc: any, curr: any) => {
-    acc[curr.advisor_name.toLowerCase()] = curr.assigned_location;
-    return acc;
-  }, {});
+  const resolveHome = advisorHomeResolver(advisorProfiles, rotationRows);
 
   const trendStats = Array.from({length: 12}, () => ({
     net: 0, qty: 0, transSet: new Set<string>(), custSet: new Set<string>()
@@ -149,18 +134,17 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
   const dailyStats = Array.from({length: 31}, () => ({ net: 0, qty: 0 }));
 
   // Real MTD bounds for fair comparison
-  const now = new Date();
-  const isCurrentMonth = year === now.getFullYear() && monthIndex === now.getMonth();
-  const maxDay = isCurrentMonth ? now.getDate() : 31;
+  const isCurrentMonth = year === currentYear && monthIndex === currentMonthIdx;
+  const maxDay = isCurrentMonth ? currentDay : 31;
 
   rows.forEach(row => {
-    const d = new Date(row.transaction_date);
-    const rMonth = d.getMonth();
+    const d = new Date(row.transaction_date.slice(0, 10) + 'T00:00:00Z');
+    const rMonth = d.getUTCMonth();
     const net = row.net_sales || 0;
     const qty = row.qty || 0;
-    const loc = (row.location || '').trim();
+    const loc = overviewStore(row.location || '');
     const cat = (row.main_category || 'Other').trim();
-    const isHO = loc.toLowerCase().includes('head office');
+    const isHO = isHeadOffice(loc);
 
     // A: Trend Stats
     trendStats[rMonth].net += net;
@@ -185,37 +169,20 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
 
     // F: Crossing Sales & Mobility check (GAS Style)
     if (rMonth === monthIndex) {
-      let tLoc = loc;
-      const salesmanKey = (row.salesman || '').trim().toLowerCase();
-      // Rotation takes precedence over home_location. Fallback to transaction location if unknown.
-      let hLoc = (rotationMap[salesmanKey] || advisorMap[salesmanKey] || loc).trim();
-
-      const tLocLower = tLoc.toLowerCase();
-      const hLocLower = hLoc.toLowerCase();
-
-      const isValidT = validStores.includes(tLocLower);
-      const isValidH = validStores.includes(hLocLower);
-
-      if (isValidT && isValidH) {
-        // Normalize Bali
-        const normT = (tLocLower === 'bali boutique') ? 'Bali' : (tLocLower === 'plaza indonesia' ? 'Plaza Indonesia' : (tLocLower === 'plaza senayan' ? 'Plaza Senayan' : 'Bali'));
-        const normH = (hLocLower === 'bali boutique') ? 'Bali' : (hLocLower === 'plaza indonesia' ? 'Plaza Indonesia' : (hLocLower === 'plaza senayan' ? 'Plaza Senayan' : 'Bali'));
-
-        if (crossingResult.storeStats[normT]) crossingResult.storeStats[normT].physical += net;
-        if (crossingResult.storeStats[normH]) crossingResult.storeStats[normH].adjusted += net;
-
-        if (tLocLower !== hLocLower) {
+      const home = resolveHome(row.salesman || '', loc);
+      // Physical sales stay in their store when the advisor has no retail assignment.
+      if (crossingResult.storeStats[loc]) {
+        crossingResult.storeStats[loc].physical += net;
+        const attributedStore = crossingResult.storeStats[home] ? home : loc;
+        crossingResult.storeStats[attributedStore].adjusted += net;
+        if (isReportCrossing(home, loc)) {
           crossingResult.totalNet += net;
           crossingResult.totalQty += qty;
           const salesman = row.salesman || 'Unknown';
-          const cKey = `${salesman}||${normH}||${normT}`;
-          if (crossingRecordMap.has(cKey)) {
-            const r = crossingRecordMap.get(cKey)!;
-            r.net += net;
-            r.qty += qty;
-          } else {
-            crossingRecordMap.set(cKey, { salesman, baseLoc: normH, crossingLoc: normT, net, qty });
-          }
+          const key = salesman.trim().toLowerCase() + '||' + home + '||' + loc;
+          const record = crossingRecordMap.get(key) || { salesman, baseLoc: home, crossingLoc: loc, net: 0, qty: 0 };
+          record.net += net; record.qty += qty;
+          crossingRecordMap.set(key, record);
         }
       }
 
@@ -237,7 +204,7 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
       catStats[cat].net += net;
       catStats[cat].qty += qty;
 
-      const day = d.getDate() - 1;
+      const day = d.getUTCDate() - 1;
       if (day >= 0 && day < 31) {
         dailyStats[day].net += net;
         dailyStats[day].qty += qty;
@@ -250,11 +217,11 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
 
   monthlyRows.forEach(r => {
     const loc = (r.location || '').trim();
-    if (!loc.toLowerCase().includes('head office')) {
-      currentMtd += (r.net_sales || 0);
+    if (!isHeadOffice(loc)) {
       // MTD Qty & Tx (Current)
-      const d = new Date(r.transaction_date);
-      if (d.getDate() <= maxDay) {
+      const d = new Date(r.transaction_date.slice(0, 10) + 'T00:00:00Z');
+      if (d.getUTCDate() <= maxDay) {
+        currentMtd += (r.net_sales || 0);
         mtdQtyCurrent += (r.qty || 0);
         if (r.trans_no) mtdTxSetCurrent.add(r.trans_no);
       }
@@ -262,13 +229,13 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
   });
 
   multiYearRows?.forEach(r => {
-    const d = new Date(r.transaction_date);
+    const d = new Date(r.transaction_date.slice(0, 10) + 'T00:00:00Z');
     const loc = (r.location || '').trim();
-    if (loc.toLowerCase().includes('head office')) return;
+    if (isHeadOffice(loc)) return;
 
-    const rYear = d.getFullYear();
-    const rMonth = d.getMonth();
-    const rDay = d.getDate();
+    const rYear = d.getUTCFullYear();
+    const rMonth = d.getUTCMonth();
+    const rDay = d.getUTCDate();
 
     const qty = r.qty || 0;
     const tx = r.trans_no;
@@ -310,14 +277,12 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
 
   // Build store performance array
   const allStoreNames = new Set([...Object.keys(storeStats), ...Object.keys(targetMap)]);
-  let totalTarget = 0;
   const storeData: StorePerformanceRow[] = [];
   allStoreNames.forEach(store => {
     const actual = storeStats[store]?.net || 0;
     const cost = storeStats[store]?.cost || 0;
     const qtyS = storeStats[store]?.qty || 0;
     const target = targetMap[store] || 0;
-    totalTarget += target;
     storeData.push({
       store, actual, cost, target, qty: qtyS,
       achievement: target > 0 ? (actual / target) * 100 : 0
@@ -326,7 +291,7 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
 
   crossingResult.records = Array.from(crossingRecordMap.values()).sort((a, b) => b.net - a.net);
 
-  const activeStores = storeData.filter(s => !s.store.toLowerCase().includes('head office'));
+  const activeStores = storeData.filter(s => !isHeadOffice(s.store));
   const storeNetExcHO = activeStores.reduce((s, r) => s + r.actual, 0);
   const storeTargetExcHO = activeStores.reduce((s, r) => s + r.target, 0);
 
@@ -367,9 +332,11 @@ export async function getMonthlyOverview(month: string, year: number): Promise<M
     catData: catStats,
     trendData: trendStats.map(t => ({ net: t.net, qty: t.qty, trans: t.transSet.size, customers: t.custSet.size })),
     multiYearStats,
+    multiYearTargets,
+    asOfDate: today,
     categoryTrend,
     crossingData: crossingResult,
     advisorData: [], // Loaded separately via getAdvisorPerformance
-    dailyTrendData: dailyStats.slice(0, new Date(year, monthIndex + 1, 0).getDate())
+    dailyTrendData: dailyStats.slice(0, new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate())
   };
 }

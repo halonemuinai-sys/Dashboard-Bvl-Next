@@ -1,4 +1,7 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
+import { businessDate, salesDate } from '@/lib/sales-chart-data';
+import { advisorHomeResolver, normalizeReportStore, isReportCrossing } from '@/lib/report-attribution';
 import type { AdvisorPerformanceData, AdvisorRecord, AdvisorProfile, AdvisorRotation, AdvisorSetupData } from './types';
 import { MONTH_NAMES } from './constants';
 
@@ -8,50 +11,35 @@ import { MONTH_NAMES } from './constants';
  */
 export async function getAdvisorPerformance(month: string, year: number): Promise<AdvisorPerformanceData> {
   const monthIndex = MONTH_NAMES.indexOf(month);
-  const mStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01T00:00:00`;
-  const mEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59).toISOString();
-
-  // 1. Fetch Sales, Advisor Profiles, and Advisor Targets in parallel
-  const [
-    { data: salesRows, error: salesErr },
-    { data: advisorProfiles },
-    { data: advisorTargets },
-    { data: storeTargets },
-    { data: rotationRows }
-  ] = await Promise.all([
-    supabase
-      .from('clean_master')
-      .select('trans_no, transaction_date, salesman, location, main_category, net_sales, qty, type')
-      .gte('transaction_date', mStart)
-      .lte('transaction_date', mEnd),
-    supabase.from('advisors').select('name, home_location'),
-    supabase.from('advisor_targets').select('advisor_name, target_value').eq('year', year).eq('month_number', monthIndex + 1),
-    supabase.from('targets').select('store_name, target_value').eq('year', year).eq('month_number', monthIndex + 1),
-    supabase.from('advisor_rotations').select('advisor_name, assigned_location').eq('year', year).eq('month_number', monthIndex + 1)
+  if (monthIndex < 0 || !Number.isInteger(year)) throw new Error('Invalid reporting period.');
+  const mStart = year + '-' + String(monthIndex + 1).padStart(2, '0') + '-01T00:00:00+07:00';
+  const nextMonth = new Date(Date.UTC(year, monthIndex + 1, 1)).toISOString().slice(0, 10) + 'T00:00:00+07:00';
+  const [salesRows, advisorProfiles, advisorTargets, storeTargets, rotationRows] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from('clean_master')
+      .select('trans_no,transaction_date,salesman,location,main_category,net_sales,qty,type')
+      .gte('transaction_date', mStart).lt('transaction_date', nextMonth).order('id').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('advisors').select('name,home_location').order('name').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('advisor_targets').select('advisor_name,target_value')
+      .eq('year', year).eq('month_number', monthIndex + 1).order('advisor_name').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('targets').select('store_name,target_value')
+      .eq('year', year).eq('month_number', monthIndex + 1).order('store_name').range(from, to)),
+    fetchAllRows((from, to) => supabase.from('advisor_rotations').select('advisor_name,assigned_location')
+      .eq('year', year).eq('month_number', monthIndex + 1).order('advisor_name').range(from, to)),
   ]);
-
-  if (salesErr) throw salesErr;
-  const rows = salesRows || [];
-
-  // 2. Maps for quick lookup
-  const homeLocMap: Record<string, string> = {};
-  advisorProfiles?.forEach(p => { homeLocMap[p.name.toLowerCase()] = p.home_location; });
-
-  const rotationMap: Record<string, string> = {};
-  rotationRows?.forEach(r => { rotationMap[r.advisor_name.toLowerCase()] = r.assigned_location; });
-
-  const effectiveLoc = (key: string, fallback: string) => rotationMap[key] || homeLocMap[key] || fallback;
+  const today = businessDate();
+  const rows = salesRows.filter(row => salesDate(row.transaction_date) <= today);
+  const effectiveLoc = advisorHomeResolver(advisorProfiles, rotationRows);
 
   const advTargetMap: Record<string, number> = {};
-  advisorTargets?.forEach(t => { advTargetMap[t.advisor_name.toLowerCase()] = t.target_value || 0; });
+  advisorTargets?.forEach(t => { advTargetMap[(t.advisor_name || '').trim().toLowerCase()] = t.target_value || 0; });
 
   const storeTargetMap: Record<string, number> = {};
-  storeTargets?.forEach(t => { storeTargetMap[t.store_name] = t.target_value || 0; });
+  storeTargets?.forEach(t => { storeTargetMap[normalizeReportStore(t.store_name || '')] = t.target_value || 0; });
 
   // 3. Aggregate store-level sales for contribution context
   const storeStats: Record<string, number> = {};
   let globalTarget = 0;
-  storeTargets?.forEach(t => { if (!t.store_name.toLowerCase().includes('head office')) globalTarget += t.target_value || 0; });
+  storeTargets?.forEach(t => { if (!(t.store_name || '').toLowerCase().includes('head office')) globalTarget += t.target_value || 0; });
 
   // 4. Aggregate Advisor Stats (Mirrors GAS logic)
   const advisorMap = new Map<string, {
@@ -65,7 +53,7 @@ export async function getAdvisorPerformance(month: string, year: number): Promis
     const name = (row.salesman || '').trim();
     if (!name) return;
     const key = name.toLowerCase();
-    const loc = (row.location || '').trim();
+    const loc = normalizeReportStore(row.location || '');
     const cat = (row.main_category || 'Other').trim();
     const net = row.net_sales || 0;
     const qty = row.qty || 0;
@@ -91,7 +79,7 @@ export async function getAdvisorPerformance(month: string, year: number): Promis
 
     // Crossing Sale Detection: transLoc != homeLoc
     const homeLoc = effectiveLoc(key, '');
-    if (homeLoc && loc.toLowerCase() !== homeLoc.toLowerCase()) {
+    if (isReportCrossing(homeLoc, loc)) {
       entry.crossingNet += net;
       entry.crossingQty += qty;
     }
@@ -103,7 +91,7 @@ export async function getAdvisorPerformance(month: string, year: number): Promis
 
   // Ensure advisors with targets but no sales also show up
   advisorTargets?.forEach(t => {
-    const key = t.advisor_name.toLowerCase();
+    const key = (t.advisor_name || '').trim().toLowerCase();
     if (!advisorMap.has(key)) {
       advisorMap.set(key, {
         name: t.advisor_name, net: 0, loc: effectiveLoc(key, 'Unknown'), target: t.target_value || 0,
@@ -230,8 +218,8 @@ export async function getAdvisorSetup(year: number): Promise<AdvisorSetupData> {
   return {
     advisors: (advisors || []) as AdvisorProfile[],
     rotations: (rotations || []) as AdvisorRotation[],
-    targets: (targets || []) as any[],
-    storeTargets: (storeTargets || []) as any[]
+    targets: (targets || []) as AdvisorSetupData['targets'],
+    storeTargets: (storeTargets || []) as AdvisorSetupData['storeTargets']
   };
 }
 
