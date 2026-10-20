@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { BarChart3, Target, CalendarDays, Package, FileText, Percent, TrendingUp, TrendingDown } from 'lucide-react';
 import Amt from '@/components/Amt';
+import InfoTip from '@/components/InfoTip';
 import { cn } from '@/lib/utils';
 import type { MonthlyOverviewData } from '@/services/dashboardService';
 import styles from './MonthlyOverview.module.css';
@@ -32,9 +33,9 @@ export default function MonthlyMetrics({ data, storeNetExcHO, year }: { data: Mo
   const comparison = monthly ? 'vs last month' : 'vs last year';
   return <div className="space-y-5">
     <div className={cn(styles.metrics, 'grid gap-4 sm:grid-cols-2 xl:grid-cols-4')}>
-      <article className="relative min-w-0 overflow-hidden rounded-2xl bg-linear-to-br from-slate-900 via-slate-900 to-blue-950 p-5 text-white shadow-sm">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-blue-400/10" />
-        <div className="relative flex items-center justify-between"><p className="text-xs font-medium text-blue-100">Monthly net sales</p><BarChart3 size={18} className="text-blue-300" /></div>
+      <article className="relative min-w-0 rounded-2xl bg-linear-to-br from-slate-900 via-slate-900 to-blue-950 p-5 text-white shadow-sm">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl"><div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-blue-400/10" /></div>
+        <div className="relative flex items-center justify-between"><p className="flex items-center gap-1 text-xs font-medium text-blue-100">Monthly net sales<InfoTip tone="dark" label="About monthly net sales" text="All net sales for the selected month, including Head Office. MoM and YoY compare boutique sales only, up to the same day of the month, so a month in progress is compared fairly." /></p><BarChart3 size={18} className="text-blue-300" /></div>
         <p className="relative mt-3 text-2xl font-semibold tracking-tight"><span key={k.totalNet} className={styles.value}><Amt value={k.totalNet} compact /></span></p>
         <p className="mt-2 text-[10px] text-slate-400">IDR / including Head Office</p>
         <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1 rounded-xl bg-white p-2.5">
@@ -43,21 +44,21 @@ export default function MonthlyMetrics({ data, storeNetExcHO, year }: { data: Mo
         <p className="mt-2 text-[9px] text-blue-200/70">Growth compares boutique sales over matching periods.</p>
       </article>
       <article className={card}>
-        <div className="flex items-center justify-between"><p className={label}>Monthly achievement</p><Target size={18} className="text-blue-500" /></div>
+        <div className="flex items-center justify-between"><p className={cn(label, 'flex items-center gap-1')}>Monthly achievement<InfoTip label="About Monthly achievement" text="Boutique net sales this month divided by the boutiques' monthly target. Head Office is excluded from both." /></p><Target size={18} className="text-blue-500" /></div>
         <p className={number}>{k.totalTarget > 0 ? pct(k.achievement) : '\u2014'}</p>
         <Progress value={k.achievement} />
         <p className="mt-3 text-[11px] text-slate-500">Target <strong className="font-semibold text-slate-700"><Amt value={k.totalTarget} compact /></strong></p>
         <p className="mt-2 text-[10px] text-slate-400">Boutiques: <Amt value={storeNetExcHO} compact /> / excludes Head Office</p>
       </article>
       <article className={card}>
-        <div className="flex items-center justify-between"><p className={label}>Annual sales / {year}</p><CalendarDays size={18} className="text-teal-500" /></div>
+        <div className="flex items-center justify-between"><p className={cn(label, 'flex items-center gap-1')}>Annual sales / {year}<InfoTip label="About Annual sales" text="Boutique net sales from January up to today for the selected year, excluding Head Office. The bar shows progress to the annual target." /></p><CalendarDays size={18} className="text-teal-500" /></div>
         <p className={number}><Amt value={annual.salesExcHO} compact /></p>
         <Progress value={annual.achievement} />
         <p className="mt-3 text-[11px] text-slate-500"><strong className="font-semibold text-teal-700">{annual.target > 0 ? pct(annual.achievement) : '\u2014'}</strong> of annual target</p>
         <p className="mt-2 text-[10px] text-slate-400">Boutique net sales / excludes Head Office</p>
       </article>
       <article className={card}>
-        <div className="flex items-center justify-between"><p className={label}>Annual target</p><Target size={18} className="text-blue-500" /></div>
+        <div className="flex items-center justify-between"><p className={cn(label, 'flex items-center gap-1')}>Annual target<InfoTip label="About Annual target" text="Sum of all boutique monthly targets for January–December, excluding Head Office. Remaining = annual target minus annual sales so far." /></p><Target size={18} className="text-blue-500" /></div>
         <p className={number}><Amt value={annual.target} compact /></p>
         <span className="mt-3 inline-flex rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">January &ndash; December {year}</span>
         <p className="mt-3 text-[11px] text-slate-500">Remaining <strong className="font-semibold text-slate-700"><Amt value={Math.max(0, annual.target - annual.salesExcHO)} compact /></strong></p>
@@ -71,10 +72,10 @@ export default function MonthlyMetrics({ data, storeNetExcHO, year }: { data: Mo
       </div>
     </div>
     <div className={cn(styles.metrics, 'grid gap-4 sm:grid-cols-2 xl:grid-cols-4')}>
-      <article className={card}><div className="flex items-center justify-between"><p className={label}>Items sold</p><Package size={17} className="text-blue-500" /></div><p className={number}><span key={period + qty} className={styles.value}>{qty.toLocaleString('en-US')}</span></p><div className="mt-3">{previousQty > 0 ? <Growth value={(qty - previousQty) / previousQty * 100} description={comparison} /> : <span className="text-[10px] text-slate-400">No prior-period baseline</span>}</div></article>
-      <article className={card}><div className="flex items-center justify-between"><p className={label}>Transactions</p><FileText size={17} className="text-blue-500" /></div><p className={number}><span key={period + transactions} className={styles.value}>{transactions.toLocaleString('en-US')}</span></p><div className="mt-3">{previousTransactions > 0 ? <Growth value={(transactions - previousTransactions) / previousTransactions * 100} description={comparison} /> : <span className="text-[10px] text-slate-400">No prior-period baseline</span>}</div></article>
-      <article className={card}><div className="flex items-center justify-between"><p className={label}>Cost rate</p><Percent size={17} className="text-teal-500" /></div><p className={number}><span key={period} className={styles.value}>{pct(monthly ? k.costPercentage : k.annualCostPercentage)}</span></p><p className="mt-3 text-[11px] text-slate-500"><Amt value={monthly ? k.totalCost : k.annualTotalCost} compact /> / cost incl. commission</p><p className="mt-1 text-[10px] text-slate-400">As a share of gross sales</p></article>
-      <article className={card}><div className="flex items-center justify-between"><p className={label}>Average discount</p><Percent size={17} className="text-amber-500" /></div><p className={number}><span key={period} className={styles.value}>{pct(monthly ? k.avgDiscountPercentage : k.annualAvgDiscountPercentage)}</span></p><p className="mt-3 text-[11px] text-slate-500"><Amt value={monthly ? k.totalValDisc : k.annualTotalValDisc} compact /> / total discounts</p><p className="mt-1 text-[10px] text-slate-400">As a share of gross sales</p></article>
+      <article className={card}><div className="flex items-center justify-between"><p className={cn(label, 'flex items-center gap-1')}>Items sold<InfoTip label="About Items sold" text="Units sold at the boutiques (excluding Head Office). Monthly compares with the same days of last month; Yearly is year-to-date compared with the same period last year." /></p><Package size={17} className="text-blue-500" /></div><p className={number}><span key={period + qty} className={styles.value}>{qty.toLocaleString('en-US')}</span></p><div className="mt-3">{previousQty > 0 ? <Growth value={(qty - previousQty) / previousQty * 100} description={comparison} /> : <span className="text-[10px] text-slate-400">No prior-period baseline</span>}</div></article>
+      <article className={card}><div className="flex items-center justify-between"><p className={cn(label, 'flex items-center gap-1')}>Transactions<InfoTip label="About Transactions" text="Number of unique invoices at the boutiques (excluding Head Office), using the same comparison periods as Items sold." /></p><FileText size={17} className="text-blue-500" /></div><p className={number}><span key={period + transactions} className={styles.value}>{transactions.toLocaleString('en-US')}</span></p><div className="mt-3">{previousTransactions > 0 ? <Growth value={(transactions - previousTransactions) / previousTransactions * 100} description={comparison} /> : <span className="text-[10px] text-slate-400">No prior-period baseline</span>}</div></article>
+      <article className={card}><div className="flex items-center justify-between"><p className={cn(label, 'flex items-center gap-1')}>Cost rate<InfoTip label="About Cost rate" text="Product cost plus card commission, as a share of gross sales for the selected month or year." /></p><Percent size={17} className="text-teal-500" /></div><p className={number}><span key={period} className={styles.value}>{pct(monthly ? k.costPercentage : k.annualCostPercentage)}</span></p><p className="mt-3 text-[11px] text-slate-500"><Amt value={monthly ? k.totalCost : k.annualTotalCost} compact /> / cost incl. commission</p><p className="mt-1 text-[10px] text-slate-400">As a share of gross sales</p></article>
+      <article className={card}><div className="flex items-center justify-between"><p className={cn(label, 'flex items-center gap-1')}>Average discount<InfoTip label="About Average discount" text="Total discounts given, as a share of gross sales for the selected month or year." /></p><Percent size={17} className="text-amber-500" /></div><p className={number}><span key={period} className={styles.value}>{pct(monthly ? k.avgDiscountPercentage : k.annualAvgDiscountPercentage)}</span></p><p className="mt-3 text-[11px] text-slate-500"><Amt value={monthly ? k.totalValDisc : k.annualTotalValDisc} compact /> / total discounts</p><p className="mt-1 text-[10px] text-slate-400">As a share of gross sales</p></article>
     </div>
   </div>;
 }
