@@ -1,33 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import { useUserAccess } from '@/lib/user-access-context';
-import { inventoryService, LOCATION_MAPPING } from '@/services/inventoryService';
-import { 
-  Boxes, 
-  Calendar as CalendarIcon, 
-  RefreshCw, 
-  FileDown, 
-  Search, 
-  ArrowLeft, 
-  ShieldOff, 
-  TrendingUp, 
-  DollarSign, 
-  Layers 
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import Link from 'next/link';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Boxes, CalendarDays, RefreshCw, FileDown, Search, X, ArrowLeft, ShieldOff, Database, Loader2,
+  ChevronUp, ChevronDown, ChevronsUpDown, Store, Barcode, Wallet, Tag, CloudDownload, AlertCircle, CircleCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  Legend
-} from 'recharts';
+import Amt from '@/components/Amt';
+import InfoTip from '@/components/InfoTip';
+import { useUserAccess } from '@/lib/user-access-context';
+import { inventoryService, LOCATION_MAPPING } from '@/services/inventoryService';
 
 interface InventoryItem {
   id: number;
@@ -48,758 +32,575 @@ interface InventoryItem {
   created_at: string;
 }
 
-const PAGE_SIZE = 10;
+type SortKey = 'item_code' | 'item_sku' | 'description' | 'item_price' | 'qoh' | 'amount' | 'category';
+type SortDir = 'asc' | 'desc';
 
-const COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
-  '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#6366f1'
-];
+const PAGE_SIZES = [25, 50, 100];
+const CATEGORY_ORDER = ['Watches', 'Jewelry', 'Accessories', 'Perfume', 'SSP', 'Other'];
+const CATEGORY_STYLE: Record<string, { bar: string; pill: string }> = {
+  Watches: { bar: 'bg-blue-600', pill: 'bg-blue-50 text-blue-700 ring-blue-200' },
+  Jewelry: { bar: 'bg-emerald-500', pill: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  Accessories: { bar: 'bg-amber-500', pill: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  Perfume: { bar: 'bg-cyan-500', pill: 'bg-cyan-50 text-cyan-700 ring-cyan-200' },
+  SSP: { bar: 'bg-slate-500', pill: 'bg-slate-100 text-slate-600 ring-slate-200' },
+  Other: { bar: 'bg-slate-300', pill: 'bg-slate-100 text-slate-500 ring-slate-200' },
+};
+const STORE_CODES = ['PI', 'PS', 'BL'];
 
-const normalizeCat = (c: string) => {
-  const cu = (c || '').split(',')[0].trim().toUpperCase();
-  if (cu === 'JWL' || cu === 'JEWELRY') return 'Jewelry';
-  if (cu === 'WTH' || cu === 'WATCHES') return 'Watches';
-  if (cu === 'ACCS' || cu === 'ACCESSORIES') return 'Accessories';
-  if (cu === 'PFM' || cu === 'PERFUME') return 'Perfume';
+const categoryOf = (item: InventoryItem) => {
+  const main = (item.main_category || '').trim();
+  if (main) {
+    const known = CATEGORY_ORDER.find(c => c.toLowerCase() === main.toLowerCase());
+    return known || main;
+  }
+  const code = (item.collection_code || '').split(',')[0].trim().toUpperCase();
+  if (code === 'JWL' || code === 'JEWELRY') return 'Jewelry';
+  if (code === 'WTH' || code === 'WATCHES') return 'Watches';
+  if (code === 'ACCS' || code === 'ACCESSORIES') return 'Accessories';
+  if (code === 'PFM' || code === 'PERFUME') return 'Perfume';
+  if (code === 'PACK') return 'PACK';
   return 'Other';
 };
-
-const formatRupiah = (v: number) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(v);
+const collectionOf = (item: InventoryItem) => item.collection_name || (item.collection_code || '').split(',').slice(-1)[0]?.trim() || '';
+const isPackaging = (item: InventoryItem) => {
+  const code = (item.collection_code || '').split(',')[0].trim().toUpperCase();
+  const main = (item.main_category || '').toUpperCase();
+  return code === 'PACK' || main === 'PACK' || main === 'PACKAGING';
 };
+const fmtSnapshot = (iso: string) => {
+  const d = new Date(iso + 'T00:00:00');
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+const pillTone = (category: string) => CATEGORY_STYLE[category]?.pill || CATEGORY_STYLE.Other.pill;
 
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: any[];
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <ChevronsUpDown className="h-3 w-3 text-slate-300" />;
+  return dir === 'asc' ? <ChevronUp className="h-3 w-3 text-blue-600" /> : <ChevronDown className="h-3 w-3 text-blue-600" />;
 }
-
-const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
-  if (!active || !payload || !payload.length) return null;
-  const data = payload[0].payload;
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-4 py-3 min-w-[200px]">
-      <p className="text-xs font-black text-slate-800 mb-1.5 uppercase tracking-wide">
-        {data.name}
-      </p>
-      <div className="flex justify-between items-center gap-4">
-        <span className="text-[10px] text-slate-500 font-medium">Retail Value</span>
-        <span className="text-xs font-black text-slate-900">{formatRupiah(data.value)}</span>
-      </div>
-      <div className="flex justify-between items-center gap-4 mt-1">
-        <span className="text-[10px] text-slate-500 font-medium">Total Stok (QOH)</span>
-        <span className="text-xs font-bold text-blue-600">{data.qoh.toLocaleString('id-ID')} Pcs</span>
-      </div>
-    </div>
-  );
-};
 
 export default function InventoryPage() {
   const { role, canAccess, loading: accessLoading } = useUserAccess();
 
-  // Filter & selections
+  // Snapshot index (metadata) loads on open; stock rows only after "Load data".
+  const [snapshotIndex, setSnapshotIndex] = useState<Record<string, string[]>>({});
+  const [indexError, setIndexError] = useState('');
   const [selectedLoc, setSelectedLoc] = useState('PI');
   const [selectedSnapshot, setSelectedSnapshot] = useState('');
-  const [snapshotsList, setSnapshotsList] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [excludePerfume, setExcludePerfume] = useState(true);
-  
-  // Search & Pagination
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+
+  const [includePerfume, setIncludePerfume] = useState(false);
+  const [category, setCategory] = useState('All');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [sortKey, setSortKey] = useState<keyof InventoryItem>('item_sku');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [pageSize, setPageSize] = useState(25);
+  const [sortKey, setSortKey] = useState<SortKey>('amount');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
-  // Sync Modal
-  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showSync, setShowSync] = useState(false);
   const [syncLoc, setSyncLoc] = useState('PI');
-  const [syncDate, setSyncDate] = useState(() => {
-    const today = new Date();
-    // Default format YYYY-MM-DD
-    return today.toISOString().split('T')[0];
-  });
+  const [syncDate, setSyncDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [syncError, setSyncError] = useState('');
+  const [notice, setNotice] = useState('');
 
-  // Load available snapshot dates
-  const loadSnapshots = async () => {
-    const list = await inventoryService.getAvailableSnapshots();
-    setSnapshotsList(list);
-    if (list.length > 0 && !selectedSnapshot) {
-      // Default to the latest snapshot
-      setSelectedSnapshot(list[0]);
+  const locationSnapshots = useMemo(() => snapshotIndex[selectedLoc] || [], [snapshotIndex, selectedLoc]);
+  const locationsWithData = useMemo(() => Object.keys(LOCATION_MAPPING).filter(code => snapshotIndex[code]?.length), [snapshotIndex]);
+  const locationsWithoutData = useMemo(() => Object.keys(LOCATION_MAPPING).filter(code => !snapshotIndex[code]?.length), [snapshotIndex]);
+
+  const loadIndex = useCallback(async () => {
+    try {
+      const index = await inventoryService.getSnapshotIndex();
+      setIndexError('');
+      setSnapshotIndex(index);
+      return index;
+    } catch {
+      setIndexError('Snapshot dates could not be loaded. Check your connection and reload the page.');
+      return null;
     }
-  };
-
-  useEffect(() => {
-    loadSnapshots();
   }, []);
 
-  // Fetch items when location or selected snapshot changes
   useEffect(() => {
-    if (!selectedSnapshot) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
+    void loadIndex().then(index => {
+      if (!cancelled && index) setSelectedSnapshot(current => current || index[selectedLoc]?.[0] || '');
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadIndex]);
 
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await inventoryService.getInventoryValuation(selectedLoc, selectedSnapshot);
-        if (res.success) {
-          setItems(res.data as InventoryItem[]);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [selectedLoc, selectedSnapshot]);
-
-  // Reset page on search or sort key changes
-  useEffect(() => {
+  const changeLocation = (code: string) => {
+    setSelectedLoc(code);
+    // Keep the date when the boutique has it, otherwise jump to its latest snapshot.
+    setSelectedSnapshot(current => (snapshotIndex[code]?.includes(current) ? current : snapshotIndex[code]?.[0] || ''));
     setPage(1);
-  }, [search, sortKey, sortDir]);
-
-  // Derived filtered data
-  const filteredItems = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    let result = items;
-
-    // Filter out PACK (packaging) items
-    result = result.filter(item => {
-      const collCode = (item.collection_code || '').split(',')[0].trim().toUpperCase();
-      const mainCat = (item.main_category || '').toUpperCase();
-      return collCode !== 'PACK' && mainCat !== 'PACK' && mainCat !== 'PACKAGING';
-    });
-
-    if (excludePerfume) {
-      result = result.filter(item => {
-        const cat = (item.main_category || normalizeCat(item.collection_code) || '').toLowerCase();
-        return cat !== 'perfume' && cat !== 'pfm';
-      });
-    }
-
-    if (!q) return result;
-    return result.filter(item => 
-      (item.item_sku && item.item_sku.toLowerCase().includes(q)) ||
-      (item.item_code && item.item_code.toLowerCase().includes(q)) ||
-      (item.description && item.description.toLowerCase().includes(q)) ||
-      (item.collection_code && item.collection_code.toLowerCase().includes(q)) ||
-      normalizeCat(item.collection_code).toLowerCase().includes(q) ||
-      (item.main_category && item.main_category.toLowerCase().includes(q)) ||
-      (item.collection_name && item.collection_name.toLowerCase().includes(q))
-    );
-  }, [items, search, excludePerfume]);
-
-  // Sorted items
-  const sortedItems = useMemo(() => {
-    return [...filteredItems].sort((a, b) => {
-      const aVal = a[sortKey] ?? '';
-      const bVal = b[sortKey] ?? '';
-      
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      
-      return sortDir === 'asc' 
-        ? String(aVal).localeCompare(String(bVal)) 
-        : String(bVal).localeCompare(String(aVal));
-    });
-  }, [filteredItems, sortKey, sortDir]);
-
-  // Pagination calculation
-  const totalPages = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
-  const pagedItems = useMemo(() => {
-    return sortedItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  }, [sortedItems, page]);
-
-  // Math aggregates
-  const summaries = useMemo(() => {
-    let totalItems = 0;
-    let totalRetailValue = 0;
-    let totalCostValue = 0;
-
-    filteredItems.forEach(item => {
-      totalItems += item.qoh;
-      totalRetailValue += item.qoh * item.item_price;
-      totalCostValue += item.qoh * item.item_cost;
-    });
-
-    const estGrossMargin = totalRetailValue - totalCostValue;
-    const marginPct = totalRetailValue > 0 ? (estGrossMargin / totalRetailValue) * 100 : 0;
-
-    return {
-      totalItems,
-      totalRetailValue,
-      totalCostValue,
-      estGrossMargin,
-      marginPct
-    };
-  }, [filteredItems]);
-
-  // Math aggregates per category
-  const categorySummaries = useMemo(() => {
-    let watchesQty = 0;
-    let watchesVal = 0;
-    let jewelryQty = 0;
-    let jewelryVal = 0;
-    let accsQty = 0;
-    let accsVal = 0;
-
-    filteredItems.forEach(item => {
-      const cat = (item.main_category || normalizeCat(item.collection_code) || '').toLowerCase();
-      const val = item.qoh * item.item_price;
-      
-      if (cat === 'watches') {
-        watchesQty += item.qoh;
-        watchesVal += val;
-      } else if (cat === 'jewelry') {
-        jewelryQty += item.qoh;
-        jewelryVal += val;
-      } else if (cat === 'accessories') {
-        accsQty += item.qoh;
-        accsVal += val;
-      }
-    });
-
-    return {
-      watches: { qty: watchesQty, value: watchesVal },
-      jewelry: { qty: jewelryQty, value: jewelryVal },
-      accessories: { qty: accsQty, value: accsVal }
-    };
-  }, [filteredItems]);
-
-  // Recharts Collection data aggregation
-  const collectionChartData = useMemo(() => {
-    const collMap: Record<string, { name: string; value: number; qoh: number }> = {};
-    
-    filteredItems.forEach(item => {
-      const categoryName = item.main_category || normalizeCat(item.collection_code);
-      const retailVal = item.qoh * item.item_price;
- 
-      if (!collMap[categoryName]) {
-        collMap[categoryName] = { name: categoryName, value: 0, qoh: 0 };
-      }
-      collMap[categoryName].value += retailVal;
-      collMap[categoryName].qoh += item.qoh;
-    });
-
-    return Object.values(collMap)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10); // Show top 10 collections
-  }, [filteredItems]);
-
-  const handleSort = (key: keyof InventoryItem) => {
-    if (sortKey === key) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
   };
 
-  const handleSyncSubmit = async () => {
-    setSyncing(true);
-    setSyncError(null);
-    setSyncSuccess(false);
+  const loadData = useCallback(async () => {
+    if (!selectedSnapshot) { setItems([]); return; }
+    setLoading(true);
+    setLoadError('');
+    try {
+      const res = await inventoryService.getInventoryValuation(selectedLoc, selectedSnapshot);
+      if (!res.success) throw new Error(res.error);
+      setItems(res.data as InventoryItem[]);
+      setUpdatedAt(Date.now());
+      setPage(1);
+    } catch {
+      setLoadError('Stock could not be loaded. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedLoc, selectedSnapshot]);
 
+  useEffect(() => {
+    if (loaded) void loadData();
+  }, [loaded, loadData]);
+
+  // Packaging is never valued; perfume is optional.
+  const scopedItems = useMemo(() => items.filter(item => !isPackaging(item) && (includePerfume || categoryOf(item) !== 'Perfume')), [items, includePerfume]);
+  const packagingCount = useMemo(() => items.filter(isPackaging).length, [items]);
+
+  const categoryMix = useMemo(() => {
+    const map = new Map<string, { name: string; qty: number; value: number; lines: number }>();
+    scopedItems.forEach(item => {
+      const name = categoryOf(item);
+      const row = map.get(name) || { name, qty: 0, value: 0, lines: 0 };
+      row.qty += item.qoh; row.value += item.qoh * item.item_price; row.lines += 1;
+      map.set(name, row);
+    });
+    const order = (name: string) => { const i = CATEGORY_ORDER.indexOf(name); return i < 0 ? CATEGORY_ORDER.length : i; };
+    return [...map.values()].sort((a, b) => order(a.name) - order(b.name));
+  }, [scopedItems]);
+
+  const kpi = useMemo(() => {
+    const units = scopedItems.reduce((s, i) => s + i.qoh, 0);
+    const value = scopedItems.reduce((s, i) => s + i.qoh * i.item_price, 0);
+    const skus = new Set(scopedItems.map(i => i.item_sku).filter(Boolean)).size;
+    const unpriced = scopedItems.filter(i => !i.item_price).length;
+    const top = [...categoryMix].sort((a, b) => b.value - a.value)[0];
+    return { units, value, skus, unpriced, avg: units > 0 ? value / units : 0, top };
+  }, [scopedItems, categoryMix]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return scopedItems.filter(item => {
+      if (category !== 'All' && categoryOf(item) !== category) return false;
+      if (!q) return true;
+      return [item.item_code, item.item_sku, item.description, item.item_name, item.collection_code, item.collection_name, categoryOf(item)]
+        .some(v => (v || '').toLowerCase().includes(q));
+    });
+  }, [scopedItems, category, search]);
+
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
+    const av = sortKey === 'category' ? categoryOf(a) : sortKey === 'description' ? (a.description || a.item_name || '') : a[sortKey] ?? '';
+    const bv = sortKey === 'category' ? categoryOf(b) : sortKey === 'description' ? (b.description || b.item_name || '') : b[sortKey] ?? '';
+    if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av;
+    return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+  }), [filtered, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const hasFilters = Boolean(search || category !== 'All');
+  const clearFilters = () => { setSearch(''); setCategory('All'); setPage(1); };
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir(['item_price', 'qoh', 'amount'].includes(key) ? 'desc' : 'asc'); }
+    setPage(1);
+  };
+
+  const openSync = () => { setSyncLoc(selectedLoc); setSyncError(''); setShowSync(true); };
+  const runSync = async () => {
+    setSyncing(true);
+    setSyncError('');
     try {
       const result = await inventoryService.syncInventory(syncLoc, syncDate);
-      if (result.success) {
-        setSyncSuccess(true);
-        // Refresh dropdowns and set the current active selection to the synced date
-        await loadSnapshots();
-        setSelectedSnapshot(syncDate);
-        setSelectedLoc(syncLoc);
-        setTimeout(() => {
-          setShowSyncModal(false);
-          setSyncSuccess(false);
-        }, 1500);
-      } else {
-        setSyncError(result.error || 'Terjadi kesalahan saat sinkronisasi');
-      }
-    } catch (err: any) {
-      setSyncError(err.message || 'Terjadi kesalahan sistem');
+      if (!result.success) throw new Error(result.error || 'The stock sync failed.');
+      await loadIndex();
+      setSelectedLoc(syncLoc);
+      setSelectedSnapshot(syncDate);
+      setLoaded(true);
+      setShowSync(false);
+      setNotice(`${LOCATION_MAPPING[syncLoc] || syncLoc} stock for ${fmtSnapshot(syncDate)} was synced.`);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'The stock sync failed.');
     } finally {
       setSyncing(false);
     }
   };
 
-  // Export to CSV with BOM formatting
-  const handleExportExcel = () => {
-    const headers = [
-      'Location Name', 'Snapshot Date', 'Serial Number', 'SAP SKU Code', 
-      'Description', 'Retail Price', 'QOH', 'Total Amount', 'Collection Code'
-    ];
-
+  const exportCsv = () => {
     const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-
-    const csvRows = sortedItems.map(item => [
-      q(item.location_name),
-      q(item.snapshot_date),
-      q(item.item_code || ''),
-      q(item.item_sku || ''),
-      q(item.description || ''),
-      item.item_price,
-      item.qoh,
-      item.amount,
-      q(item.collection_code || '')
+    const headers = ['Location', 'Snapshot Date', 'Serial Number', 'SAP Code', 'Description', 'Category', 'Collection', 'Retail Price', 'QOH', 'Total Amount', 'Collection Code'];
+    const rows = sorted.map(item => [
+      q(item.location_name), q(item.snapshot_date), q(item.item_code || ''), q(item.item_sku || ''), q(item.description || item.item_name || ''),
+      q(categoryOf(item)), q(collectionOf(item)), item.item_price, item.qoh, item.amount, q(item.collection_code || ''),
     ].join(','));
-
-    const csvContent = '\ufeff' + [headers.join(','), ...csvRows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Inventory_${selectedLoc}_${selectedSnapshot}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' }));
+    a.download = `Inventory_${selectedLoc}_${selectedSnapshot}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
 
-  // formatRupiah helper moved to module level
-
-  // Auth Protection Check
   if (accessLoading) {
     return (
-      <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-slate-500 font-medium animate-pulse">Memuat izin akses...</p>
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-sm text-slate-500">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />Checking access…
       </div>
     );
   }
 
   if (!canAccess('/inventory')) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center p-4">
-        <div className="text-center space-y-4 max-w-sm">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-rose-50 border border-rose-100 shadow-sm">
-            <ShieldOff className="w-8 h-8 text-rose-500" />
-          </div>
+      <div className="flex min-h-[70vh] items-center justify-center p-4">
+        <div className="max-w-sm space-y-4 text-center">
+          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 ring-1 ring-rose-100"><ShieldOff className="h-7 w-7 text-rose-500" /></span>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Akses Ditolak</h1>
-            <p className="text-slate-500 text-sm mt-1">
-              Halaman ini tidak tersedia untuk role{' '}
-              <span className="font-semibold text-slate-700">{role || '-'}</span>.
-            </p>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">Access denied</h1>
+            <p className="mt-1 text-sm text-slate-500">Inventory Valuation is not available for the <span className="font-semibold text-slate-700">{role || '—'}</span> role.</p>
           </div>
-          <Link href="/"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all shadow-sm">
-            <ArrowLeft className="w-4 h-4" /> Kembali ke Dashboard
+          <Link href="/" className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700">
+            <ArrowLeft className="h-4 w-4" />Back to dashboard
           </Link>
         </div>
       </div>
     );
   }
 
+  const kpis = [
+    { icon: Wallet, tone: 'bg-blue-50 text-blue-600', label: 'Retail value', value: <Amt value={kpi.value} />, sub: 'IDR · on-hand units × retail price',
+      help: 'Quantity on hand multiplied by the retail price of each item. Packaging is excluded, and perfume only counts when "Include perfume" is on.' },
+    { icon: Boxes, tone: 'bg-emerald-50 text-emerald-600', label: 'Units on hand', value: kpi.units.toLocaleString('en-GB'), sub: `${scopedItems.length.toLocaleString('en-GB')} stock lines`,
+      help: 'Total quantity on hand (QOH) in this snapshot, across every stock line in scope.' },
+    { icon: Barcode, tone: 'bg-slate-100 text-slate-600', label: 'Unique SKUs', value: kpi.skus.toLocaleString('en-GB'), sub: kpi.unpriced ? `${kpi.unpriced} lines without retail price` : 'Every line has a retail price',
+      help: 'Distinct SAP codes in stock. Lines without a retail price add units but no value.' },
+    { icon: Tag, tone: 'bg-amber-50 text-amber-600', label: 'Average unit price', value: <Amt value={kpi.avg} />, sub: kpi.top ? `Largest category: ${kpi.top.name}` : '—',
+      help: 'Retail value divided by units on hand.' },
+  ];
+
   return (
-    <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
-      {/* Header controls */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-100 pb-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 rounded-xl bg-blue-50 border border-blue-100">
-              <Boxes className="w-5 h-5 text-blue-600" />
+    <div className="space-y-5 pb-12">
+      {/* Hero */}
+      <motion.section initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 p-6 text-white">
+        <motion.div aria-hidden animate={{ rotate: 360 }} transition={{ duration: 60, repeat: Infinity, ease: 'linear' }}
+          className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full border border-dashed border-white/10" />
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex items-start gap-3.5">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15"><Boxes className="h-5 w-5 text-blue-200" /></span>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-300">Stock</p>
+              <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">Inventory Valuation</h1>
+              <p className="mt-1 text-sm text-slate-300">Retail value of boutique stock from each saved snapshot.</p>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Inventory Valuation</h1>
           </div>
-          <p className="text-slate-500 text-sm">Dashboard visualisasi stok bulanan per butik retail.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-3 text-xs">
+              <Store className="h-3.5 w-3.5 text-blue-200" />
+              <span className="sr-only">Boutique</span>
+              <select aria-label="Boutique" value={selectedLoc} onChange={e => changeLocation(e.target.value)}
+                className="bg-transparent font-semibold text-white outline-none [&>optgroup]:text-slate-900 [&_option]:text-slate-900">
+                <optgroup label="With snapshots">
+                  {locationsWithData.map(code => <option key={code} value={code}>{LOCATION_MAPPING[code]}</option>)}
+                </optgroup>
+                <optgroup label="No snapshot yet">
+                  {locationsWithoutData.map(code => <option key={code} value={code}>{LOCATION_MAPPING[code]}</option>)}
+                </optgroup>
+              </select>
+            </label>
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-3 text-xs">
+              <CalendarDays className="h-3.5 w-3.5 text-blue-200" />
+              <span className="sr-only">Snapshot date</span>
+              <select aria-label="Snapshot date" value={selectedSnapshot} onChange={e => { setSelectedSnapshot(e.target.value); setPage(1); }}
+                disabled={!locationSnapshots.length} className="bg-transparent font-semibold text-white outline-none disabled:text-slate-400 [&>option]:text-slate-900">
+                {!locationSnapshots.length && <option value="">No snapshot</option>}
+                {locationSnapshots.map(date => <option key={date} value={date}>{fmtSnapshot(date)}</option>)}
+              </select>
+            </label>
+            <button type="button" onClick={openSync}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3 text-xs font-semibold text-white transition hover:bg-white/10">
+              <CloudDownload className="h-4 w-4" />Sync stock
+            </button>
+            <button type="button" onClick={() => (loaded ? void loadData() : setLoaded(true))} disabled={loading || !selectedSnapshot}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-4 text-xs font-semibold text-slate-900 transition hover:bg-slate-100 disabled:opacity-50">
+              {loaded ? <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} /> : <Database className="h-3.5 w-3.5" />}
+              {loaded ? 'Reload' : 'Load data'}
+            </button>
+          </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          {/* Location Select */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Lokasi</span>
-            <select 
-              aria-label="Pilih lokasi butik" 
-              value={selectedLoc} 
-              onChange={e => setSelectedLoc(e.target.value)}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
-            >
-              {Object.entries(LOCATION_MAPPING).map(([code, name]) => (
-                <option key={code} value={code}>{name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Snapshot Date Select */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
-            <CalendarIcon className="w-4 h-4 text-blue-600" />
-            <select 
-              aria-label="Pilih tanggal snapshot" 
-              value={selectedSnapshot} 
-              onChange={e => setSelectedSnapshot(e.target.value)}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
-            >
-              {snapshotsList.length === 0 ? (
-                <option value="">(Belum ada data)</option>
-              ) : (
-                snapshotsList.map(date => (
-                  <option key={date} value={date}>{date}</option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* Exclude Perfume Toggle */}
-          <label className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm cursor-pointer select-none hover:bg-slate-50 transition-colors">
-            <input 
-              type="checkbox" 
-              checked={excludePerfume}
-              onChange={e => setExcludePerfume(e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
-            <span className="text-xs font-bold text-slate-700">Tanpa Perfume</span>
-          </label>
-
-          {/* Sync Button */}
-          <button 
-            type="button" 
-            onClick={() => {
-              setSyncLoc(selectedLoc);
-              setShowSyncModal(true);
-            }}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Sync Stock</span>
-          </button>
-
-          {/* Export Button */}
-          <button 
-            type="button" 
-            onClick={handleExportExcel} 
-            disabled={sortedItems.length === 0}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border shadow-sm transition-all bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <FileDown className="w-4 h-4" />
-            <span>Export CSV</span>
-          </button>
+        <div className="relative mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-[11px] text-slate-300">
+          <span className="inline-flex items-center gap-1.5"><Store className="h-3.5 w-3.5" />{LOCATION_MAPPING[selectedLoc] || selectedLoc}</span>
+          <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{selectedSnapshot ? fmtSnapshot(selectedSnapshot) : 'No snapshot'} · {locationSnapshots.length} snapshot{locationSnapshots.length === 1 ? '' : 's'} saved</span>
+          <span className="rounded-md border border-white/15 px-2 py-0.5 text-[9px] font-semibold tracking-wider">AMOUNTS IN IDR</span>
+          {updatedAt && <span className="ml-auto text-slate-400">Loaded {new Date(updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
         </div>
-      </div>
+      </motion.section>
 
-      {/* Sync Modal */}
-      {showSyncModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-100 animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-              <RefreshCw className={cn("w-5 h-5 text-blue-600", syncing && "animate-spin")} />
-              <span>Sinkronisasi Stok Baru</span>
-            </h3>
-            <p className="text-slate-500 text-xs mb-5">
-              Tarik data real-time inventory dari API Bvlgari dan simpan sebagai snapshot di database.
+      {(indexError || notice) && (
+        <div role={indexError ? 'alert' : 'status'} className={cn('flex items-center gap-3 rounded-2xl border px-4 py-3 text-xs',
+          indexError ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800')}>
+          {indexError ? <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" /> : <CircleCheck className="h-4 w-4 shrink-0 text-emerald-600" />}
+          <span className="flex-1">{indexError || notice}</span>
+          {notice && <button type="button" onClick={() => setNotice('')} aria-label="Dismiss" className="rounded p-1 hover:bg-emerald-100"><X className="h-3.5 w-3.5" /></button>}
+        </div>
+      )}
+
+      {!loaded ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-white px-6 py-16 text-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Database className="h-5 w-5" /></span>
+          <div>
+            <p className="text-sm font-semibold text-slate-900">{LOCATION_MAPPING[selectedLoc]} · {selectedSnapshot ? fmtSnapshot(selectedSnapshot) : 'no snapshot yet'}</p>
+            <p className="mt-1 max-w-md text-xs text-slate-500">
+              {selectedSnapshot ? 'Choose a boutique and snapshot, then load the stock. After loading, switching boutique or date reloads automatically.' : 'This boutique has no saved snapshot. Run Sync stock to save one.'}
             </p>
+          </div>
+          {selectedSnapshot ? (
+            <button type="button" onClick={() => setLoaded(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700">
+              <Database className="h-4 w-4" />Load data
+            </button>
+          ) : (
+            <button type="button" onClick={openSync} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700">
+              <CloudDownload className="h-4 w-4" />Sync stock
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {loadError && (
+            <div role="alert" className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" /><span className="flex-1">{loadError}</span>
+              <button type="button" onClick={() => void loadData()} className="font-semibold underline">Try again</button>
+            </div>
+          )}
 
-            <div className="space-y-4 mb-6">
+          {/* KPI */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {kpis.map((card, i) => (
+              <motion.div key={card.label} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }} whileHover={{ y: -2 }}
+                className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+                <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', card.tone)}><card.icon className="h-4 w-4" /></span>
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{card.label}<InfoTip label={`About ${card.label.toLowerCase()}`} text={card.help} /></p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums tracking-tight text-slate-900">{loading ? '…' : card.value}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-slate-500">{card.sub}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Category mix */}
+          <motion.section initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pilih Lokasi</label>
-                <select 
-                  value={syncLoc} 
-                  onChange={e => setSyncLoc(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-semibold outline-none focus:border-blue-500"
-                >
-                  {Object.entries(LOCATION_MAPPING).map(([code, name]) => (
-                    <option key={code} value={code}>{name}</option>
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900">Category mix</h2>
+                <p className="mt-0.5 text-[11px] text-slate-500">Share of retail value per main category. Click a category to filter the stock list.</p>
+              </div>
+              <label className="inline-flex cursor-pointer select-none items-center gap-2 text-xs font-medium text-slate-600">
+                <input type="checkbox" checked={includePerfume} onChange={e => { setIncludePerfume(e.target.checked); setPage(1); if (!e.target.checked && category === 'Perfume') setCategory('All'); }}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                Include perfume
+              </label>
+            </div>
+            <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-slate-100" role="img" aria-label="Retail value share by category">
+              {categoryMix.map(cat => (
+                <motion.div key={cat.name} initial={{ width: 0 }} animate={{ width: kpi.value > 0 ? `${(cat.value / kpi.value) * 100}%` : '0%' }} transition={{ duration: 0.6 }}
+                  title={`${cat.name}: ${kpi.value > 0 ? ((cat.value / kpi.value) * 100).toFixed(1) : 0}%`} className={cn('h-full', CATEGORY_STYLE[cat.name]?.bar || CATEGORY_STYLE.Other.bar)} />
+              ))}
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              {categoryMix.map(cat => {
+                const active = category === cat.name;
+                const share = kpi.value > 0 ? (cat.value / kpi.value) * 100 : 0;
+                return (
+                  <button key={cat.name} type="button" aria-pressed={active} onClick={() => { setCategory(active ? 'All' : cat.name); setPage(1); }}
+                    className={cn('rounded-xl border p-3 text-left transition', active ? 'border-blue-300 bg-blue-50/60 ring-1 ring-blue-200' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50')}>
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-800"><span className={cn('h-2 w-2 rounded-full', CATEGORY_STYLE[cat.name]?.bar || CATEGORY_STYLE.Other.bar)} />{cat.name}</span>
+                      <span className="text-[11px] font-semibold tabular-nums text-slate-500">{share.toFixed(1)}%</span>
+                    </span>
+                    <span className="mt-1.5 block truncate text-sm font-semibold tabular-nums text-slate-900"><Amt value={cat.value} /></span>
+                    <span className="mt-0.5 block text-[11px] tabular-nums text-slate-500">{cat.qty.toLocaleString('en-GB')} pcs · {cat.lines.toLocaleString('en-GB')} lines</span>
+                  </button>
+                );
+              })}
+              {!categoryMix.length && !loading && <p className="text-xs text-slate-400">No stock in scope for this snapshot.</p>}
+            </div>
+            {packagingCount > 0 && <p className="mt-3 text-[10px] text-slate-400">{packagingCount} packaging lines are excluded from every total.</p>}
+          </motion.section>
+
+          {/* Stock list */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input type="search" aria-label="Search stock" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+                  placeholder="Search serial number, SAP code, description or collection…"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-9 text-xs text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                {search && (
+                  <button type="button" onClick={() => setSearch('')} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div role="tablist" aria-label="Category" className="relative flex flex-wrap rounded-lg bg-slate-100 p-1">
+                  {['All', ...categoryMix.map(c => c.name)].map(name => (
+                    <button key={name} type="button" role="tab" aria-selected={category === name} onClick={() => { setCategory(name); setPage(1); }}
+                      className={cn('relative rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors', category === name ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700')}>
+                      {category === name && <motion.span layoutId="inventory-category" className="absolute inset-0 rounded-md bg-white shadow-sm" transition={{ type: 'spring', damping: 30, stiffness: 260 }} />}
+                      <span className="relative">{name}</span>
+                    </button>
                   ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tanggal Snapshot</label>
-                <input 
-                  type="date" 
-                  value={syncDate} 
-                  onChange={e => setSyncDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm font-semibold outline-none focus:border-blue-500"
-                />
+                </div>
+                <span aria-live="polite" className="text-xs text-slate-400"><span className="font-semibold tabular-nums text-slate-700">{filtered.length.toLocaleString('en-GB')}</span> lines</span>
+                <button type="button" onClick={exportCsv} disabled={!sorted.length}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40">
+                  <FileDown className="h-4 w-4 text-slate-500" />Export CSV
+                </button>
               </div>
             </div>
 
-            {syncError && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium mb-4">
-                {syncError}
-              </div>
-            )}
-
-            {syncSuccess && (
-              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-600 text-xs font-medium mb-4">
-                Sinkronisasi berhasil disimpan!
-              </div>
-            )}
-
-            <div className="flex gap-2 justify-end">
-              <button 
-                type="button" 
-                onClick={() => setShowSyncModal(false)}
-                disabled={syncing}
-                className="px-4 py-2 text-slate-500 hover:bg-slate-50 border border-transparent rounded-xl text-xs font-bold transition-all"
-              >
-                Batal
-              </button>
-              <button 
-                type="button" 
-                onClick={handleSyncSubmit} 
-                disabled={syncing}
-                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm"
-              >
-                {syncing ? 'Menyinkronkan...' : 'Ya, Sync Sekarang'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Summaries KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Total Qty */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-300 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">TOTAL QTY (QOH)</span>
-            <span className="text-2xl font-black text-slate-900 leading-none">
-              {summaries.totalItems.toLocaleString('id-ID')}
-            </span>
-            <span className="text-[10px] text-slate-400 block mt-1">Pcs tersedia di butik</span>
-          </div>
-          <div className="p-3 rounded-2xl bg-blue-50/50 text-blue-600">
-            <Boxes className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* Total Retail Value */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-300 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">TOTAL RETAIL VALUE</span>
-            <span className="text-2xl font-black text-slate-900 leading-none">
-              {formatRupiah(summaries.totalRetailValue)}
-            </span>
-            <span className="text-[10px] text-emerald-600 font-semibold block mt-1">Nilai jual teragregasi</span>
-          </div>
-          <div className="p-3 rounded-2xl bg-emerald-50/50 text-emerald-600">
-            <DollarSign className="w-6 h-6" />
-          </div>
-        </div>
-      </div>
-
-      {/* Category Specific KPI Cards */}
-      <div className="space-y-2.5">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">STOK PER KATEGORI UTAMA</span>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          {/* Watches Card */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-300 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest block mb-1">WATCHES (JAM TANGAN)</span>
-              <span className="text-2xl font-black text-slate-900 leading-none">
-                {categorySummaries.watches.qty.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400">Pcs</span>
-              </span>
-              <span className="text-xs text-slate-500 font-medium block mt-1">
-                Value: <span className="font-bold text-slate-700">{formatRupiah(categorySummaries.watches.value)}</span>
-              </span>
-            </div>
-            <div className="p-3 rounded-2xl bg-blue-50/50 text-blue-600">
-              <Boxes className="w-6 h-6" />
-            </div>
-          </div>
-
-          {/* Jewelry Card */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-300 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block mb-1">JEWELRY (PERHIASAN)</span>
-              <span className="text-2xl font-black text-slate-900 leading-none">
-                {categorySummaries.jewelry.qty.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400">Pcs</span>
-              </span>
-              <span className="text-xs text-slate-500 font-medium block mt-1">
-                Value: <span className="font-bold text-slate-700">{formatRupiah(categorySummaries.jewelry.value)}</span>
-              </span>
-            </div>
-            <div className="p-3 rounded-2xl bg-emerald-50/50 text-emerald-600">
-              <Boxes className="w-6 h-6" />
-            </div>
-          </div>
-
-          {/* Accessories Card */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-amber-200 transition-all duration-300 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest block mb-1">ACCESSORIES (AKSESORIS)</span>
-              <span className="text-2xl font-black text-slate-900 leading-none">
-                {categorySummaries.accessories.qty.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400">Pcs</span>
-              </span>
-              <span className="text-xs text-slate-500 font-medium block mt-1">
-                Value: <span className="font-bold text-slate-700">{formatRupiah(categorySummaries.accessories.value)}</span>
-              </span>
-            </div>
-            <div className="p-3 rounded-2xl bg-amber-50/50 text-amber-600">
-              <Boxes className="w-6 h-6" />
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Chart Section */}
-      {collectionChartData.length > 0 && (
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-slate-900">Retail Value per Kategori Utama</h3>
-            <p className="text-slate-400 text-[11px]">Komposisi nilai stock butik disaring berdasarkan Kategori Utama.</p>
-          </div>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={collectionChartData}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                <XAxis 
-                  type="number" 
-                  stroke="#94a3b8" 
-                  fontSize={10} 
-                  tickFormatter={(val) => `Rp ${(val / 1000000).toLocaleString('id-ID')}M`} 
-                />
-                <YAxis 
-                  dataKey="name" 
-                  type="category" 
-                  stroke="#94a3b8" 
-                  fontSize={10} 
-                  width={80}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={30}>
-                  {collectionChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Data Table and Search */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
-        {/* Search filter bar */}
-        <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-            <input 
-              type="text" 
-              placeholder="Cari Serial No, SAP Code, atau Deskripsi..." 
-              value={search} 
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-            />
-          </div>
-          <div className="text-slate-400 text-xs font-medium">
-            Menampilkan <span className="font-bold text-slate-700">{filteredItems.length}</span> dari <span className="font-bold text-slate-700">{items.length}</span> item.
-          </div>
-        </div>
-
-        {/* Table representation */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/30 text-slate-400 text-[10px] font-bold tracking-wider uppercase select-none">
-                <th className="p-4 cursor-pointer hover:bg-slate-50" onClick={() => handleSort('item_code')}>
-                  Serial Number (Item Code) {sortKey === 'item_code' && (sortDir === 'asc' ? '▲' : '▼')}
-                </th>
-                <th className="p-4 cursor-pointer hover:bg-slate-50" onClick={() => handleSort('item_sku')}>
-                  SAP Code (Sku) {sortKey === 'item_sku' && (sortDir === 'asc' ? '▲' : '▼')}
-                </th>
-                <th className="p-4 cursor-pointer hover:bg-slate-50" onClick={() => handleSort('description')}>
-                  Description {sortKey === 'description' && (sortDir === 'asc' ? '▲' : '▼')}
-                </th>
-                <th className="p-4 cursor-pointer hover:bg-slate-50 text-right" onClick={() => handleSort('item_price')}>
-                  Retail Price {sortKey === 'item_price' && (sortDir === 'asc' ? '▲' : '▼')}
-                </th>
-                <th className="p-4 cursor-pointer hover:bg-slate-50 text-center" onClick={() => handleSort('qoh')}>
-                  QOH {sortKey === 'qoh' && (sortDir === 'asc' ? '▲' : '▼')}
-                </th>
-                <th className="p-4 cursor-pointer hover:bg-slate-50 text-right" onClick={() => handleSort('amount')}>
-                  Total Amount {sortKey === 'amount' && (sortDir === 'asc' ? '▲' : '▼')}
-                </th>
-                 <th className="p-4 cursor-pointer hover:bg-slate-50 text-center" onClick={() => handleSort('collection_code')}>
-                  Category / Collection {sortKey === 'collection_code' && (sortDir === 'asc' ? '▲' : '▼')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center">
-                    <RefreshCw className="w-6 h-6 text-blue-600 animate-spin mx-auto mb-2" />
-                    <span className="text-slate-400 font-medium animate-pulse">Memuat detail stock...</span>
-                  </td>
-                </tr>
-              ) : pagedItems.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
-                    Tidak ada data stok tersedia. Silakan klik tombol <strong>Sync Stock</strong> untuk memperbarui data bulan ini.
-                  </td>
-                </tr>
-              ) : (
-                pagedItems.map((item, idx) => (
-                  <tr key={item.id || idx} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 font-mono font-bold text-slate-900">{item.item_code}</td>
-                    <td className="p-4 font-mono text-slate-500">{item.item_sku}</td>
-                    <td className="p-4 font-medium text-slate-700">{item.description || item.item_name}</td>
-                    <td className="p-4 text-right font-semibold text-slate-700">{formatRupiah(item.item_price)}</td>
-                    <td className="p-4 text-center font-bold text-slate-900 bg-slate-50/20">{item.qoh}</td>
-                    <td className="p-4 text-right font-bold text-blue-600">{formatRupiah(item.amount)}</td>
-                    <td className="p-4 text-center">
-                      <div className="flex flex-col items-center">
-                        <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 uppercase border border-blue-100">
-                          {item.main_category || normalizeCat(item.collection_code)}
-                        </span>
-                        {(item.collection_name || (item.collection_code && item.collection_code.split(',').slice(-1)[0])) && (
-                          <span className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-wider">
-                            {item.collection_name || item.collection_code.split(',').slice(-1)[0]}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1040px] table-fixed text-left text-xs">
+                <thead className="border-b border-slate-100 bg-slate-50/80 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  <tr>
+                    {([
+                      ['item_code', 'Serial number', 'w-[150px] px-4'],
+                      ['item_sku', 'SAP code', 'w-[110px] px-3'],
+                      ['description', 'Description', 'px-3'],
+                      ['category', 'Category', 'w-[170px] px-3'],
+                      ['item_price', 'Retail price', 'w-[140px] px-3 text-right'],
+                      ['qoh', 'QOH', 'w-[70px] px-3 text-right'],
+                      ['amount', 'Total amount', 'w-[150px] px-4 text-right'],
+                    ] as [SortKey, string, string][]).map(([key, label, cls]) => (
+                      <th key={key} className={cn('py-3', cls)} aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                        <button type="button" onClick={() => toggleSort(key)} className={cn('inline-flex items-center gap-1 uppercase hover:text-blue-600', key === 'amount' && 'text-blue-700')}>
+                          {label}<SortIcon active={sortKey === key} dir={sortDir} />
+                        </button>
+                      </th>
+                    ))}
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loading && !items.length ? (
+                    <tr><td colSpan={7} className="py-16 text-center text-slate-400"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Loading stock…</td></tr>
+                  ) : !paged.length ? (
+                    <tr><td colSpan={7} className="py-16 text-center">
+                      {hasFilters ? (
+                        <><p className="text-sm font-semibold text-slate-700">No stock lines match your filters</p>
+                          <button type="button" onClick={clearFilters} className="mt-2 text-xs font-semibold text-blue-600 hover:underline">Clear filters</button></>
+                      ) : (
+                        <><p className="text-sm font-semibold text-slate-700">No stock in this snapshot</p>
+                          <p className="mt-1 text-xs text-slate-400">Run Sync stock to save a new snapshot for {LOCATION_MAPPING[selectedLoc]}.</p></>
+                      )}
+                    </td></tr>
+                  ) : (
+                    <AnimatePresence initial={false}>
+                      {paged.map((item, i) => {
+                        const cat = categoryOf(item);
+                        const collection = collectionOf(item);
+                        return (
+                          <motion.tr key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i, 12) * 0.02 }}
+                            className={cn('transition-colors hover:bg-slate-50/70', loading && 'opacity-60')}>
+                            <td className="truncate px-4 py-2.5 font-mono text-[11px] font-semibold text-slate-900" title={item.item_code}>{item.item_code || '—'}</td>
+                            <td className="truncate px-3 py-2.5 font-mono text-[11px] text-slate-500" title={item.item_sku}>{item.item_sku || '—'}</td>
+                            <td className="truncate px-3 py-2.5 text-slate-700" title={item.description || item.item_name}>{item.description || item.item_name || '—'}</td>
+                            <td className="px-3 py-2">
+                              <span className={cn('inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset', pillTone(cat))}>
+                                <span className="h-1 w-1 shrink-0 rounded-full bg-current" />{cat}
+                              </span>
+                              {collection && <span className="mt-0.5 block truncate text-[10px] text-slate-400" title={collection}>{collection}</span>}
+                            </td>
+                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{item.item_price ? <Amt value={item.item_price} /> : <span className="text-amber-600" title="No retail price">—</span>}</td>
+                            <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-slate-900">{item.qoh}</td>
+                            <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900"><Amt value={item.amount} /></td>
+                          </motion.tr>
+                        );
+                      })}
+                    </AnimatePresence>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="p-5 border-t border-slate-100 flex items-center justify-between bg-slate-50/30">
-            <button 
-              type="button" 
-              onClick={() => setPage(p => Math.max(1, p - 1))} 
-              disabled={page === 1}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              Previous
-            </button>
-            <span className="text-xs text-slate-400 font-medium">
-              Page <span className="font-bold text-slate-700">{page}</span> of <span className="font-bold text-slate-700">{totalPages}</span>
-            </span>
-            <button 
-              type="button" 
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
-              disabled={page === totalPages}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              Next
-            </button>
+            <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:flex-row">
+              <label className="flex items-center gap-2">
+                Rows per page
+                <select aria-label="Rows per page" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                  className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none">
+                  {PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+                </select>
+              </label>
+              <div className="flex items-center gap-3">
+                <span className="tabular-nums">{sorted.length ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, sorted.length)}` : '0'} of {sorted.length.toLocaleString('en-GB')}</span>
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}
+                    className="h-8 rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Previous</button>
+                  <button type="button" onClick={() => setPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}
+                    className="h-8 rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Next</button>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
 
+      {/* Sync drawer */}
+      <AnimatePresence>
+        {showSync && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm"
+            onClick={e => { if (e.target === e.currentTarget && !syncing) setShowSync(false); }}>
+            <motion.aside initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 260 }}
+              role="dialog" aria-modal="true" aria-labelledby="sync-title" className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-2xl">
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
+                <div>
+                  <h2 id="sync-title" className="text-base font-semibold tracking-tight text-slate-900">Sync stock</h2>
+                  <p className="mt-1 text-xs text-slate-500">Pull live stock from the Bvlgari inventory API and save it as a snapshot.</p>
+                </div>
+                <button type="button" onClick={() => setShowSync(false)} disabled={syncing} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Location</span>
+                  <select value={syncLoc} onChange={e => setSyncLoc(e.target.value)} disabled={syncing}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
+                    {Object.entries(LOCATION_MAPPING).map(([code, name]) => <option key={code} value={code}>{name}{STORE_CODES.includes(code) ? '' : ` (${code})`}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Snapshot date</span>
+                  <input type="date" value={syncDate} onChange={e => setSyncDate(e.target.value)} disabled={syncing}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                </label>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-500">
+                  The API returns today&apos;s stock. It is saved under the date above{snapshotIndex[syncLoc]?.includes(syncDate) ? ' and replaces the snapshot already saved for that date' : ''}.
+                </div>
+                {snapshotIndex[syncLoc]?.includes(syncDate) && (
+                  <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{LOCATION_MAPPING[syncLoc]} already has a snapshot for {fmtSnapshot(syncDate)}.
+                  </p>
+                )}
+                {syncError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] text-rose-700">{syncError}</p>}
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 p-4">
+                <button type="button" onClick={() => setShowSync(false)} disabled={syncing} className="h-9 rounded-lg px-4 text-xs font-semibold text-slate-500 hover:bg-slate-100">Cancel</button>
+                <button type="button" onClick={runSync} disabled={syncing || !syncDate}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                  {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudDownload className="h-3.5 w-3.5" />}
+                  {syncing ? 'Syncing…' : 'Sync now'}
+                </button>
+              </div>
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

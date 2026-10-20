@@ -245,9 +245,27 @@ export async function getAvailableSnapshots(): Promise<string[]> {
   }
 }
 
+/**
+ * Snapshot dates per location (newest first), so the page only offers dates that exist for a boutique.
+ */
+export async function getSnapshotIndex(): Promise<Record<string, string[]>> {
+  const { data, error } = await supabase
+    .from('inventory_valuation')
+    .select('snapshot_date,location_code')
+    .order('snapshot_date', { ascending: false });
+  if (error) throw new Error(error.message);
+  const index: Record<string, string[]> = {};
+  (data || []).forEach(row => {
+    const dates = (index[row.location_code] ||= []);
+    if (!dates.includes(row.snapshot_date)) dates.push(row.snapshot_date);
+  });
+  return index;
+}
+
 export const inventoryService = {
   syncInventory,
   getInventoryValuation,
   getAvailableSnapshots,
+  getSnapshotIndex,
   LOCATION_MAPPING
 };

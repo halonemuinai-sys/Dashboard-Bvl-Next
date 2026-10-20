@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { salesDate } from '@/lib/sales-chart-data';
 import { MONTH_NAMES } from './constants';
 
 /**
@@ -7,23 +8,25 @@ import { MONTH_NAMES } from './constants';
  * MTD: all transactions from day 1 of month up to and including selected date
  */
 export async function getDailyReport(dateStr: string) {
-  const selected = new Date(dateStr);
-  const year = selected.getFullYear();
-  const monthIdx = selected.getMonth();
-  const day = selected.getDate();
+  // Business dates are Asia/Jakarta calendar days. Bounds carry +07:00 so legacy rows stored at
+  // 17:00 UTC of the previous day (= 00:00 Jakarta) still count on day 1.
+  const [year, monthNumber, day] = dateStr.split('-').map(Number);
+  const monthIdx = monthNumber - 1;
   const monthName = MONTH_NAMES[monthIdx];
+  const monthStart = (y: number, m: number) => new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10) + 'T00:00:00+07:00';
+  const dayOf = (value: string) => Number(salesDate(value).slice(8, 10));
 
-  const mStart = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01T00:00:00`;
-  const mEnd   = new Date(year, monthIdx + 1, 0, 23, 59, 59).toISOString();
+  const mStart = monthStart(year, monthIdx);
+  const mEnd   = monthStart(year, monthIdx + 1);
 
-  const lastMonthDate = new Date(year, monthIdx - 1, 1);
-  const lmYear = lastMonthDate.getFullYear();
-  const lmMonthIdx = lastMonthDate.getMonth();
-  const lmStart = `${lmYear}-${String(lmMonthIdx + 1).padStart(2, '0')}-01T00:00:00`;
-  const lmEnd   = new Date(lmYear, lmMonthIdx + 1, 0, 23, 59, 59).toISOString();
+  const lastMonthDate = new Date(Date.UTC(year, monthIdx - 1, 1));
+  const lmYear = lastMonthDate.getUTCFullYear();
+  const lmMonthIdx = lastMonthDate.getUTCMonth();
+  const lmStart = monthStart(lmYear, lmMonthIdx);
+  const lmEnd   = mStart;
 
   const mStartStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
-  const mEndStr   = new Date(year, monthIdx + 1, 0).toISOString().split('T')[0];
+  const mEndStr   = new Date(Date.UTC(year, monthIdx + 1, 0)).toISOString().slice(0, 10);
 
   const isPreJuly2026 = year < 2026 || (year === 2026 && monthIdx < 6);
 
@@ -32,12 +35,12 @@ export async function getDailyReport(dateStr: string) {
       .from('clean_master')
       .select('transaction_date, location, main_category, net_sales, qty, cost, gross_sales, type, comm, val_disc')
       .gte('transaction_date', mStart)
-      .lte('transaction_date', mEnd),
+      .lt('transaction_date', mEnd),
     supabase
       .from('clean_master')
       .select('transaction_date, location, net_sales')
       .gte('transaction_date', lmStart)
-      .lte('transaction_date', lmEnd),
+      .lt('transaction_date', lmEnd),
     supabase
       .from('targets')
       .select('store_name, target_value')
@@ -160,15 +163,13 @@ export async function getDailyReport(dateStr: string) {
 
     if (isHO) {
       // Accumulate HO sales up to the selected day
-      const rowDate = new Date(row.transaction_date);
-      if (rowDate.getDate() <= day) {
+      if (dayOf(row.transaction_date) <= day) {
         globalHOSales += net;
       }
       return;
     }
 
-    const rowDate = new Date(row.transaction_date);
-    const rowDay = rowDate.getDate();
+    const rowDay = dayOf(row.transaction_date);
     if (rowDay > day) return; // Only MTD
 
     globalStoreSales += net;
@@ -238,8 +239,7 @@ export async function getDailyReport(dateStr: string) {
     const loc = (row.location || '').trim();
     const isHO = loc.toLowerCase().includes('head office') || loc.toLowerCase() === 'ho';
     if (!isHO) {
-      const rowDate = new Date(row.transaction_date);
-      if (rowDate.getDate() <= day) {
+      if (dayOf(row.transaction_date) <= day) {
         lmStoreSales += (row.net_sales || 0);
       }
     }
