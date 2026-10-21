@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ProfileItem, DuplicateGroup, TrafficItemRow, DbCustomerItem, applyCountryPhoneCode, formatDomisiliLN, INTERNATIONAL_CITIES } from './masterData';
+
+import { boutiqueDate, validateVisit, visitAmounts } from '@/lib/crm-visit';
 
 export function useCrmDedup() {
   const [loading, setLoading] = useState(true);
@@ -112,7 +114,7 @@ export function useCrmDedup() {
   const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Traffic form state
-  const [trTanggal, setTrTanggal] = useState(new Date().toISOString().split('T')[0]);
+  const [trTanggal, setTrTanggal] = useState(() => boutiqueDate());
   const [trCustomerName, setTrCustomerName] = useState('');
   const [trNamaPanggilan, setTrNamaPanggilan] = useState('');
   const [trNoHp, setTrNoHp] = useState('');
@@ -140,24 +142,26 @@ export function useCrmDedup() {
   const [newKategori, setNewKategori] = useState('Jewelry');
   const [newKoleksi, setNewKoleksi] = useState('');
   const [trMessage, setTrMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [savingVisit, setSavingVisit] = useState(false);
+  const visitSaveLock = useRef(false);
   const [selectedDbCustomer, setSelectedDbCustomer] = useState<DbCustomerItem | null>(null);
 
   const selectCustomerFromDb = useCallback((customer: DbCustomerItem) => {
     setSelectedDbCustomer(customer);
     setTrCustomerName(customer.name);
-    if (customer.nickname) setTrNamaPanggilan(customer.nickname);
-    if (customer.phone) setTrNoHp(customer.phone);
-    if (customer.email) setTrEmail(customer.email);
+    setTrNamaPanggilan(customer.nickname || '');
+    setTrNoHp(customer.phone || '');
+    setTrEmail(customer.email || '');
     setTrStatusPelanggan('Existing Customer');
 
-    // Autofill visit & segmentation fields
-    if (customer.statusVisit) setTrStatus(customer.statusVisit);
-    if (customer.prospectLevel) setTrProspectLevel(customer.prospectLevel);
-    if (customer.minatBarang) setTrMinatBarang(customer.minatBarang);
-    if (customer.aksesMasuk) setTrAksesMasuk(customer.aksesMasuk);
-    if (customer.siapa) setTrSiapa(customer.siapa);
-    if (customer.faktorPemicu) setTrFaktorPemicu(customer.faktorPemicu);
-    if (customer.groupSize) setTrGroupSize(String(customer.groupSize));
+    // A new visit keeps its own outcome and group size; only interests carry forward.
+    setTrStatus('Follow Up');
+    setTrGroupSize('1');
+    setTrProspectLevel(customer.prospectLevel || 'Potensial Pelanggan Baru');
+    setTrMinatBarang(customer.minatBarang || 'Jewelry');
+    setTrAksesMasuk(customer.aksesMasuk || '');
+    setTrSiapa(customer.siapa || '');
+    setTrFaktorPemicu(customer.faktorPemicu || '');
 
     // Store & Advisor
     if (customer.store) setTrLocation(customer.store);
@@ -168,6 +172,11 @@ export function useCrmDedup() {
 
   const clearSelectedCustomer = useCallback(() => {
     setSelectedDbCustomer(null);
+    setTrNamaPanggilan(''); setTrNoHp(''); setTrEmail('');
+    setTrStatusPelanggan('New Prospect'); setTrAutoProfile(true);
+    setTrStatus('Follow Up'); setTrGroupSize('1');
+    setTrProspectLevel('Potensial Pelanggan Baru'); setTrMinatBarang('Jewelry');
+    setTrAksesMasuk(''); setTrSiapa(''); setTrFaktorPemicu('');
   }, []);
 
   // Dedup check state
@@ -180,7 +189,7 @@ export function useCrmDedup() {
   // Computed
   const fullName = useMemo(() => `${namaDepan} ${namaBelakang}`.trim(), [namaDepan, namaBelakang]);
   const trSubtotal = useMemo(() => trItems.reduce((acc, item) => acc + (item.harga || 0), 0), [trItems]);
-  const trNetSales = useMemo(() => trSubtotal - (trSubtotal * (trDiskonPct || 0)) / 100, [trSubtotal, trDiskonPct]);
+  const trNetSales = useMemo(() => Number.isFinite(trDiskonPct) && trDiskonPct >= 0 && trDiskonPct <= 100 ? visitAmounts(trItems, trDiskonPct).net : 0, [trItems, trDiskonPct]);
   const isExactDuplicate = exactPhoneMatches.length > 0 || exactEmailMatches.length > 0;
 
   const fetchAuditData = useCallback(async () => {
@@ -259,10 +268,10 @@ export function useCrmDedup() {
   };
 
   const handleAddTrafficItem = () => {
-    if (!newDeskripsi || newHarga <= 0) { alert('Isi Deskripsi dan Harga barang!'); return; }
+    if (!newDeskripsi.trim() || !Number.isFinite(newHarga) || newHarga <= 0) { setTrMessage({ type: 'error', text: 'Enter an item description and a price greater than zero.' }); return; }
     setTrItems(prev => [...prev, {
-      item_code: newItemCode || `ITEM-${Date.now().toString().slice(-4)}`,
-      sap_code: newSapCode, deskripsi: newDeskripsi,
+      item_code: newItemCode || `ITEM-${globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`}`,
+      sap_code: newSapCode.trim(), deskripsi: newDeskripsi.trim(),
       harga: Number(newHarga), kategori: newKategori, koleksi: newKoleksi,
     }]);
     setNewItemCode(''); setNewSapCode(''); setNewDeskripsi(''); setNewHarga(0); setNewKoleksi('');
@@ -279,8 +288,8 @@ export function useCrmDedup() {
     setNewItemCode(item.item_code || '');
     setNewSapCode(item.sap_code || '');
     setNewDeskripsi(item.deskripsi || '');
-    if (item.kategori) setNewKategori(item.kategori);
-    if (item.koleksi) setNewKoleksi(item.koleksi);
+    setNewKategori(item.kategori || 'Jewelry');
+    setNewKoleksi(item.koleksi || '');
     setNewHarga(Number(item.harga) || 0);
   };
 
@@ -292,14 +301,14 @@ export function useCrmDedup() {
     koleksi?: string;
     harga?: number;
   }) => {
-    if (!item.deskripsi || !item.harga || item.harga <= 0) return;
+    if (!item.deskripsi?.trim() || !Number.isFinite(Number(item.harga)) || Number(item.harga) <= 0) { setTrMessage({ type: 'error', text: 'This item needs a valid price. Select it and enter a price before adding.' }); return; }
     setTrItems(prev => [...prev, {
-      item_code: item.item_code || `ITEM-${Date.now().toString().slice(-4)}`,
+      item_code: item.item_code || `ITEM-${globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`}`,
       sap_code: item.sap_code || '',
       deskripsi: item.deskripsi || '',
       harga: Number(item.harga),
       kategori: item.kategori || 'Jewelry',
-      koleksi: item.koleksi || 'Bulgari',
+      koleksi: item.koleksi || '',
     }]);
   };
 
@@ -384,7 +393,16 @@ export function useCrmDedup() {
   };
 
   const handleCreateTraffic = async () => {
-    if (!trCustomerName) { setTrMessage({ type: 'error', text: 'Nama Pengunjung / Pelanggan wajib diisi!' }); return; }
+    if (visitSaveLock.current || uploadingBukti) return;
+    try {
+      validateVisit({ customer_name: trCustomerName, tanggal_berkunjung: trTanggal, location: trLocation, email: trEmail, diskon_pct: trDiskonPct }, trItems);
+      if (newDeskripsi.trim() || newItemCode.trim() || newSapCode.trim() || newHarga) throw new Error('Add the draft item or clear it before saving this visit.');
+    } catch (error) {
+      setTrMessage({ type: 'error', text: error instanceof Error ? error.message : 'Check the visit details.' });
+      return;
+    }
+    visitSaveLock.current = true;
+    setSavingVisit(true);
     setTrMessage(null);
     try {
       const barangDiminatiStr = trItems
@@ -397,7 +415,8 @@ export function useCrmDedup() {
           action: 'create_traffic',
           autoCreateProfile: trAutoProfile,
           trafficData: {
-            tanggal_berkunjung: trTanggal, customer_name: trCustomerName,
+            crm_profile_id: selectedDbCustomer?.source === 'CRM Profile' ? selectedDbCustomer.id : selectedDbCustomer?.crmProfileId || null,
+            tanggal_berkunjung: trTanggal, customer_name: trCustomerName.trim(),
             nama_panggilan: trNamaPanggilan, no_hp: trNoHp, email: trEmail,
             status_pelanggan: trStatusPelanggan, status: trStatus,
             prospect_item: trProspectLevel, minat_barang: trMinatBarang,
@@ -414,16 +433,27 @@ export function useCrmDedup() {
       });
       const data = await res.json();
       if (data.success) {
-        setTrMessage({ type: 'success', text: 'Data Kunjungan Traffic & Items berhasil disimpan!' });
+        setTrMessage({ type: data.warning ? 'error' : 'success', text: data.warning || 'Visit and product interests saved successfully.' });
         setSelectedDbCustomer(null);
         setTrCustomerName(''); setTrNamaPanggilan(''); setTrNoHp('');
         setTrEmail(''); setTrNotes(''); setTrBuktiChatUrl(''); setTrItems([]);
+        setTrDiskonPct(0); setTrAutoProfile(true); setTrStatusPelanggan('New Prospect');
+        setTrStatus('Follow Up'); setTrProspectLevel('Potensial Pelanggan Baru'); setTrMinatBarang('Jewelry');
+        setTrAksesMasuk(''); setTrSiapa(''); setTrFaktorPemicu(''); setTrGroupSize('1');
+        setNewItemCode(''); setNewSapCode(''); setNewDeskripsi(''); setNewHarga(0); setNewKoleksi(''); setNewKategori('Jewelry');
         fetchAuditData();
       } else {
-        setTrMessage({ type: 'error', text: 'Gagal menyimpan traffic: ' + data.error });
+        if (data.crmProfileId) {
+          setSelectedDbCustomer({ id: data.crmProfileId, crmProfileId: data.crmProfileId, source: 'CRM Profile', name: trCustomerName, nickname: trNamaPanggilan, phone: trNoHp, email: trEmail, status: trStatusPelanggan, advisor: trServedBy, store: trLocation });
+          setTrAutoProfile(false);
+        }
+        setTrMessage({ type: 'error', text: 'Unable to save visit: ' + data.error });
       }
     } catch (e: any) {
       setTrMessage({ type: 'error', text: 'Error: ' + e.message });
+    } finally {
+      visitSaveLock.current = false;
+      setSavingVisit(false);
     }
   };
 
@@ -512,7 +542,7 @@ export function useCrmDedup() {
     newKoleksi, setNewKoleksi,
     handleAddTrafficItem, handleRemoveTrafficItem,
     handleSelectInventoryItem, handleDirectAddTrafficItem,
-    trMessage, handleCreateTraffic,
+    trMessage, savingVisit, handleCreateTraffic,
     handleUploadImage,
   };
 }

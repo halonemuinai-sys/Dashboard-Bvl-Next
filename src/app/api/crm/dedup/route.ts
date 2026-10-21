@@ -1,3 +1,4 @@
+import { validateVisit } from '@/lib/crm-visit';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -98,8 +99,8 @@ export async function GET(req: Request) {
 
       let trafficQuery = supabase
         .from('mirror_traffic')
-        .select('id, customer_name, nama_panggilan, no_hp, email, status_pelanggan, customer_advisor, served_by, location, status, prospect_item, siapa, akses_masuk, faktor_pemicu, group_size, minat_barang')
-        .not('customer_name', 'is', null);
+        .select('id, customer_name, nama_panggilan, no_hp, email, status_pelanggan, customer_advisor, served_by, location, status, prospect_item, siapa, akses_masuk, faktor_pemicu, group_size, minat_barang, crm_profile_id')
+        .not('customer_name', 'is', null).order('id', { ascending: false });
 
       if (q) {
         crmQuery = crmQuery.or(`nama_lengkap.ilike.%${q}%,nama_panggilan.ilike.%${q}%,no_hp.ilike.%${q}%,email.ilike.%${q}%`).limit(30);
@@ -127,7 +128,8 @@ export async function GET(req: Request) {
       // 1. First insert traffic records (which have rich visit segmentation history)
       (trafficRows || []).forEach(t => {
         if (!t.customer_name) return;
-        const key = t.customer_name.trim().toLowerCase();
+        const key = t.crm_profile_id ? `crm:${t.crm_profile_id}` : `traffic:${t.id}`;
+        if (map.has(key)) return;
         map.set(key, {
           id: t.id,
           name: t.customer_name.trim(),
@@ -138,6 +140,7 @@ export async function GET(req: Request) {
           advisor: t.customer_advisor?.trim() || t.served_by?.trim() || '',
           store: t.location?.trim() || '',
           source: 'Traffic Record',
+          crmProfileId: t.crm_profile_id || null,
           // Visit & Segmentation details
           statusVisit: normalizeStatusVisit(t.status),
           prospectLevel: t.prospect_item?.trim() || 'Potensial Pelanggan Baru',
@@ -152,12 +155,15 @@ export async function GET(req: Request) {
       // 2. Then merge or insert CRM Profiles (profiles take precedence for master details, and enrich segmentation)
       (crmRows || []).forEach(c => {
         if (!c.nama_lengkap) return;
-        const key = c.nama_lengkap.trim().toLowerCase();
+        const key = `crm:${c.id}`;
         const existing = map.get(key);
 
         if (existing) {
           map.set(key, {
             ...existing,
+            id: c.id,
+            crmProfileId: c.id,
+            name: c.nama_lengkap.trim(),
             nickname: c.nama_panggilan?.trim() || existing.nickname,
             phone: c.no_hp?.trim() || existing.phone,
             email: c.email?.trim() || existing.email,
@@ -750,16 +756,32 @@ export async function POST(req: Request) {
 
     // Create Traffic / Prospect entry action
     if (action === 'create_traffic') {
+      let validated;
+      try { validated = validateVisit(trafficData, trafficItems); }
+      catch (error) { return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Invalid visit.' }, { status: 400 }); }
       let createdProfileId = trafficData.crm_profile_id || null;
+      let newProfileId: string | number | null = null;
+      const warnings: string[] = [];
+      if (createdProfileId) {
+        const { data: profile, error } = await supabase.from('crm_profiling').select('id').eq('id', createdProfileId).maybeSingle();
+        if (error) throw error;
+        if (!profile) return NextResponse.json({ success: false, error: 'The selected CRM profile no longer exists. Select the customer again.' }, { status: 400 });
+      }
+      const cleanNewProfile = async () => {
+        if (!newProfileId) return null;
+        const { data: removed, error } = await supabase.from('crm_profiling').delete().eq('id', newProfileId).select('id');
+        if (error) { console.error('Unable to clean up newly created visit profile:', error); return newProfileId; }
+        return removed?.length ? null : newProfileId;
+      };
 
       // Auto-create CRM profile if checked
-      if (autoCreateProfile && trafficData.customer_name) {
+      if (autoCreateProfile && !createdProfileId) {
         const { data: newProf, error: profErr } = await supabase
           .from('crm_profiling')
           .insert({
-            nama_lengkap: trafficData.customer_name,
+            nama_lengkap: validated.customerName,
             no_hp: trafficData.no_hp || '',
-            email: trafficData.email || '',
+            email: (trafficData.email || '').trim(),
             lokasi_store: trafficData.location || 'Plaza Indonesia',
             customer_advisor: trafficData.served_by || 'System SA',
             status_pelanggan: trafficData.status_pelanggan || 'New Prospect',
@@ -768,8 +790,10 @@ export async function POST(req: Request) {
           .select()
           .single();
 
-        if (!profErr && newProf) {
+        if (profErr || !newProf) return NextResponse.json({ success: false, error: 'Unable to create the CRM profile. Select an existing profile or turn off profile creation and retry.' }, { status: 500 });
+        if (newProf) {
           createdProfileId = newProf.id;
+          newProfileId = newProf.id;
         }
       }
 
@@ -778,7 +802,7 @@ export async function POST(req: Request) {
         .from('mirror_traffic')
         .insert({
           tanggal_berkunjung: trafficData.tanggal_berkunjung || new Date().toISOString().split('T')[0],
-          customer_name: trafficData.customer_name,
+          customer_name: validated.customerName,
           nama_panggilan: trafficData.nama_panggilan || '',
           customer_advisor: trafficData.customer_advisor || trafficData.served_by,
           served_by: trafficData.served_by,
@@ -791,23 +815,26 @@ export async function POST(req: Request) {
           faktor_pemicu: trafficData.faktor_pemicu || '',
           group_size: trafficData.group_size || '',
           no_hp: trafficData.no_hp || '',
-          email: trafficData.email || '',
+          email: (trafficData.email || '').trim(),
           status_pelanggan: trafficData.status_pelanggan || 'New Prospect',
           notes: trafficData.notes || '',
-          barang_diminati: trafficData.barang_diminati || '',
-          net_sales: trafficData.net_sales || 0,
-          diskon_pct: trafficData.diskon_pct || 0,
+          barang_diminati: validated.items.map(item => `${item.item_code} - ${item.deskripsi} (Rp ${item.harga.toLocaleString('id-ID')})`).join('; '),
+          net_sales: validated.net,
+          diskon_pct: validated.discount,
           bukti_chat: trafficData.bukti_chat || '',
           crm_profile_id: createdProfileId,
         })
         .select()
         .single();
 
-      if (trErr) throw trErr;
+      if (trErr) {
+        const retainedProfileId = await cleanNewProfile();
+        return NextResponse.json({ success: false, error: 'Unable to save the visit. Your form has been kept; please retry.', crmProfileId: retainedProfileId }, { status: 500 });
+      }
 
       // Insert multi-row items into traffic_items if provided
-      if (Array.isArray(trafficItems) && trafficItems.length > 0 && insTraffic) {
-        const rowsToInsert = trafficItems.map((item: any) => ({
+      if (validated.items.length > 0 && insTraffic) {
+        const rowsToInsert = validated.items.map((item) => ({
           traffic_id: insTraffic.id,
           item_code: item.item_code || '',
           sap_code: item.sap_code || '',
@@ -817,12 +844,22 @@ export async function POST(req: Request) {
           koleksi: item.koleksi || '',
         }));
 
-        await supabase.from('traffic_items').insert(rowsToInsert);
+        const { error: itemsError } = await supabase.from('traffic_items').insert(rowsToInsert);
+        if (itemsError) {
+          const { data: removed, error: rollbackError } = await supabase.from('mirror_traffic').delete().eq('id', insTraffic.id).select('id');
+          if (!rollbackError && removed?.length) {
+            const retainedProfileId = await cleanNewProfile();
+            return NextResponse.json({ success: false, crmProfileId: retainedProfileId, error: 'The product interests could not be saved. The visit was rolled back; your form is kept so you can retry.' }, { status: 500 });
+          }
+          console.error('Visit item save and rollback failed:', itemsError, rollbackError);
+          warnings.push('Visit #' + insTraffic.id + ' was saved, but its product rows could not be stored. The item descriptions remain in the visit record. Review this visit in history; do not submit it again.');
+        }
       }
 
       return NextResponse.json({
         success: true,
-        message: 'Kunjungan Traffic / Walk-in berhasil dicatat!',
+        message: 'Visit and product interests saved.',
+        warning: warnings.length ? warnings.join(' ') : undefined,
         data: insTraffic,
       });
     }

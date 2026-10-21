@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, UserCheck, X, Database, Store, Phone, Mail, User,
-  CheckCircle2, ExternalLink, Loader2, Sparkles, Filter
+  CheckCircle2, Loader2, Filter
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DbCustomerItem } from '../masterData';
@@ -24,6 +24,8 @@ export function CustomerPickerCombobox({
   onClearCustomer,
   selectedCustomer,
 }: CustomerPickerComboboxProps) {
+  const searchVersion = useRef(0);
+  const modalVersion = useRef(0);
   // Dropdown states
   const [isOpen, setIsOpen] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -41,6 +43,7 @@ export function CustomerPickerCombobox({
 
   // Debounced search for inline combobox
   const executeSearch = useCallback(async (query: string) => {
+    const version = ++searchVersion.current;
     if (!query || query.trim().length < 2) {
       setResults([]);
       setSearching(false);
@@ -50,21 +53,26 @@ export function CustomerPickerCombobox({
     try {
       const res = await fetch(`/api/crm/dedup?action=search_customers&q=${encodeURIComponent(query.trim())}`);
       const data = await res.json();
+      if (version !== searchVersion.current) return;
       if (data.success && Array.isArray(data.customers)) {
         setResults(data.customers);
       } else {
         setResults([]);
       }
     } catch (err) {
+      if (version !== searchVersion.current) return;
       console.error('Error searching customers:', err);
       setResults([]);
     } finally {
-      setSearching(false);
+      if (version === searchVersion.current) setSearching(false);
     }
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
+    searchVersion.current++;
+    setResults([]);
+    setSearching(val.trim().length >= 2);
     onChange(val);
 
     // If typing doesn't match selected customer name, clear selected customer flag
@@ -79,6 +87,12 @@ export function CustomerPickerCombobox({
     }, 280);
   };
 
+  useEffect(() => () => {
+    searchVersion.current++; modalVersion.current++;
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
+  }, []);
+
   // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -92,6 +106,7 @@ export function CustomerPickerCombobox({
 
   // Modal search execution
   const executeModalSearch = useCallback(async (query: string, store: string) => {
+    const version = ++modalVersion.current;
     setModalLoading(true);
     try {
       let url = `/api/crm/dedup?action=search_customers&q=${encodeURIComponent(query.trim())}`;
@@ -106,10 +121,11 @@ export function CustomerPickerCombobox({
         setModalResults([]);
       }
     } catch (err) {
+      if (version !== modalVersion.current) return;
       console.error('Error in modal customer search:', err);
       setModalResults([]);
     } finally {
-      setModalLoading(false);
+      if (version === modalVersion.current) setModalLoading(false);
     }
   }, []);
 
@@ -123,6 +139,8 @@ export function CustomerPickerCombobox({
 
   // Handle modal search input change
   const handleModalSearchChange = (val: string) => {
+    modalVersion.current++;
+    setModalLoading(true);
     setModalSearch(val);
     if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
     modalTimeoutRef.current = setTimeout(() => {
@@ -131,11 +149,14 @@ export function CustomerPickerCombobox({
   };
 
   const handleModalStoreChange = (store: string) => {
+    if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
     setModalStoreFilter(store);
     executeModalSearch(modalSearch, store);
   };
 
   const selectFromDropdown = (cust: DbCustomerItem) => {
+    searchVersion.current++;
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     onSelectCustomer(cust);
     setIsOpen(false);
   };
@@ -149,16 +170,16 @@ export function CustomerPickerCombobox({
     <div className="relative" ref={containerRef}>
       <div className="flex items-center justify-between mb-1">
         <label className="block text-[11px] font-bold text-slate-600 uppercase">
-          Nama Pengunjung <span className="text-red-500">*</span>
+          Customer name <span className="text-red-500">*</span>
         </label>
         <button
           type="button"
           onClick={openModal}
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all shadow-xs"
-          title="Cari dan pilih customer dari database CRM Profiling & Traffic"
+          title="Search CRM profiles and previous visitors"
         >
           <Database className="w-3 h-3 text-amber-600" />
-          Pilih dari Database
+          Browse customers
         </button>
       </div>
 
@@ -166,7 +187,7 @@ export function CustomerPickerCombobox({
       <div className="relative">
         <input
           type="text"
-          placeholder="Ketik nama customer atau cari database..."
+          placeholder="Type a name or search existing customers..."
           value={value}
           onChange={handleInputChange}
           onFocus={() => {
@@ -194,6 +215,9 @@ export function CustomerPickerCombobox({
           <button
             type="button"
             onClick={() => {
+              searchVersion.current++;
+              if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+              setSearching(false);
               onChange('');
               onClearCustomer();
               setResults([]);
@@ -218,10 +242,10 @@ export function CustomerPickerCombobox({
                 <span className="font-black text-slate-900">{selectedCustomer.name}</span>
                 {selectedCustomer.nickname && <span className="text-slate-500 font-medium">({selectedCustomer.nickname})</span>}
                 <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
-                  Terhubung Database
+                  Database customer
                 </span>
                 <span className="text-[10px] text-emerald-700 font-semibold">
-                  ✓ Kolom otomatis terisi
+                  ✓ Details filled automatically
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-slate-600">
@@ -229,7 +253,7 @@ export function CustomerPickerCombobox({
                 {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
                 {selectedCustomer.advisor && <span>👤 SA: <strong className="text-slate-800">{selectedCustomer.advisor}</strong></span>}
                 {selectedCustomer.store && <span>📍 <strong className="text-slate-800">{selectedCustomer.store}</strong></span>}
-                {selectedCustomer.minatBarang && <span>💎 Minat: {selectedCustomer.minatBarang}</span>}
+                {selectedCustomer.minatBarang && <span>💎 Interest: {selectedCustomer.minatBarang}</span>}
               </div>
             </div>
           </div>
@@ -237,9 +261,9 @@ export function CustomerPickerCombobox({
             type="button"
             onClick={onClearCustomer}
             className="text-[10px] font-bold text-rose-600 hover:text-rose-800 bg-white hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 shrink-0 self-end sm:self-center transition-all shadow-2xs"
-            title="Lepas koneksi ke database dan edit manual"
+            title="Clear the linked customer details"
           >
-            Lepas / Edit Manual
+            Unlink customer
           </button>
         </div>
       )}
@@ -249,15 +273,15 @@ export function CustomerPickerCombobox({
         <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-100 animate-in fade-in slide-in-from-top-1 duration-150">
           <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Ditemukan {results.length} Pelanggan di Database
+              {results.length} matching customers
             </span>
-            <span className="text-[10px] text-slate-400">Klik untuk auto-fill form</span>
+            <span className="text-[10px] text-slate-400">Select to fill customer details</span>
           </div>
           {results.map((cust) => (
-            <div
+            <button type="button"
               key={`${cust.source}-${cust.id}`}
               onClick={() => selectFromDropdown(cust)}
-              className="p-3 hover:bg-amber-50/60 cursor-pointer transition-colors flex items-center justify-between gap-3 group"
+              className="w-full text-left p-3 hover:bg-amber-50/60 cursor-pointer transition-colors flex items-center justify-between gap-3 group"
             >
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
@@ -271,7 +295,7 @@ export function CustomerPickerCombobox({
                     className={cn(
                       "text-[9px] font-bold px-1.5 py-0.5 rounded-md",
                       cust.source === 'CRM Profile'
-                        ? "bg-purple-50 text-purple-700 border border-purple-200"
+                        ? "bg-blue-50 text-blue-700 border border-blue-200"
                         : "bg-blue-50 text-blue-700 border border-blue-200"
                     )}
                   >
@@ -310,13 +334,12 @@ export function CustomerPickerCombobox({
                   )}
                 </div>
               </div>
-              <button
-                type="button"
+              <span
                 className="shrink-0 px-2.5 py-1 text-[10px] font-bold text-amber-700 bg-amber-50 group-hover:bg-amber-600 group-hover:text-white rounded-lg transition-all"
               >
-                Pilih
-              </button>
-            </div>
+                Select
+              </span>
+            </button>
           ))}
         </div>
       )}
@@ -325,10 +348,10 @@ export function CustomerPickerCombobox({
       {isOpen && !searching && results.length === 0 && value.trim().length >= 2 && (
         <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 text-center animate-in fade-in duration-150">
           <p className="text-xs text-slate-700 font-semibold mb-1">
-            Tidak ada customer &quot;{value}&quot; di database.
+            No customer matching &quot;{value}&quot; in the database.
           </p>
           <p className="text-[11px] text-slate-400">
-            Anda dapat terus mengetik dan menyimpan data ini sebagai pengunjung / prospect baru.
+            You can enter their details and save this as a new visit.
           </p>
         </div>
       )}
@@ -350,10 +373,10 @@ export function CustomerPickerCombobox({
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-900">
-                    Pilih Pelanggan dari Database
+                    Find an existing customer
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Cari riwayat profil CRM atau data kunjungan traffic sebelumnya
+                    Search CRM profiles and previous visit records.
                   </p>
                 </div>
               </div>
@@ -371,7 +394,7 @@ export function CustomerPickerCombobox({
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Ketik nama customer, nomor HP, email, atau panggilan..."
+                  placeholder="Search name, phone, email or preferred name..."
                   value={modalSearch}
                   onChange={(e) => handleModalSearchChange(e.target.value)}
                   autoFocus
@@ -382,6 +405,7 @@ export function CustomerPickerCombobox({
                   <button
                     type="button"
                     onClick={() => {
+                      if (modalTimeoutRef.current) clearTimeout(modalTimeoutRef.current);
                       setModalSearch('');
                       executeModalSearch('', modalStoreFilter);
                     }}
@@ -398,7 +422,7 @@ export function CustomerPickerCombobox({
                   <Filter className="w-3 h-3" /> Store:
                 </span>
                 {[
-                  { id: 'ALL', label: 'Semua Store' },
+                  { id: 'ALL', label: 'All stores' },
                   { id: 'Plaza Indonesia', label: 'Plaza Indonesia' },
                   { id: 'Plaza Senayan', label: 'Plaza Senayan' },
                   { id: 'Bali', label: 'Bali' },
@@ -425,14 +449,14 @@ export function CustomerPickerCombobox({
               {modalLoading ? (
                 <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
                   <Loader2 className="w-6 h-6 animate-spin text-amber-600" />
-                  <p className="text-xs font-medium">Mencari data pelanggan...</p>
+                  <p className="text-xs font-medium">Searching customers...</p>
                 </div>
               ) : modalResults.length === 0 ? (
                 <div className="py-12 flex flex-col items-center justify-center text-center text-slate-400 space-y-2">
                   <User className="w-8 h-8 text-slate-300" />
-                  <p className="text-xs font-bold text-slate-600">Tidak ada pelanggan yang cocok</p>
+                  <p className="text-xs font-bold text-slate-600">No matching customers</p>
                   <p className="text-[11px] text-slate-400 max-w-sm">
-                    Coba ubah kata kunci pencarian atau ganti filter store. Jika ini pengunjung baru, Anda dapat langsung mengetik namanya di form.
+                    Try another search or boutique. For a new visitor, enter their name directly in the form.
                   </p>
                 </div>
               ) : (
@@ -453,7 +477,7 @@ export function CustomerPickerCombobox({
                           className={cn(
                             "text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0",
                             cust.source === 'CRM Profile'
-                              ? "bg-purple-50 text-purple-700 border border-purple-200"
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
                               : "bg-blue-50 text-blue-700 border border-blue-200"
                           )}
                         >
@@ -497,9 +521,7 @@ export function CustomerPickerCombobox({
                       onClick={() => selectFromModal(cust)}
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shrink-0 transition-all shadow-sm flex items-center gap-1"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Pilih
-                    </button>
+                      <CheckCircle2 className="w-3.5 h-3.5" />Select</button>
                   </div>
                 ))
               )}
@@ -507,13 +529,13 @@ export function CustomerPickerCombobox({
 
             {/* Modal Footer */}
             <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-              <span>Menampilkan {modalResults.length} hasil</span>
+              <span>Showing {modalResults.length} results</span>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg font-bold text-slate-700 transition-colors"
               >
-                Tutup
+                Close
               </button>
             </div>
           </div>

@@ -338,6 +338,7 @@ export interface DbCustomerItem {
   advisor: string;
   store: string;
   source: 'CRM Profile' | 'Traffic Record';
+  crmProfileId?: number | string | null;
   statusVisit?: string;
   prospectLevel?: string;
   minatBarang?: string;

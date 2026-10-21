@@ -2,48 +2,23 @@
 
 import { useState } from 'react';
 import {
-  Users, ShieldCheck, AlertTriangle, CheckCircle2, Search, RefreshCw, Merge,
-  UserPlus, Phone, Mail, User, Store, Layers, Sparkles, Link as LinkIcon,
-  Heart, UtensilsCrossed, AtSign, BadgeInfo, PlusCircle, Upload, Camera,
-  Trash2, ShoppingBag, Plus, Image as ImageIcon,
+  AlertTriangle, CheckCircle2, Search, Merge,
+  UserPlus, Phone, Mail, User, Sparkles,
+  Heart, UtensilsCrossed, AtSign, BadgeInfo,  Upload, Camera,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import BvlgariLoader from '@/components/BvlgariLoader';
 import { MASTER_DATA, applyCountryPhoneCode, COUNTRY_REGIONS, INTERNATIONAL_CITIES, QUICK_DOMISILI_COUNTRIES } from './masterData';
 import { useCrmDedup } from './useCrmDedup';
-import { CustomerPickerCombobox } from './components/CustomerPickerCombobox';
+import { VisitDetailsForm } from './components/VisitDetailsForm';
 import { TrafficHistoryTable } from './components/TrafficHistoryTable';
-import { InventorySearchModal, type InventoryItem } from './components/InventorySearchModal';
 import { DatePicker } from '@/components/DatePicker';
+import { CrmWorkspaceHeader } from './components/CrmWorkspaceHeader';
+import styles from './crm-workspace.module.css';
 
 export default function CrmDedupPage() {
   const [activeTab, setActiveTab] = useState<'check' | 'traffic' | 'audit' | 'history'>('check');
-  const [showInventoryModal, setShowInventoryModal] = useState(false);
-  const [invSuggestions, setInvSuggestions] = useState<InventoryItem[]>([]);
-  const [invSuggestLoading, setInvSuggestLoading] = useState(false);
-  const [showSuggestDropdown, setShowSuggestDropdown] = useState(false);
   const crm = useCrmDedup();
-
-  const handleFetchSuggestions = async (val: string) => {
-    if (!val || val.trim().length < 2) {
-      setInvSuggestions([]);
-      setShowSuggestDropdown(false);
-      return;
-    }
-    setInvSuggestLoading(true);
-    setShowSuggestDropdown(true);
-    try {
-      const res = await fetch(`/api/crm/dedup?action=search_inventory&q=${encodeURIComponent(val.trim())}&location=${encodeURIComponent(crm.trLocation || '')}&limit=5`);
-      const data = await res.json();
-      if (data.success) {
-        setInvSuggestions(data.items || []);
-      }
-    } catch {
-      setInvSuggestions([]);
-    } finally {
-      setInvSuggestLoading(false);
-    }
-  };
 
   if (crm.loading) {
     return (
@@ -54,99 +29,15 @@ export default function CrmDedupPage() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-16">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">CRM &amp; Traffic</h1>
-          </div>
-          <p className="text-xs text-slate-500">
-            Input profil pelanggan, catat kunjungan traffic, dan kelola data duplikasi.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={crm.fetchAuditData}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-          Refresh Data Audit
-        </button>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 border-l-4 border-l-blue-600 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Profiling</span>
-            <Users className="w-4 h-4 text-blue-600" />
-          </div>
-          <p className="text-2xl font-black text-slate-900 mt-2">{crm.totalProfiles.toLocaleString()}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Pelanggan tersimpan di CRM</p>
-        </div>
-        <div className="bg-white border border-slate-200 border-l-4 border-l-amber-500 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duplikat No HP</span>
-            <Phone className="w-4 h-4 text-amber-500" />
-          </div>
-          <p className="text-2xl font-black text-amber-600 mt-2">{crm.duplicatePhones.length}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Grup nomor HP ganda</p>
-        </div>
-        <div className="bg-white border border-slate-200 border-l-4 border-l-violet-500 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duplikat Email</span>
-            <Mail className="w-4 h-4 text-violet-500" />
-          </div>
-          <p className="text-2xl font-black text-violet-600 mt-2">{crm.duplicateEmails.length}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Grup email ganda</p>
-        </div>
-        <div className="bg-white border border-slate-200 border-l-4 border-l-emerald-500 rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prospect Traffic</span>
-            <Layers className="w-4 h-4 text-emerald-500" />
-          </div>
-          <p className="text-2xl font-black text-emerald-600 mt-2">{crm.trafficRows.length}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Kunjungan toko terbaru</p>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
-        {([
-          { key: 'check',   label: 'Form Profiling',      icon: <UserPlus className="w-4 h-4 text-blue-600" /> },
-          { key: 'traffic', label: 'Traffic & Items',     icon: <PlusCircle className="w-4 h-4 text-emerald-600" /> },
-          { key: 'audit',   label: 'Audit Duplikat',      icon: <Merge className="w-4 h-4 text-purple-600" />, badge: crm.duplicatePhones.length + crm.duplicateEmails.length },
-          { key: 'history', label: 'Riwayat Traffic & Profil', icon: <Layers className="w-4 h-4 text-amber-600" /> },
-        ] as const).map(tab => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              'flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all',
-              activeTab === tab.key
-                ? 'border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            )}
-          >
-            {tab.icon}
-            {tab.label}
-            {'badge' in tab && tab.badge > 0 && (
-              <span className="px-2 py-0.5 text-[10px] font-extrabold bg-amber-100 text-amber-800 rounded-full border border-amber-200 ml-1">
-                {tab.badge}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+    <div className={styles.page}>
+      <CrmWorkspaceHeader activeTab={activeTab} onTabChange={setActiveTab} onRefresh={crm.fetchAuditData}
+        profiles={crm.totalProfiles} duplicatePhones={crm.duplicatePhones.length}
+        duplicateEmails={crm.duplicateEmails.length} recentVisits={crm.trafficRows.length} />
+      <div className={styles.workspace}>
 
       {/* ── TAB 1: FORM PROFILING ── */}
       {activeTab === 'check' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className={cn(styles.panelEntry, "grid grid-cols-1 lg:grid-cols-12 gap-6")}>
           <div className="lg:col-span-8 space-y-6">
             {crm.submitMessage && (
               <div className={cn(
@@ -163,7 +54,7 @@ export default function CrmDedupPage() {
             )}
 
             {/* 1. PRIMARY INFORMATION */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div id="profile-1" className={cn(styles.formCard, "bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4")}>
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><User className="w-4 h-4" /></div>
                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">1. PRIMARY INFORMATION</h3>
@@ -171,15 +62,15 @@ export default function CrmDedupPage() {
               <div className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
                 <div className="w-20 h-20 bg-slate-200 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-300 shrink-0">
                   {crm.fotoCustomerUrl
-                    ? <img src={crm.fotoCustomerUrl} alt="Foto Customer" className="w-full h-full object-cover" />
+                    ? <img src={crm.fotoCustomerUrl} alt="Customer photo" className="w-full h-full object-cover" />
                     : <Camera className="w-8 h-8 text-slate-400" />}
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Foto Customer</h4>
-                  <p className="text-[11px] text-slate-500 mb-2">Upload foto profil customer</p>
+                  <h4 className="text-xs font-bold text-slate-900">Customer photo</h4>
+                  <p className="text-[11px] text-slate-500 mb-2">Add a profile photo to recognize your customer.</p>
                   <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all">
                     <Upload className="w-3.5 h-3.5" />
-                    {crm.uploadingFoto ? 'Uploading...' : 'Pilih Foto'}
+                    {crm.uploadingFoto ? 'Uploading...' : "Choose photo"}
                     <input type="file" accept="image/*" className="hidden"
                       onChange={e => { if (e.target.files?.[0]) crm.handleUploadImage(e.target.files[0], 'foto_customer'); }} />
                   </label>
@@ -202,26 +93,26 @@ export default function CrmDedupPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">First Name <span className="text-red-500">*</span></label>
-                  <input type="text" placeholder="Nama depan..." value={crm.namaDepan} onChange={e => crm.setNamaDepan(e.target.value)}
+                  <input type="text" placeholder="First name..." value={crm.namaDepan} onChange={e => crm.setNamaDepan(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Last Name</label>
-                  <input type="text" placeholder="Nama belakang..." value={crm.namaBelakang} onChange={e => crm.setNamaBelakang(e.target.value)}
+                  <input type="text" placeholder="Last name..." value={crm.namaBelakang} onChange={e => crm.setNamaBelakang(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Preferred Name</label>
-                  <input type="text" placeholder="Nama panggilan..." value={crm.namaPanggilan} onChange={e => crm.setNamaPanggilan(e.target.value)}
+                  <input type="text" placeholder="Preferred name..." value={crm.namaPanggilan} onChange={e => crm.setNamaPanggilan(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
                 </div>
               </div>
             </div>
 
             {/* 2. CONTACT DETAILS */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div id="profile-2" className={cn(styles.formCard, "bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4")}>
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><Phone className="w-4 h-4" /></div>
                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">2. CONTACT DETAILS</h3>
@@ -229,9 +120,9 @@ export default function CrmDedupPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase">Kewarganegaraan</label>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase">Nationality</label>
                     <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
-                      Kode: +{MASTER_DATA.phoneCodes[crm.kewarganegaraan] || '62'}
+                      Code: +{MASTER_DATA.phoneCodes[crm.kewarganegaraan] || '62'}
                     </span>
                   </div>
                   <select 
@@ -253,7 +144,7 @@ export default function CrmDedupPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                    Nomor HP <span className="text-red-500">*</span>
+                    Phone number <span className="text-red-500">*</span>
                   </label>
                   <input 
                     type="text" 
@@ -268,7 +159,7 @@ export default function CrmDedupPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium hover:border-slate-300 focus:border-slate-800 transition-colors" 
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Kode negara otomatis: <span className="font-bold text-slate-700">+{MASTER_DATA.phoneCodes[crm.kewarganegaraan] || '62'}</span>
+                    Country calling code: <span className="font-bold text-slate-700">+{MASTER_DATA.phoneCodes[crm.kewarganegaraan] || '62'}</span>
                   </p>
                 </div>
                 <div>
@@ -280,40 +171,40 @@ export default function CrmDedupPage() {
             </div>
 
             {/* 3. IDENTITAS & DOMISILI */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div id="profile-3" className={cn(styles.formCard, "bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4")}>
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-                <div className="p-2 bg-violet-50 text-violet-600 rounded-xl"><BadgeInfo className="w-4 h-4" /></div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">3. IDENTITAS &amp; DOMISILI</h3>
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><BadgeInfo className="w-4 h-4" /></div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">3. Identity &amp; residence</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">No. KTP / Passport</label>
-                  <input type="text" placeholder="NIK / Passport..." value={crm.ktpPassport} onChange={e => crm.setKtpPassport(e.target.value)}
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">ID / passport number</label>
+                  <input type="text" placeholder="ID / passport number..." value={crm.ktpPassport} onChange={e => crm.setKtpPassport(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tanggal Lahir</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Date of birth</label>
                   <DatePicker
                     value={crm.tglLahir}
                     onChange={crm.setTglLahir}
-                    placeholder="Pilih tgl lahir..."
+                    placeholder="Select date of birth..."
                     fromYear={1920}
                     toYear={new Date().getFullYear()}
                     showShortcuts={false}
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Umur</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Age group</label>
                   <select value={crm.umur} onChange={e => crm.setUmur(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Umur...</option>
+                    <option value="">Select age group...</option>
                     {MASTER_DATA.umurOptions.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-violet-50/50 border border-violet-100 rounded-2xl">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-blue-50/50 border border-blue-100 rounded-2xl">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Pernikahan</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Marital status</label>
                   <select value={crm.pernikahan} onChange={e => crm.setPernikahan(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     {MASTER_DATA.statusPernikahan.map(s => <option key={s} value={s}>{s}</option>)}
@@ -321,12 +212,12 @@ export default function CrmDedupPage() {
                 </div>
                 {crm.pernikahan === 'Kawin' && (
                   <div>
-                    <label className="block text-[11px] font-bold text-violet-700 uppercase mb-1">Tanggal Pernikahan</label>
+                    <label className="block text-[11px] font-bold text-blue-700 uppercase mb-1">Wedding anniversary</label>
                     <DatePicker
                       value={crm.tglPernikahan}
                       onChange={crm.setTglPernikahan}
-                      placeholder="Pilih tgl pernikahan..."
-                      buttonClassName="bg-white border-violet-300"
+                      placeholder="Select anniversary..."
+                      buttonClassName="bg-white border-blue-300"
                       fromYear={1950}
                       toYear={new Date().getFullYear()}
                       showShortcuts={false}
@@ -334,7 +225,7 @@ export default function CrmDedupPage() {
                   </div>
                 )}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Memiliki Anak?</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Has children?</label>
                   <select value={crm.memilikiAnak} onChange={e => crm.setMemilikiAnak(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                     {MASTER_DATA.memilikiAnak.map(a => <option key={a} value={a}>{a}</option>)}
@@ -342,9 +233,9 @@ export default function CrmDedupPage() {
                 </div>
                 {crm.memilikiAnak === 'YA' && (
                   <div>
-                    <label className="block text-[11px] font-bold text-violet-700 uppercase mb-1">Jumlah Anak</label>
+                    <label className="block text-[11px] font-bold text-blue-700 uppercase mb-1">Number of children</label>
                     <select value={crm.jumlahAnak} onChange={e => crm.setJumlahAnak(e.target.value)}
-                      className="w-full bg-white border border-violet-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
+                      className="w-full bg-white border border-blue-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
                       {MASTER_DATA.jumlahAnak.map(j => <option key={j} value={j}>{j}</option>)}
                     </select>
                   </div>
@@ -352,11 +243,11 @@ export default function CrmDedupPage() {
               </div>
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase">Tipe Domisili</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase">Residence type</label>
                   {crm.domisiliType === 'Luar Negeri' && (
                     <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200 flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-blue-600" />
-                      Mode Luar Negeri Terotomasi
+                      International residence
                     </span>
                   )}
                 </div>
@@ -377,13 +268,13 @@ export default function CrmDedupPage() {
 
                 {crm.domisiliType === 'Dalam Negeri' ? (
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Provinsi Domisili</label>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Province of residence</label>
                     <select 
                       value={crm.domisiliProvinsi} 
                       onChange={e => crm.setDomisiliProvinsi(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium hover:border-slate-300 transition-colors"
                     >
-                      <option value="">Pilih Provinsi...</option>
+                      <option value="">Select province...</option>
                       {MASTER_DATA.provinsi.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
@@ -394,7 +285,7 @@ export default function CrmDedupPage() {
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-amber-500" />
-                          Pilih Cepat Negara (Asia, Oseania, Eropa, Afrika, Timur Tengah, Amerika):
+                          Quick country selection
                         </span>
                         {crm.kewarganegaraan && crm.kewarganegaraan !== 'Indonesia' && crm.domisiliNegara !== crm.kewarganegaraan && (
                           <button
@@ -402,7 +293,7 @@ export default function CrmDedupPage() {
                             onClick={() => crm.handleSelectDomisiliNegara(crm.kewarganegaraan)}
                             className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
                           >
-                            Sama dg Kewarganegaraan ({crm.kewarganegaraan})
+                            Use nationality ({crm.kewarganegaraan})
                           </button>
                         )}
                       </div>
@@ -430,14 +321,14 @@ export default function CrmDedupPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                       <div>
                         <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                          Negara Domisili <span className="text-red-500">*</span>
+                          Country of residence <span className="text-red-500">*</span>
                         </label>
                         <select
                           value={crm.domisiliNegara}
                           onChange={e => crm.handleSelectDomisiliNegara(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium hover:border-slate-300 transition-colors cursor-pointer"
                         >
-                          <option value="">Pilih Negara...</option>
+                          <option value="">Select country...</option>
                           {Object.entries(COUNTRY_REGIONS).map(([region, countries]) => (
                             <optgroup key={region} label={`── ${region} ──`}>
                               {countries.map(c => (
@@ -450,12 +341,12 @@ export default function CrmDedupPage() {
 
                       <div>
                         <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                          Kota Domisili (Pilihan / Ketik)
+                          City of residence
                         </label>
                         <input
                           type="text"
                           list="international-cities-list"
-                          placeholder={crm.domisiliNegara ? `Kota di ${crm.domisiliNegara} (misal: London, Paris, Sydney...)` : "Pilih negara atau ketik nama kota..."}
+                          placeholder={crm.domisiliNegara ? `Kota di ${crm.domisiliNegara} (misal: London, Paris, Sydney...)` : "Select a country or enter a city..."}
                           value={crm.domisiliKota}
                           onChange={e => crm.handleSelectDomisiliKota(e.target.value)}
                           className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium hover:border-slate-300 focus:border-slate-800 transition-colors"
@@ -471,7 +362,7 @@ export default function CrmDedupPage() {
                     {/* Quick City Suggestions (Pill Buttons) */}
                     {crm.domisiliNegara && INTERNATIONAL_CITIES[crm.domisiliNegara] && INTERNATIONAL_CITIES[crm.domisiliNegara].length > 1 && (
                       <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Saran Kota:</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Suggested cities:</span>
                         {INTERNATIONAL_CITIES[crm.domisiliNegara].map(city => (
                           <button
                             key={city}
@@ -493,30 +384,30 @@ export default function CrmDedupPage() {
                     {/* Status Format Data Tersimpan di Database */}
                     <div className="p-2.5 bg-blue-50/70 border border-blue-100 rounded-xl flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Format Data Tersimpan:</span>
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Residence summary:</span>
                         <span className="font-bold text-slate-800">
-                          {crm.domisiliLuarNegeri || <span className="text-slate-400 italic font-normal">Belum ada negara dipilih</span>}
+                          {crm.domisiliLuarNegeri || <span className="text-slate-400 italic font-normal">No country selected</span>}
                         </span>
                       </div>
-                      <span className="text-[10px] text-blue-500 font-medium">Otomatis Terstandarisasi</span>
+                      <span className="text-[10px] text-blue-500 font-medium">Standardized residence</span>
                     </div>
                   </div>
                 )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Etnis</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Ethnicity</label>
                   <select value={crm.etnis} onChange={e => crm.setEtnis(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Etnis...</option>
+                    <option value="">Select ethnicity...</option>
                     {MASTER_DATA.etnis.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Agama</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Religion</label>
                   <select value={crm.agama} onChange={e => crm.setAgama(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Agama...</option>
+                    <option value="">Select religion...</option>
                     {MASTER_DATA.agama.map(a => <option key={a} value={a}>{a}</option>)}
                     {crm.agama && !MASTER_DATA.agama.includes(crm.agama) && (
                       <option value={crm.agama}>{crm.agama}</option>
@@ -524,10 +415,10 @@ export default function CrmDedupPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Pekerjaan</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Occupation</label>
                   <select value={crm.pekerjaan} onChange={e => crm.setPekerjaan(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Pekerjaan...</option>
+                    <option value="">Select occupation...</option>
                     {MASTER_DATA.pekerjaan.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
@@ -535,60 +426,60 @@ export default function CrmDedupPage() {
             </div>
 
             {/* 4. LIFESTYLE & HOBBY */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div id="profile-4" className={cn(styles.formCard, "bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4")}>
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-pink-50 text-pink-600 rounded-xl"><Heart className="w-4 h-4" /></div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">4. LIFESTYLE &amp; HOBBY</h3>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">4. Lifestyle &amp; interests</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Fashion Style</label>
                   <select value={crm.fashionStyle} onChange={e => crm.setFashionStyle(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Style...</option>
+                    <option value="">Select style...</option>
                     {MASTER_DATA.fashionStyle.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Hobby</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Interest category</label>
                   <select value={crm.hobbyKat} onChange={e => { crm.setHobbyKat(e.target.value); crm.setHobbySub(''); }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Kategori...</option>
+                    <option value="">Select category...</option>
                     {Object.keys(MASTER_DATA.hobiKategori).map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Sub Hobby</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Specific interest</label>
                   <select value={crm.hobbySub} onChange={e => crm.setHobbySub(e.target.value)} disabled={!crm.hobbyKat}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium disabled:opacity-40">
-                    <option value="">Pilih Sub Hobby...</option>
+                    <option value="">Select interest...</option>
                     {(MASTER_DATA.hobiKategori[crm.hobbyKat] || []).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
               {(crm.hobbyKat === 'Others' || crm.hobbySub === 'Others') && (
                 <div className="p-3 bg-pink-50 border border-pink-200 rounded-2xl">
-                  <label className="block text-[11px] font-bold text-pink-800 uppercase mb-1">Hobby Lainnya</label>
-                  <input type="text" placeholder="Tuliskan hobi khusus..." value={crm.hobbyOthers} onChange={e => crm.setHobbyOthers(e.target.value)}
+                  <label className="block text-[11px] font-bold text-pink-800 uppercase mb-1">Other interests</label>
+                  <input type="text" placeholder="Add a specific interest..." value={crm.hobbyOthers} onChange={e => crm.setHobbyOthers(e.target.value)}
                     className="w-full bg-white border border-pink-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
                 </div>
               )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Warna Favorit</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Favorite color</label>
                   <select value={crm.warnaFavorit} onChange={e => crm.setWarnaFavorit(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Warna...</option>
+                    <option value="">Select color...</option>
                     {MASTER_DATA.warnaFavorit.map(w => <option key={w} value={w}>{w}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tempat Liburan Favorit</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Favorite destinations</label>
                   <input type="text" placeholder="Paris, Bali, Tokyo..." value={crm.liburanFavorit} onChange={e => crm.setLiburanFavorit(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Topik Pembicaraan Favorit</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Favorite conversation topics</label>
                   <input type="text" placeholder="Art, Watch, Business..." value={crm.topikPembicaraan} onChange={e => crm.setTopikPembicaraan(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
                 </div>
@@ -596,17 +487,17 @@ export default function CrmDedupPage() {
             </div>
 
             {/* 5. KULINER & ALERGI */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div id="profile-5" className={cn(styles.formCard, "bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4")}>
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
                 <div className="p-2 bg-amber-50 text-amber-600 rounded-xl"><UtensilsCrossed className="w-4 h-4" /></div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">5. KULINER &amp; ALERGI</h3>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">5. Dining preferences &amp; allergies</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  { label: 'Makanan Favorit', val: crm.makananFavorit, set: crm.setMakananFavorit, ph: 'Italian, Japanese...' },
-                  { label: 'Minuman Favorit', val: crm.minumanFavorit, set: crm.setMinumanFavorit, ph: 'Wine, Champagne, Coffee...' },
-                  { label: 'Cake Favorit',    val: crm.cakeFavorit,    set: crm.setCakeFavorit,    ph: 'Chocolate, Cheese Cake...' },
-                  { label: 'Alergi Makanan',  val: crm.alergiMakanan,  set: crm.setAlergiMakanan,  ph: 'Nuts, Seafood...' },
+                  { label: "Favorite food", val: crm.makananFavorit, set: crm.setMakananFavorit, ph: 'Italian, Japanese...' },
+                  { label: "Favorite drinks", val: crm.minumanFavorit, set: crm.setMinumanFavorit, ph: 'Wine, Champagne, Coffee...' },
+                  { label: "Favorite cake",    val: crm.cakeFavorit,    set: crm.setCakeFavorit,    ph: 'Chocolate, Cheese Cake...' },
+                  { label: "Food allergies",  val: crm.alergiMakanan,  set: crm.setAlergiMakanan,  ph: 'Nuts, Seafood...' },
                 ].map(f => (
                   <div key={f.label}>
                     <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">{f.label}</label>
@@ -618,10 +509,10 @@ export default function CrmDedupPage() {
             </div>
 
             {/* 6. SOCIAL MEDIA & INSIGHTS */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div id="profile-6" className={cn(styles.formCard, "bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4")}>
               <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><AtSign className="w-4 h-4" /></div>
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">6. SOCIAL MEDIA &amp; INSIGHTS</h3>
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><AtSign className="w-4 h-4" /></div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">6. Social &amp; advisor details</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -637,33 +528,33 @@ export default function CrmDedupPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Faktor Pemicu Pembelian</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Purchase motivation</label>
                   <select value={crm.pemicu} onChange={e => crm.setPemicu(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Pemicu...</option>
+                    <option value="">Select motivation...</option>
                     {MASTER_DATA.pemicuBeli.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Barang Antusias</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Product interests</label>
                   <select value={crm.antusias} onChange={e => crm.setAntusias(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Kategori...</option>
+                    <option value="">Select category...</option>
                     {MASTER_DATA.barangAntusias.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Karakter Pelanggan</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Customer personality</label>
                   <select value={crm.karakter} onChange={e => crm.setKarakter(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Karakter...</option>
+                    <option value="">Select personality...</option>
                     {MASTER_DATA.karakter.map(k => <option key={k} value={k}>{k}</option>)}
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Lokasi Store</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Boutique</label>
                   <select value={crm.lokasiStore} onChange={e => crm.setLokasiStore(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold">
                     {MASTER_DATA.stores.map(s => <option key={s} value={s}>{s}</option>)}
@@ -673,14 +564,14 @@ export default function CrmDedupPage() {
                   <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Customer Advisor</label>
                   <select value={crm.customerAdvisor} onChange={e => crm.setCustomerAdvisor(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Customer Advisor...</option>
+                    <option value="">Select customer advisor...</option>
                     {crm.advisorsList.map(adv => <option key={adv} value={adv}>{adv}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Catatan Tambahan</label>
-                <textarea rows={3} placeholder="Catatan profil pelanggan..." value={crm.notes} onChange={e => crm.setNotes(e.target.value)}
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Additional notes</label>
+                <textarea rows={3} placeholder="Additional customer details..." value={crm.notes} onChange={e => crm.setNotes(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 outline-none font-medium" />
               </div>
             </div>
@@ -693,12 +584,16 @@ export default function CrmDedupPage() {
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white'
               )}>
               <UserPlus className="w-5 h-5" />
-              {crm.isExactDuplicate ? 'Terdeteksi Duplikat — Pembuatan Terkunci' : 'Simpan Profil Pelanggan Baru'}
+              {crm.isExactDuplicate ? 'Duplicate detected - profile creation blocked' : "Save new customer profile"}
             </button>
           </div>
 
           {/* Live Dedup Monitor */}
           <div className="lg:col-span-4 space-y-4">
+            <aside className={styles.guide}>
+              <h3>Profile essentials</h3><p>Complete the required fields first. Add personal preferences as you learn more about your customer.</p>
+              <nav aria-label="Customer profile sections">{['Primary information', 'Contact details', 'Identity & residence', 'Lifestyle & interests', 'Dining preferences', 'Social & advisor details'].map((label, index) => <a key={label} href={`#profile-${index + 1}`}><span>0{index + 1}</span>{label}</a>)}</nav>
+            </aside>
             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm sticky top-6 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
@@ -708,14 +603,14 @@ export default function CrmDedupPage() {
                 {crm.checkLoading && <span className="text-[10px] text-blue-600 animate-pulse font-bold">Checking...</span>}
               </div>
               <div className="text-xs space-y-2">
-                <p className="text-slate-500"><span className="font-bold text-slate-700">Nama Input:</span> {crm.fullName || '—'}</p>
-                <p className="text-slate-500"><span className="font-bold text-slate-700">HP Input:</span> {crm.noHp || '—'}</p>
+                <p className="text-slate-500"><span className="font-bold text-slate-700">Customer name:</span> {crm.fullName || '—'}</p>
+                <p className="text-slate-500"><span className="font-bold text-slate-700">Phone number:</span> {crm.noHp || '—'}</p>
               </div>
               {!crm.noHp && !crm.fullName && !crm.email ? (
                 <div className="py-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl p-4">
                   <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-xs font-bold">Mulai mengetik Nama / No. HP</p>
-                  <p className="text-[11px] mt-1">Sistem akan memeriksa database secara otomatis.</p>
+                  <p className="text-xs font-bold">Enter a name or phone number</p>
+                  <p className="text-[11px] mt-1">Matching profiles appear here as you type.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -723,13 +618,13 @@ export default function CrmDedupPage() {
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-3">
                       <div className="flex items-center gap-2 text-red-700 font-bold text-xs">
                         <AlertTriangle className="w-4 h-4 shrink-0" />
-                        DUPLIKAT PERSIS TERDETEKSI!
+                        Exact contact match found
                       </div>
-                      <p className="text-[11px] text-red-600">Pelanggan dengan nomor HP / Email ini sudah ada di database.</p>
+                      <p className="text-[11px] text-red-600">A profile already uses this phone number or email address.</p>
                       {[...crm.exactPhoneMatches, ...crm.exactEmailMatches].map(p => (
                         <div key={p.id} className="bg-white border border-red-200 rounded-xl p-3 text-xs space-y-1">
                           <p className="font-bold text-slate-900">{p.nama_lengkap} (ID #{p.id})</p>
-                          <p className="text-slate-500">HP: {p.no_hp} | Store: {p.lokasi_store}</p>
+                          <p className="text-slate-500">Phone: {p.no_hp} | Store: {p.lokasi_store}</p>
                           <p className="text-slate-500">CA: {p.customer_advisor || '—'}</p>
                         </div>
                       ))}
@@ -739,15 +634,15 @@ export default function CrmDedupPage() {
                     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
                       <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
                         <AlertTriangle className="w-4 h-4 shrink-0" />
-                        {crm.fuzzyMatches.length} Profil Mirip Ditemukan:
+                        {crm.fuzzyMatches.length} similar profiles found:
                       </div>
                       {crm.fuzzyMatches.map(p => (
                         <div key={p.id} className="bg-white border border-amber-200 rounded-xl p-3 text-xs space-y-1">
                           <div className="flex items-center justify-between">
                             <p className="font-bold text-slate-900">{p.nama_lengkap}</p>
-                            <span className="text-[9px] font-black px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">{p.similarityScore}% Mirip</span>
+                            <span className="text-[9px] font-black px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">{p.similarityScore}% similarity</span>
                           </div>
-                          <p className="text-slate-500">HP: {p.no_hp} | CA: {p.customer_advisor}</p>
+                          <p className="text-slate-500">Phone: {p.no_hp} | CA: {p.customer_advisor}</p>
                         </div>
                       ))}
                     </div>
@@ -755,8 +650,8 @@ export default function CrmDedupPage() {
                   {!crm.isExactDuplicate && crm.fuzzyMatches.length === 0 && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-center">
                       <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                      <p className="text-xs font-bold text-emerald-900">Data Bersih &amp; Belum Ada di CRM!</p>
-                      <p className="text-[11px] text-emerald-600 mt-1">Anda aman untuk menekan tombol Simpan.</p>
+                      <p className="text-xs font-bold text-emerald-900">No matching profiles found</p>
+                      <p className="text-[11px] text-emerald-600 mt-1">Review the details before saving a new profile.</p>
                     </div>
                   )}
                 </div>
@@ -767,431 +662,16 @@ export default function CrmDedupPage() {
       )}
 
       {/* ── TAB 2: TRAFFIC & ITEMS ── */}
-      {activeTab === 'traffic' && (
-        <div className="space-y-6 max-w-5xl mx-auto">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><PlusCircle className="w-5 h-5" /></div>
-              <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase">Form Catat Prospect Traffic &amp; Items</h3>
-                <p className="text-xs text-slate-500">Formulir kunjungan toko dengan bukti CDN &amp; tabel barang diminati multi-row.</p>
-              </div>
-            </div>
-            {crm.trMessage && (
-              <div className={cn('p-4 rounded-2xl text-xs font-bold flex items-center gap-2',
-                crm.trMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200')}>
-                {crm.trMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <AlertTriangle className="w-5 h-5 text-red-600" />}
-                {crm.trMessage.text}
-              </div>
-            )}
-
-            {/* A. Informasi Pelanggan */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">A. INFORMASI PELANGGAN &amp; KUNJUNGAN</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tanggal Kunjungan</label>
-                  <DatePicker
-                    value={crm.trTanggal}
-                    onChange={crm.setTrTanggal}
-                    placeholder="Pilih tgl kunjungan..."
-                    fromYear={2020}
-                    toYear={new Date().getFullYear() + 1}
-                    showShortcuts={true}
-                    allowClear={false}
-                  />
-                </div>
-                <div>
-                  <CustomerPickerCombobox
-                    value={crm.trCustomerName}
-                    onChange={crm.setTrCustomerName}
-                    onSelectCustomer={crm.selectCustomerFromDb}
-                    onClearCustomer={crm.clearSelectedCustomer}
-                    selectedCustomer={crm.selectedDbCustomer}
-                    advisorsList={crm.advisorsList}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nama Panggilan</label>
-                  <input type="text" placeholder="Nama panggilan..." value={crm.trNamaPanggilan} onChange={e => crm.setTrNamaPanggilan(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nomor HP</label>
-                  <input type="text" placeholder="081234567890" value={crm.trNoHp} onChange={e => crm.setTrNoHp(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Email</label>
-                  <input type="email" placeholder="email@example.com" value={crm.trEmail} onChange={e => crm.setTrEmail(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Pelanggan</label>
-                  <select value={crm.trStatusPelanggan} onChange={e => crm.setTrStatusPelanggan(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    {MASTER_DATA.statusPelangganTraffic.map(s => <option key={s} value={s}>{s}</option>)}
-                    {crm.trStatusPelanggan && !MASTER_DATA.statusPelangganTraffic.includes(crm.trStatusPelanggan) && (
-                      <option value={crm.trStatusPelanggan}>{crm.trStatusPelanggan}</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status Visit</label>
-                  <select value={crm.trStatus} onChange={e => crm.setTrStatus(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold">
-                    {MASTER_DATA.prospekStatus.map(s => <option key={s} value={s}>{s}</option>)}
-                    {crm.trStatus && !MASTER_DATA.prospekStatus.includes(crm.trStatus) && (
-                      <option value={crm.trStatus}>{crm.trStatus}</option>
-                    )}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* B. Segmentasi Prospek */}
-            <div className="space-y-4 pt-2 border-t border-slate-100">
-              <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">B. DETAIL SEGMENTASI PROSPEK</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tahap Prospek</label>
-                  <select value={crm.trProspectLevel} onChange={e => crm.setTrProspectLevel(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    {MASTER_DATA.prospekLevel.map(p => <option key={p} value={p}>{p}</option>)}
-                    {crm.trProspectLevel && !MASTER_DATA.prospekLevel.includes(crm.trProspectLevel) && (
-                      <option value={crm.trProspectLevel}>{crm.trProspectLevel}</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Minat Utama</label>
-                  <select value={crm.trMinatBarang} onChange={e => crm.setTrMinatBarang(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    {MASTER_DATA.minatBarang.map(m => <option key={m} value={m}>{m}</option>)}
-                    {crm.trMinatBarang && !MASTER_DATA.minatBarang.includes(crm.trMinatBarang) && (
-                      <option value={crm.trMinatBarang}>{crm.trMinatBarang}</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Akses Masuk (Source)</label>
-                  <select value={crm.trAksesMasuk} onChange={e => crm.setTrAksesMasuk(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Akses...</option>
-                    {MASTER_DATA.aksesMasuk.map(a => <option key={a} value={a}>{a}</option>)}
-                    {crm.trAksesMasuk && !MASTER_DATA.aksesMasuk.includes(crm.trAksesMasuk) && (
-                      <option value={crm.trAksesMasuk}>{crm.trAksesMasuk}</option>
-                    )}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Kategori Pengunjung</label>
-                  <select value={crm.trSiapa} onChange={e => crm.setTrSiapa(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Kategori...</option>
-                    {MASTER_DATA.siapa.map(s => <option key={s} value={s}>{s}</option>)}
-                    {crm.trSiapa && !MASTER_DATA.siapa.includes(crm.trSiapa) && (
-                      <option value={crm.trSiapa}>{crm.trSiapa}</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Faktor Pemicu</label>
-                  <select value={crm.trFaktorPemicu} onChange={e => crm.setTrFaktorPemicu(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih Pemicu...</option>
-                    {MASTER_DATA.faktorPemicu.map(f => <option key={f} value={f}>{f}</option>)}
-                    {crm.trFaktorPemicu && !MASTER_DATA.faktorPemicu.includes(crm.trFaktorPemicu) && (
-                      <option value={crm.trFaktorPemicu}>{crm.trFaktorPemicu}</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Group Size</label>
-                  <select value={crm.trGroupSize} onChange={e => crm.setTrGroupSize(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    {MASTER_DATA.groupSize.map(g => <option key={g} value={g}>{g} orang</option>)}
-                    {crm.trGroupSize && !MASTER_DATA.groupSize.includes(crm.trGroupSize) && (
-                      <option value={crm.trGroupSize}>{crm.trGroupSize} orang</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Lokasi Store</label>
-                  <select value={crm.trLocation} onChange={e => crm.setTrLocation(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    {MASTER_DATA.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                    {crm.trLocation && !MASTER_DATA.stores.includes(crm.trLocation) && (
-                      <option value={crm.trLocation}>{crm.trLocation}</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Served By (SA)</label>
-                  <select value={crm.trServedBy} onChange={e => crm.setTrServedBy(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium">
-                    <option value="">Pilih SA...</option>
-                    {crm.advisorsList.map(adv => <option key={adv} value={adv}>{adv}</option>)}
-                    {crm.trServedBy && !crm.advisorsList.includes(crm.trServedBy) && (
-                      <option value={crm.trServedBy}>{crm.trServedBy}</option>
-                    )}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* C. Barang Diminati */}
-            <div className="space-y-4 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2.5">
-                  <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                    <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                    C. BARANG DIMINATI (MULTI-ROW)
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={() => setShowInventoryModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-xs"
-                  >
-                    <Search className="w-3.5 h-3.5 text-emerald-600" />
-                    Cari dari Inventory
-                  </button>
-                </div>
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                  Total: Rp {crm.trNetSales.toLocaleString('id-ID')}
-                </span>
-              </div>
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 relative">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kode Item</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. AN855420"
-                      value={crm.newItemCode}
-                      onChange={e => {
-                        crm.setNewItemCode(e.target.value);
-                        handleFetchSuggestions(e.target.value);
-                      }}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">SAP Code</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 100234"
-                      value={crm.newSapCode}
-                      onChange={e => {
-                        crm.setNewSapCode(e.target.value);
-                        handleFetchSuggestions(e.target.value);
-                      }}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Deskripsi Barang</label>
-                    <input
-                      type="text"
-                      placeholder="B.zero1 4-Band Ring 18kt Rose Gold..."
-                      value={crm.newDeskripsi}
-                      onChange={e => {
-                        crm.setNewDeskripsi(e.target.value);
-                        handleFetchSuggestions(e.target.value);
-                      }}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Autocomplete Quick Suggestions Dropdown */}
-                {showSuggestDropdown && (
-                  <div className="absolute left-4 right-4 top-[72px] z-30 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                      <span>Rekomendasi Inventory ({crm.trLocation || 'Semua Store'})</span>
-                      <button type="button" onClick={() => setShowSuggestDropdown(false)} className="text-slate-400 hover:text-slate-600">
-                        ✕ Tutup
-                      </button>
-                    </div>
-                    {invSuggestLoading ? (
-                      <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                        <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent animate-spin rounded-full inline-block" />
-                        Mencari stok inventory...
-                      </div>
-                    ) : invSuggestions.length === 0 ? (
-                      <div className="p-3 text-center text-xs text-slate-500">
-                        Tidak ditemukan barang cocok di inventory.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto custom-scrollbar">
-                        {invSuggestions.map((sug, sIdx) => (
-                          <div
-                            key={sIdx}
-                            onClick={() => {
-                              crm.handleSelectInventoryItem(sug);
-                              setShowSuggestDropdown(false);
-                            }}
-                            className="p-2.5 hover:bg-slate-50 rounded-xl cursor-pointer flex items-center justify-between text-xs transition-colors"
-                          >
-                            <div className="min-w-0 pr-3">
-                              <p className="font-bold text-slate-900 truncate">{sug.deskripsi}</p>
-                              <p className="text-[11px] text-slate-400 font-mono">
-                                Kode: {sug.item_code} · SAP: {sug.sap_code || '—'} · {sug.kategori} ({sug.koleksi})
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="font-black text-emerald-700">Rp {sug.harga.toLocaleString('id-ID')}</p>
-                              {sug.qoh !== undefined && (
-                                <p className="text-[10px] text-slate-400">Stok: {sug.qoh} unit</p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowSuggestDropdown(false);
-                        setShowInventoryModal(true);
-                      }}
-                      className="w-full mt-1.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[11px] font-bold text-center border border-slate-200 transition-colors"
-                    >
-                      Buka Katalog Lengkap Inventory (16.628+ Item) &rarr;
-                    </button>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kategori</label>
-                    <select value={crm.newKategori} onChange={e => crm.setNewKategori(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none">
-                      {MASTER_DATA.minatBarang.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Koleksi</label>
-                    <input type="text" placeholder="B.zero1, Serpenti..." value={crm.newKoleksi} onChange={e => crm.setNewKoleksi(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Harga (Rp)</label>
-                    <input type="number" placeholder="45000000" value={crm.newHarga || ''} onChange={e => crm.setNewHarga(Number(e.target.value))}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none font-bold text-slate-900" />
-                  </div>
-                  <div className="flex items-end">
-                    <button type="button" onClick={crm.handleAddTrafficItem}
-                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm">
-                      <Plus className="w-4 h-4" /> Tambah Item
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {crm.trItems.length > 0 && (
-                <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      <tr>
-                        <th className="p-3">Kode / SAP</th>
-                        <th className="p-3">Deskripsi</th>
-                        <th className="p-3">Kategori</th>
-                        <th className="p-3 text-right">Harga</th>
-                        <th className="p-3 text-center">Hapus</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {crm.trItems.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="p-3 font-mono font-bold text-slate-700">{item.item_code} {item.sap_code && `(${item.sap_code})`}</td>
-                          <td className="p-3 font-bold text-slate-900">{item.deskripsi}</td>
-                          <td className="p-3 text-slate-600">{item.kategori}</td>
-                          <td className="p-3 text-right font-bold text-emerald-600">Rp {item.harga.toLocaleString('id-ID')}</td>
-                          <td className="p-3 text-center">
-                            <button type="button" onClick={() => crm.handleRemoveTrafficItem(idx)} className="p-1 text-red-500 hover:bg-red-50 rounded-lg">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Diskon (%)</label>
-                  <input type="number" placeholder="0" value={crm.trDiskonPct || ''} onChange={e => crm.setTrDiskonPct(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-bold" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Subtotal</label>
-                  <p className="text-sm font-bold text-slate-900 pt-2">Rp {crm.trSubtotal.toLocaleString('id-ID')}</p>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Net Sales</label>
-                  <p className="text-base font-black text-emerald-600 pt-1">Rp {crm.trNetSales.toLocaleString('id-ID')}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* D. Bukti & Notes */}
-            <div className="space-y-4 pt-2 border-t border-slate-100">
-              <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">D. BUKTI CHAT &amp; CATATAN</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center gap-4">
-                  <div className="w-16 h-16 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center border border-slate-300 shrink-0">
-                    {crm.trBuktiChatUrl
-                      ? <img src={crm.trBuktiChatUrl} alt="Bukti Chat" className="w-full h-full object-cover" />
-                      : <ImageIcon className="w-6 h-6 text-slate-400" />}
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Bukti Chat / Lampiran</h5>
-                    <p className="text-[11px] text-slate-500 mb-2">Upload bukti ke folder bukti_chat</p>
-                    <label className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all">
-                      <Upload className="w-3 h-3" />
-                      {crm.uploadingBukti ? 'Uploading...' : 'Upload Bukti'}
-                      <input type="file" accept="image/*" className="hidden"
-                        onChange={e => { if (e.target.files?.[0]) crm.handleUploadImage(e.target.files[0], 'bukti_chat'); }} />
-                    </label>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Catatan Kunjungan</label>
-                  <textarea rows={3} placeholder="Keperluan pelanggan, request khusus..." value={crm.trNotes} onChange={e => crm.setTrNotes(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none font-medium" />
-                </div>
-              </div>
-              <div className="flex items-center gap-3 pt-2">
-                <input type="checkbox" id="autoProfileCheck" checked={crm.trAutoProfile} onChange={e => crm.setTrAutoProfile(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 rounded cursor-pointer" />
-                <label htmlFor="autoProfileCheck" className="text-xs font-bold text-slate-700 cursor-pointer">
-                  Otomatis Buat &amp; Link Profil CRM Baru untuk Pelanggan Ini
-                </label>
-              </div>
-            </div>
-
-            <button type="button" onClick={crm.handleCreateTraffic}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-lg mt-4">
-              <PlusCircle className="w-5 h-5" />
-              Simpan Data Kunjungan Traffic &amp; Items
-            </button>
-          </div>
-        </div>
-      )}
+      {activeTab === 'traffic' && <VisitDetailsForm crm={crm} />}
 
       {/* ── TAB 3: AUDIT DUPLIKAT ── */}
       {activeTab === 'audit' && (
-        <div className="space-y-6">
+        <div className={cn(styles.panelEntry, "space-y-6") }>
           {crm.duplicatePhones.length === 0 && crm.duplicateEmails.length === 0 ? (
             <div className="bg-emerald-50/50 border border-emerald-200 rounded-3xl p-10 text-center">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-              <h3 className="text-base font-bold text-emerald-900">Database Profiling Bersih dari Duplikasi Exact!</h3>
-              <p className="text-xs text-emerald-600 mt-1 max-w-md mx-auto">Tidak ditemukan nomor HP atau Email ganda di database saat ini.</p>
+              <h3 className="text-base font-bold text-emerald-900">No exact duplicate contacts found</h3>
+              <p className="text-xs text-emerald-600 mt-1 max-w-md mx-auto">The current review found no repeated phone numbers or email addresses.</p>
             </div>
           ) : (
             <>
@@ -1199,16 +679,16 @@ export default function CrmDedupPage() {
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                     <Phone className="w-4 h-4 text-amber-500" />
-                    Grup Duplikat Berdasarkan Nomor HP ({crm.duplicatePhones.length})
+                    Matching phone groups ({crm.duplicatePhones.length})
                   </h3>
                   <div className="space-y-4">
                     {crm.duplicatePhones.map((group, gIdx) => (
                       <div key={gIdx} className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm space-y-4">
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                           <span className="text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                            No. HP: {group.phoneKey} ({group.count} profil)
+                            Phone: {group.phoneKey} ({group.count} profiles)
                           </span>
-                          <span className="text-[11px] text-slate-400">Pilih 1 profil utama untuk dipertahankan</span>
+                          <span className="text-[11px] text-slate-400">Choose the primary profile to retain</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {group.items.map(item => {
@@ -1229,7 +709,7 @@ export default function CrmDedupPage() {
                                 <button type="button" disabled={crm.mergingId === item.id} onClick={() => crm.handleMerge(item, secondaries)}
                                   className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50">
                                   <Merge className="w-3.5 h-3.5" />
-                                  Simpan Ini Sebagai Utama (Gabung {secondaries.length} Lainnya)
+                                  Keep this profile (merge {secondaries.length} others)
                                 </button>
                               </div>
                             );
@@ -1243,15 +723,15 @@ export default function CrmDedupPage() {
               {crm.duplicateEmails.length > 0 && (
                 <div className="space-y-3 pt-4">
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-violet-500" />
-                    Grup Duplikat Berdasarkan Email ({crm.duplicateEmails.length})
+                    <Mail className="w-4 h-4 text-blue-500" />
+                    Matching email groups ({crm.duplicateEmails.length})
                   </h3>
                   <div className="space-y-4">
                     {crm.duplicateEmails.map((group, gIdx) => (
-                      <div key={gIdx} className="bg-white border border-violet-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div key={gIdx} className="bg-white border border-blue-200 rounded-2xl p-5 shadow-sm space-y-4">
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                          <span className="text-xs font-bold text-violet-800 bg-violet-50 px-3 py-1 rounded-full border border-violet-200">
-                            Email: {group.emailKey} ({group.count} profil)
+                          <span className="text-xs font-bold text-blue-800 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+                            Email: {group.emailKey} ({group.count} profiles)
                           </span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1265,9 +745,9 @@ export default function CrmDedupPage() {
                                   <p className="text-xs text-slate-500">CA: {item.customer_advisor}</p>
                                 </div>
                                 <button type="button" onClick={() => crm.handleMerge(item, secondaries)}
-                                  className="mt-4 w-full py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+                                  className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2">
                                   <Merge className="w-3.5 h-3.5" />
-                                  Simpan Ini Sebagai Utama
+                                  Keep as primary profile
                                 </button>
                               </div>
                             );
@@ -1298,17 +778,9 @@ export default function CrmDedupPage() {
       )}
 
       {/* ── MODAL KATALOG INVENTORY & PRODUK BVLGARI ── */}
-      <InventorySearchModal
-        isOpen={showInventoryModal}
-        onClose={() => setShowInventoryModal(false)}
-        currentStore={crm.trLocation}
-        onSelectItem={(item) => {
-          crm.handleSelectInventoryItem(item);
-        }}
-        onDirectAddItem={(item) => {
-          crm.handleDirectAddTrafficItem(item);
-        }}
-      />
+      </div>
+      <footer className={styles.footer}><span>BVLGARI / Client Experience</span><span>Designed &amp; developed by <strong>Aris Setiyono</strong></span></footer>
+
     </div>
   );
 }
