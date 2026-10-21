@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { salesDate } from '@/lib/sales-chart-data';
 import { MONTH_NAMES } from './constants';
 
@@ -318,70 +319,73 @@ export async function getDailyReport(dateStr: string) {
   };
 }
 
-export async function getDailyBreakdown(month: string, year: number) {
-  const pad = (n: number) => String(n).padStart(2, '0');
+export const BREAKDOWN_STORES = ['Bali', 'Head Office', 'Plaza Indonesia', 'Plaza Senayan'] as const;
+export type BreakdownStore = typeof BREAKDOWN_STORES[number];
+export interface BreakdownSale { transaction_date: string; location: string | null; net_sales: number | null; qty: number | null }
+export interface BreakdownDay {
+  dayNum: number; dateStr: string; dayOfWeek: string; totalSales: number; totalQty: number;
+  stores: Record<BreakdownStore, { netSales: number; qty: number }>;
+}
+
+const breakdownStore = (loc: string): BreakdownStore | null => {
+  const l = loc.trim().toLowerCase();
+  if (l.includes('head office') || l === 'ho') return 'Head Office';
+  if (l.includes('plaza indonesia') || l === 'pi') return 'Plaza Indonesia';
+  if (l.includes('plaza senayan') || l === 'ps') return 'Plaza Senayan';
+  if (l.includes('bali') || l === 'bl') return 'Bali';
+  return null;
+};
+
+/** Buckets sales into Jakarta calendar days of the month, per boutique. */
+export function aggregateDailyBreakdown(month: string, year: number, rows: BreakdownSale[]): BreakdownDay[] {
   const monthIdx = MONTH_NAMES.indexOf(month);
   if (monthIdx === -1) throw new Error('Invalid month');
-  const monthNum = monthIdx + 1;
-  const lastDay = new Date(year, monthNum, 0).getDate();
-  const from = `${year}-${pad(monthNum)}-01T00:00:00`;
-  const to   = `${year}-${pad(monthNum)}-${pad(lastDay)}T23:59:59`;
+  const lastDay = new Date(Date.UTC(year, monthIdx + 1, 0)).getUTCDate();
+  const prefix = `${year}-${String(monthIdx + 1).padStart(2, '0')}-`;
+  const days: BreakdownDay[] = Array.from({ length: lastDay }, (_, i) => ({
+    dayNum: i + 1,
+    dateStr: `${i + 1} ${month.slice(0, 3)} ${year}`,
+    dayOfWeek: new Date(Date.UTC(year, monthIdx, i + 1)).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+    totalSales: 0,
+    totalQty: 0,
+    stores: Object.fromEntries(BREAKDOWN_STORES.map(s => [s, { netSales: 0, qty: 0 }])) as BreakdownDay['stores'],
+  }));
+  rows.forEach(row => {
+    const date = salesDate(row.transaction_date);
+    if (!date.startsWith(prefix)) return;
+    const day = days[Number(date.slice(8, 10)) - 1];
+    const store = breakdownStore(row.location || '');
+    if (!day || !store) return;
+    const net = row.net_sales || 0;
+    const qty = row.qty || 0;
+    day.stores[store].netSales += net;
+    day.stores[store].qty += qty;
+    day.totalSales += net;
+    day.totalQty += qty;
+  });
+  return days;
+}
 
-  const { data: rows, error } = await supabase
-    .from('clean_master')
+export async function getDailyBreakdown(month: string, year: number) {
+  const monthIdx = MONTH_NAMES.indexOf(month);
+  if (monthIdx === -1) throw new Error('Invalid month');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const next = monthIdx === 11 ? `${year + 1}-01` : `${year}-${pad(monthIdx + 2)}`;
+  // Jakarta month boundaries; paginated so busy months are not cut at the API row cap.
+  const rows = await fetchAllRows<BreakdownSale>((from, to) => supabase.from('clean_master')
     .select('transaction_date, location, net_sales, qty')
-    .gte('transaction_date', from)
-    .lte('transaction_date', to);
+    .gte('transaction_date', `${year}-${pad(monthIdx + 1)}-01T00:00:00+07:00`)
+    .lt('transaction_date', `${next}-01T00:00:00+07:00`)
+    .order('id').range(from, to));
+  return aggregateDailyBreakdown(month, year, rows);
+}
 
-  if (error) throw error;
-
-  const daysData = Array.from({ length: lastDay }, (_, i) => {
-    const dayNum = i + 1;
-    const d = new Date(year, monthIdx, dayNum);
-    const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
-    const dateStr = `${dayNum} ${month.slice(0, 3)} ${year}`;
-
-    return {
-      dayNum,
-      dateStr,
-      dayOfWeek,
-      totalSales: 0,
-      totalQty: 0,
-      stores: {
-        'Bali':            { netSales: 0, qty: 0 },
-        'Head Office':     { netSales: 0, qty: 0 },
-        'Plaza Indonesia': { netSales: 0, qty: 0 },
-        'Plaza Senayan':   { netSales: 0, qty: 0 }
-      }
-    };
-  });
-
-  const getStoreKey = (loc: string) => {
-    const l = loc.trim().toLowerCase();
-    if (l.includes('head office') || l === 'ho') return 'Head Office';
-    if (l.includes('plaza indonesia') || l === 'pi') return 'Plaza Indonesia';
-    if (l.includes('plaza senayan') || l === 'ps') return 'Plaza Senayan';
-    if (l.includes('bali') || l === 'bl') return 'Bali';
-    return null;
-  };
-
-  (rows || []).forEach(row => {
-    const rowDate = new Date(row.transaction_date);
-    const dayNum = rowDate.getDate();
-    if (dayNum >= 1 && dayNum <= lastDay) {
-      const storeKey = getStoreKey(row.location || '');
-      if (storeKey) {
-        const net = row.net_sales || 0;
-        const qty = row.qty || 0;
-        const idx = dayNum - 1;
-
-        daysData[idx].stores[storeKey].netSales += net;
-        daysData[idx].stores[storeKey].qty += qty;
-        daysData[idx].totalSales += net;
-        daysData[idx].totalQty += qty;
-      }
-    }
-  });
-
-  return daysData;
+/** Sum of boutique targets for the month, excluding Head Office. */
+export async function getBoutiqueMonthlyTarget(month: string, year: number) {
+  const monthIdx = MONTH_NAMES.indexOf(month);
+  if (monthIdx === -1) throw new Error('Invalid month');
+  const { data, error } = await supabase.from('targets').select('target_value, store_name')
+    .eq('year', year).eq('month_number', monthIdx + 1);
+  if (error) throw new Error(error.message);
+  return (data || []).reduce((sum, t) => breakdownStore(t.store_name || '') === 'Head Office' ? sum : sum + (t.target_value || 0), 0);
 }

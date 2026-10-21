@@ -1,53 +1,70 @@
 "use client";
 
-import { useState, useEffect, useMemo, Fragment } from 'react';
-import { 
-  Calendar as CalendarIcon, 
-  Filter, 
-  RefreshCw, 
-  Download, 
-  FileSpreadsheet, 
+import { useState, useMemo, useCallback, useRef, Fragment } from 'react';
+import { motion } from 'framer-motion';
+import {
+  CalendarDays,
+  RefreshCw,
+  Download,
+  FileSpreadsheet,
   Table,
   Info,
   Trophy,
   AlertTriangle,
-  Eye,
+  AlertCircle,
   EyeOff,
   Check,
   TrendingUp,
-  Percent
+  Database,
+  Store,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
+import InfoTip from '@/components/InfoTip';
+import MonthYearPicker, { type MonthPeriod } from '@/components/MonthYearPicker';
 import { dashboardService } from '@/services/dashboardService';
-import BvlgariLoader from '@/components/BvlgariLoader';
+import { BREAKDOWN_STORES, type BreakdownDay, type BreakdownStore } from '@/services/dashboard/dailyService';
 import { getDayType, getHolidayName } from '@/lib/holidays';
-import { supabase } from '@/lib/supabase';
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June', 
+  'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const STORE_THEME: Record<string, { color: string; border: string; text: string; bg: string; fill: string }> = {
-  'Bali':            { color: '#2563EB', border: 'border-blue-200',   text: 'text-blue-600',   bg: 'bg-blue-50/50',    fill: 'bg-blue-600' },
-  'Head Office':     { color: '#64748B', border: 'border-slate-200',  text: 'text-slate-500',  bg: 'bg-slate-50/50',   fill: 'bg-slate-500' },
-  'Plaza Indonesia': { color: '#8B5CF6', border: 'border-purple-200', text: 'text-purple-600', bg: 'bg-purple-50/40',  fill: 'bg-purple-600' },
-  'Plaza Senayan':   { color: '#D97706', border: 'border-amber-200',  text: 'text-amber-600',  bg: 'bg-amber-50/40',   fill: 'bg-amber-500' }
+const STORE_THEME: Record<BreakdownStore, { border: string; text: string; bg: string; fill: string; short: string }> = {
+  'Bali':            { border: 'border-blue-200',  text: 'text-blue-600',  bg: 'bg-blue-50/50',  fill: 'bg-blue-600',  short: 'BL' },
+  'Head Office':     { border: 'border-slate-200', text: 'text-slate-500', bg: 'bg-slate-50/50', fill: 'bg-slate-500', short: 'HO' },
+  'Plaza Indonesia': { border: 'border-teal-200',  text: 'text-teal-600',  bg: 'bg-teal-50/40',  fill: 'bg-teal-600',  short: 'PI' },
+  'Plaza Senayan':   { border: 'border-amber-200', text: 'text-amber-600', bg: 'bg-amber-50/40', fill: 'bg-amber-500', short: 'PS' }
 };
 
+const card = 'min-w-0 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-200/30';
+const cardLabel = 'flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500';
+const boutiqueSales = (d: BreakdownDay) => d.totalSales - d.stores['Head Office'].netSales;
+
 export default function DailyBreakdownPage() {
-  const today = new Date();
-  const [month, setMonth] = useState(MONTHS[today.getMonth()]);
-  const [year, setYear] = useState(String(today.getFullYear()));
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any[]>([]);
+  const [period, setPeriod] = useState<MonthPeriod>(() => {
+    const now = new Date();
+    return { month: now.getMonth(), year: now.getFullYear() };
+  });
+  const month = MONTHS[period.month];
+  const year = String(period.year);
+
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<{ message: string; retry: boolean } | null>(null);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  const [data, setData] = useState<BreakdownDay[]>([]);
+  const [loadedPeriod, setLoadedPeriod] = useState<MonthPeriod>(period);
+  const dataLabel = `${MONTHS[loadedPeriod.month]} ${loadedPeriod.year}`;
   const [monthlyTarget, setMonthlyTarget] = useState<number>(0);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
+  const requestId = useRef(0);
 
   // Column Toggles
-  const [visibleStores, setVisibleStores] = useState<Record<string, boolean>>({
+  const [visibleStores, setVisibleStores] = useState<Record<BreakdownStore, boolean>>({
     'Bali': true,
     'Head Office': true,
     'Plaza Indonesia': true,
@@ -58,136 +75,96 @@ export default function DailyBreakdownPage() {
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   const [hoveredCol, setHoveredCol] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const monthIdx = MONTHS.indexOf(month);
-        
-        // Fetch Daily breakdown
-        const res = await dashboardService.getDailyBreakdown(month, parseInt(year));
-        setData(res);
+  const loadData = useCallback(async (target: MonthPeriod) => {
+    const id = ++requestId.current;
+    const targetMonth = MONTHS[target.month];
+    setLoaded(true);
+    setLoading(true);
+    setError(null);
+    try {
+      const [days, boutiqueTarget] = await Promise.all([
+        dashboardService.getDailyBreakdown(targetMonth, target.year),
+        dashboardService.getBoutiqueMonthlyTarget(targetMonth, target.year)
+      ]);
+      if (id !== requestId.current) return;
+      setData(days);
+      setMonthlyTarget(boutiqueTarget);
+      setLoadedPeriod(target);
+      setLoadedAt(new Date());
+    } catch (e) {
+      console.error(e);
+      if (id === requestId.current) setError({ message: 'Daily sales could not be loaded. Check your connection and try again.', retry: true });
+    } finally {
+      if (id === requestId.current) setLoading(false);
+    }
+  }, []);
 
-        // Fetch Monthly Target from targets table
-        const { data: targetRows } = await supabase
-          .from('targets')
-          .select('target_value, store_name')
-          .eq('year', parseInt(year))
-          .eq('month_number', monthIdx + 1);
-        
-        let totalT = 0;
-        targetRows?.forEach((t: any) => {
-          if (!t.store_name.toLowerCase().includes('head office') && t.store_name.toLowerCase() !== 'ho') {
-            totalT += (t.target_value || 0);
-          }
-        });
-        setMonthlyTarget(totalT);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [month, year]);
+  // After the first load, changing the period reloads automatically.
+  const changePeriod = (next: MonthPeriod) => {
+    setPeriod(next);
+    if (loaded) void loadData(next);
+  };
 
-  const monthIndex = useMemo(() => MONTHS.indexOf(month), [month]);
-  const yearNum = useMemo(() => parseInt(year), [year]);
+  const activeStoresList = useMemo(() => BREAKDOWN_STORES.filter(s => visibleStores[s]), [visibleStores]);
 
   // Calculate totals
   const totals = useMemo(() => {
-    const t = {
-      totalSales: 0,
-      totalQty: 0,
-      baliSales: 0,
-      baliQty: 0,
-      hoSales: 0,
-      hoQty: 0,
-      piSales: 0,
-      piQty: 0,
-      psSales: 0,
-      psQty: 0
-    };
-
+    const stores = Object.fromEntries(BREAKDOWN_STORES.map(s => [s, { netSales: 0, qty: 0 }])) as Record<BreakdownStore, { netSales: number; qty: number }>;
+    let totalSales = 0;
+    let totalQty = 0;
     data.forEach(d => {
-      t.totalSales += d.totalSales;
-      t.totalQty += d.totalQty;
-      t.baliSales += d.stores['Bali'].netSales;
-      t.baliQty += d.stores['Bali'].qty;
-      t.hoSales += d.stores['Head Office'].netSales;
-      t.hoQty += d.stores['Head Office'].qty;
-      t.piSales += d.stores['Plaza Indonesia'].netSales;
-      t.piQty += d.stores['Plaza Indonesia'].qty;
-      t.psSales += d.stores['Plaza Senayan'].netSales;
-      t.psQty += d.stores['Plaza Senayan'].qty;
+      totalSales += d.totalSales;
+      totalQty += d.totalQty;
+      BREAKDOWN_STORES.forEach(s => {
+        stores[s].netSales += d.stores[s].netSales;
+        stores[s].qty += d.stores[s].qty;
+      });
     });
-
-    return t;
+    return { totalSales, totalQty, stores };
   }, [data]);
 
   // Exclude HO for store-only metrics
-  const storeOnlySales = useMemo(() => {
-    return totals.totalSales - totals.hoSales;
-  }, [totals]);
+  const storeOnlySales = totals.totalSales - totals.stores['Head Office'].netSales;
 
-  // Find best sales day
-  const bestDayIdx = useMemo(() => {
-    let bestIdx = -1;
-    let maxSales = -Infinity;
+  // Best / worst day and averages use boutique sales (Head Office excluded), consistent with the target.
+  const { bestDayIdx, worstDayIdx, activeDays } = useMemo(() => {
+    let best = -1, worst = -1, max = -Infinity, min = Infinity, active = 0;
     data.forEach((d, i) => {
-      if (d.totalSales > 0 && d.totalSales > maxSales) {
-        maxSales = d.totalSales;
-        bestIdx = i;
-      }
+      const sales = boutiqueSales(d);
+      if (sales <= 0) return;
+      active++;
+      if (sales > max) { max = sales; best = i; }
+      if (sales < min) { min = sales; worst = i; }
     });
-    return bestIdx;
+    // A single active day is the best day, not also the worst.
+    return { bestDayIdx: best, worstDayIdx: active > 1 ? worst : -1, activeDays: active };
   }, [data]);
-
-  // Find worst sales day (exclude zero days)
-  const worstDayIdx = useMemo(() => {
-    let worstIdx = -1;
-    let minSales = Infinity;
-    data.forEach((d, i) => {
-      if (d.totalSales > 0 && d.totalSales < minSales) {
-        minSales = d.totalSales;
-        worstIdx = i;
-      }
-    });
-    return worstIdx;
-  }, [data]);
-
-  // Active days count & average sales
-  const activeDaysStats = useMemo(() => {
-    const activeDays = data.filter(d => d.totalSales > 0).length;
-    const avgSales = activeDays > 0 ? storeOnlySales / activeDays : 0;
-    return { activeDays, avgSales };
-  }, [data, storeOnlySales]);
+  const avgSales = activeDays > 0 ? storeOnlySales / activeDays : 0;
 
   // Targets circle tracker progress
-  const targetProgressPercent = useMemo(() => {
-    if (monthlyTarget <= 0) return 0;
-    return (storeOnlySales / monthlyTarget) * 100;
-  }, [storeOnlySales, monthlyTarget]);
+  const targetProgressPercent = monthlyTarget > 0 ? (storeOnlySales / monthlyTarget) * 100 : 0;
 
   // Dynamic store segments percentages
   const storeContributionShares = useMemo(() => {
-    const baseSales = storeOnlySales || 1;
-    return [
-      { name: 'Plaza Indonesia', val: totals.piSales, pct: (totals.piSales / baseSales) * 100 },
-      { name: 'Plaza Senayan',   val: totals.psSales, pct: (totals.psSales / baseSales) * 100 },
-      { name: 'Bali',            val: totals.baliSales, pct: (totals.baliSales / baseSales) * 100 }
-    ].sort((a, b) => b.val - a.val);
+    const baseSales = storeOnlySales > 0 ? storeOnlySales : 1;
+    return (['Plaza Indonesia', 'Plaza Senayan', 'Bali'] as const)
+      .map(name => ({ name, val: totals.stores[name].netSales, pct: (totals.stores[name].netSales / baseSales) * 100 }))
+      .sort((a, b) => b.val - a.val);
   }, [totals, storeOnlySales]);
 
-  const toggleStoreVisibility = (store: string) => {
-    setVisibleStores(prev => ({
-      ...prev,
-      [store]: !prev[store]
-    }));
+  const toggleStoreVisibility = (store: BreakdownStore) => {
+    setVisibleStores(prev => ({ ...prev, [store]: !prev[store] }));
   };
 
-  const visibleColumnsCount = useMemo(() => {
-    return Object.values(visibleStores).filter(Boolean).length;
-  }, [visibleStores]);
+  const dayMeta = (d: BreakdownDay, idx: number) => {
+    const dayType = getDayType(loadedPeriod.year, loadedPeriod.month, d.dayNum);
+    return {
+      holidayName: getHolidayName(loadedPeriod.year, loadedPeriod.month, d.dayNum),
+      isRedDay: dayType === 'weekend' || dayType === 'holiday',
+      isBestDay: idx === bestDayIdx,
+      isWorstDay: idx === worstDayIdx
+    };
+  };
 
   const handleDownloadExcel = async () => {
     setExportingExcel(true);
@@ -199,9 +176,7 @@ export default function DailyBreakdownPage() {
 
       const C = {
         navyBg:     '1E3A5F',
-        navyText:   'FFFFFF',
         slateBg:    '475569',
-        slateText:  'FFFFFF',
         lightBg:    'F8FAFC',
         accentBg:   'F1F5F9',
         border:     'E2E8F0',
@@ -215,27 +190,18 @@ export default function DailyBreakdownPage() {
         top: thinBorder(color), bottom: thinBorder(color),
         left: thinBorder(color), right: thinBorder(color)
       });
-      const numFmt = 'Rp #,##0;[Red](Rp #,##0);"-"';
+      const numFmt = '#,##0;[Red](#,##0);"-"';
 
       const ws = wb.addWorksheet('Daily Breakdown', {
         views: [{ showGridLines: true }]
       });
 
-      // Define standard columns structure
-      const excelCols = [
-        { width: 14 }, // Date
-        { width: 12 }, // Day
-        { width: 18 }, // Total Sales
-        { width: 10 }  // Total Qty
-      ];
-
-      // Dynamically add store columns depending on check status
-      const activeStoresList = Object.keys(visibleStores).filter(s => visibleStores[s]);
+      // Date, Day, Total Sales, Total Qty, then Net Sales + Qty per visible store
+      const excelCols = [{ width: 14 }, { width: 14 }, { width: 18 }, { width: 10 }];
       activeStoresList.forEach(() => {
-        excelCols.push({ width: 16 }); // Net Sales
-        excelCols.push({ width: 8  }); // Qty
+        excelCols.push({ width: 16 });
+        excelCols.push({ width: 8 });
       });
-
       ws.columns = excelCols;
 
       // Title Section
@@ -251,7 +217,7 @@ export default function DailyBreakdownPage() {
 
       ws.mergeCells(`A2:${endColLetter}2`);
       const dateCell = ws.getCell('A2');
-      dateCell.value = `Analysis Period: ${month} ${year}`;
+      dateCell.value = `Analysis Period: ${dataLabel} · Amounts in IDR · * public holiday`;
       dateCell.font = { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } };
       dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
       ws.getRow(2).height = 18;
@@ -261,12 +227,7 @@ export default function DailyBreakdownPage() {
       // Row 4: Stores (Merged Headers)
       const r4 = ws.getRow(4);
       r4.height = 24;
-      
-      ws.mergeCells('A4:A5');
-      ws.mergeCells('B4:B5');
-      ws.mergeCells('C4:C5');
-      ws.mergeCells('D4:D5');
-
+      ['A', 'B', 'C', 'D'].forEach(col => ws.mergeCells(`${col}4:${col}5`));
       r4.getCell(1).value = 'DATE';
       r4.getCell(2).value = 'DAY';
       r4.getCell(3).value = 'TOTAL SALES';
@@ -274,10 +235,7 @@ export default function DailyBreakdownPage() {
 
       activeStoresList.forEach((storeName, i) => {
         const colIdxStart = 5 + (i * 2);
-        const colLetterStart = String.fromCharCode(64 + colIdxStart);
-        const colLetterEnd = String.fromCharCode(65 + colIdxStart);
-        
-        ws.mergeCells(`${colLetterStart}4:${colLetterEnd}4`);
+        ws.mergeCells(`${String.fromCharCode(64 + colIdxStart)}4:${String.fromCharCode(65 + colIdxStart)}4`);
         r4.getCell(colIdxStart).value = storeName.toUpperCase();
       });
 
@@ -292,8 +250,7 @@ export default function DailyBreakdownPage() {
 
       // Style Headers
       [4, 5].forEach(rowNum => {
-        const row = ws.getRow(rowNum);
-        row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+        ws.getRow(rowNum).eachCell({ includeEmpty: true }, (cell, colIdx) => {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + (colIdx <= 4 ? C.navyBg : C.slateBg) } };
           cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
           cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
@@ -301,22 +258,17 @@ export default function DailyBreakdownPage() {
         });
       });
 
+      const isAmountCol = (colIdx: number) => colIdx === 3 || (colIdx >= 5 && colIdx % 2 === 1);
+
       // Data Rows
       data.forEach((d, idx) => {
-        const dayNum = d.dayNum;
-        const dayType = getDayType(yearNum, monthIndex, dayNum);
-        const holidayName = getHolidayName(yearNum, monthIndex, dayNum);
-        const isRedDay = dayType === 'weekend' || dayType === 'holiday';
-        const isBestDay = idx === bestDayIdx;
-        const isWorstDay = idx === worstDayIdx;
-
-        const rowData = [
+        const { holidayName, isRedDay, isBestDay } = dayMeta(d, idx);
+        const rowData: (string | number)[] = [
           holidayName ? `${d.dateStr} *` : d.dateStr,
           isBestDay ? `${d.dayOfWeek} (Peak)` : d.dayOfWeek,
           d.totalSales,
           d.totalQty
         ];
-
         activeStoresList.forEach(storeName => {
           rowData.push(d.stores[storeName].netSales);
           rowData.push(d.stores[storeName].qty);
@@ -343,11 +295,9 @@ export default function DailyBreakdownPage() {
           }
 
           // Red highlights for weekends & holidays
-          if (isRedDay && !isBestDay) {
-            if (colIdx === 1 || colIdx === 2) {
-              cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF' + C.redText } };
-              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.redBg } };
-            }
+          if (isRedDay && !isBestDay && colIdx <= 2) {
+            cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF' + C.redText } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C.redBg } };
           }
 
           // Alignments & formats
@@ -355,7 +305,7 @@ export default function DailyBreakdownPage() {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
           } else if (colIdx === 2) {
             cell.alignment = { vertical: 'middle', horizontal: 'left' };
-          } else if (colIdx === 3 || (colIdx >= 5 && colIdx % 2 === 1)) {
+          } else if (isAmountCol(colIdx)) {
             cell.alignment = { vertical: 'middle', horizontal: 'right' };
             cell.numFmt = numFmt;
             if (colIdx === 3) cell.font = { name: 'Arial', bold: true, size: 9 };
@@ -369,23 +319,10 @@ export default function DailyBreakdownPage() {
 
       // Total Row
       const totRowIdx = ws.rowCount + 1;
-      const totalRowData = [
-        'TOTAL',
-        '',
-        totals.totalSales,
-        totals.totalQty
-      ];
-
+      const totalRowData: (string | number)[] = ['TOTAL', '', totals.totalSales, totals.totalQty];
       activeStoresList.forEach(storeName => {
-        if (storeName === 'Bali') {
-          totalRowData.push(totals.baliSales); totalRowData.push(totals.baliQty);
-        } else if (storeName === 'Head Office') {
-          totalRowData.push(totals.hoSales); totalRowData.push(totals.hoQty);
-        } else if (storeName === 'Plaza Indonesia') {
-          totalRowData.push(totals.piSales); totalRowData.push(totals.piQty);
-        } else if (storeName === 'Plaza Senayan') {
-          totalRowData.push(totals.psSales); totalRowData.push(totals.psQty);
-        }
+        totalRowData.push(totals.stores[storeName].netSales);
+        totalRowData.push(totals.stores[storeName].qty);
       });
 
       const totRow = ws.addRow(totalRowData);
@@ -399,7 +336,7 @@ export default function DailyBreakdownPage() {
 
         if (colIdx === 1) {
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        } else if (colIdx === 3 || (colIdx >= 5 && colIdx % 2 === 1)) {
+        } else if (isAmountCol(colIdx)) {
           cell.alignment = { vertical: 'middle', horizontal: 'right' };
           cell.numFmt = numFmt;
         } else {
@@ -414,14 +351,14 @@ export default function DailyBreakdownPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Daily_Breakdown_${month}_${year}.xlsx`;
+      a.download = `Daily_Breakdown_${dataLabel.replace(' ', '_')}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert('Error exporting Excel: ' + err.message);
+      setError({ message: 'Excel export failed: ' + (err instanceof Error ? err.message : String(err)), retry: false });
     } finally {
       setExportingExcel(false);
     }
@@ -429,12 +366,11 @@ export default function DailyBreakdownPage() {
 
   const handleDownloadPDF = async () => {
     setExportingPDF(true);
+    const element = document.getElementById('pdf-document');
     try {
+      if (!element) return;
       const html2canvas = (await import('html2canvas-pro')).default;
       const { jsPDF } = await import('jspdf');
-
-      const element = document.getElementById('pdf-document');
-      if (!element) return;
 
       element.style.left = '0';
       element.style.top = '0';
@@ -446,8 +382,6 @@ export default function DailyBreakdownPage() {
         useCORS: true,
         windowWidth: 1123 // A4 landscape width in pixels
       });
-
-      element.style.left = '-9999px';
 
       const imgData = canvas.toDataURL('image/jpeg', 0.85);
       const pdf = new jsPDF('l', 'mm', 'a4');
@@ -465,181 +399,193 @@ export default function DailyBreakdownPage() {
       const xPos = (pdfWidth - drawWidth) / 2;
       pdf.addImage(imgData, 'JPEG', xPos, 0, drawWidth, drawHeight);
 
-      pdf.save(`Daily_Breakdown_${month}_${year}.pdf`);
-    } catch (err: any) {
+      pdf.save(`Daily_Breakdown_${dataLabel.replace(' ', '_')}.pdf`);
+    } catch (err) {
       console.error(err);
-      alert('Error generating PDF: ' + err.message);
+      setError({ message: 'PDF export failed: ' + (err instanceof Error ? err.message : String(err)), retry: false });
     } finally {
+      if (element) element.style.left = '-9999px';
       setExportingPDF(false);
     }
   };
 
-  if (loading) return <BvlgariLoader message="Loading Daily Breakdown..." />;
+  const hasData = loaded && data.length > 0;
+  const exportDisabled = !hasData || loading;
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-      
-      {/* ── HEADER ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-600 shadow-sm shadow-blue-100">
-              <Table className="w-5 h-5" />
+    <div className="space-y-5 pb-10">
+
+      {/* ── HERO ── */}
+      <motion.section initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 p-6 text-white">
+        <motion.div aria-hidden animate={{ rotate: 360 }} transition={{ duration: 60, repeat: Infinity, ease: 'linear' }}
+          className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full border border-dashed border-white/10" />
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex items-start gap-3.5">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15"><Table className="h-5 w-5 text-blue-200" /></span>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-300">Sales</p>
+              <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">Daily Breakdown (All Stores)</h1>
+              <p className="mt-1 text-sm text-slate-300">Day-by-day net sales and units for every boutique and Head Office.</p>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Daily Breakdown (All Stores)</h1>
           </div>
-          <p className="text-slate-500 text-sm">Monthly daily sales tracking for all boutiques — {month} {year}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <MonthYearPicker value={period} onChange={changePeriod} />
+            <button type="button" onClick={() => void loadData(period)} disabled={loading}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-4 text-xs font-semibold text-slate-900 transition hover:bg-slate-100 disabled:opacity-50">
+              {loaded ? <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} /> : <Database className="h-3.5 w-3.5" />}
+              {loaded ? 'Reload' : 'Load data'}
+            </button>
+            <button type="button" onClick={handleDownloadExcel} disabled={exportDisabled || exportingExcel}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3 text-xs font-semibold text-white transition hover:bg-white/10 disabled:opacity-40">
+              {exportingExcel ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-300" />}
+              Excel
+            </button>
+            <button type="button" onClick={handleDownloadPDF} disabled={exportDisabled || exportingPDF}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3 text-xs font-semibold text-white transition hover:bg-white/10 disabled:opacity-40">
+              {exportingPDF ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 text-blue-200" />}
+              PDF
+            </button>
+          </div>
         </div>
+        <div className="relative mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-[11px] text-slate-300">
+          <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{month} {year}</span>
+          <span className="inline-flex items-center gap-1.5"><Store className="h-3.5 w-3.5" />{activeStoresList.length} of {BREAKDOWN_STORES.length} columns shown</span>
+          <span className="rounded-md border border-white/15 px-2 py-0.5 text-[9px] font-semibold tracking-wider">AMOUNTS IN IDR</span>
+          {loadedAt && <span className="ml-auto text-slate-400">Loaded {dataLabel} at {loadedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
+        </div>
+      </motion.section>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select aria-label="Select month" value={month} onChange={e => setMonth(e.target.value)}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer">
-              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
+      {error && (
+        <div role="alert" className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800">
+          <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+          <span className="flex-1">{error.message}</span>
+          {error.retry
+            ? <button type="button" onClick={() => void loadData(period)} className="rounded-lg border border-rose-200 bg-white px-3 py-1 font-semibold hover:bg-rose-100">Try again</button>
+            : <button type="button" onClick={() => setError(null)} aria-label="Dismiss" className="rounded p-1 hover:bg-rose-100"><X className="h-3.5 w-3.5" /></button>}
+        </div>
+      )}
+
+      {!loaded ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-white px-6 py-16 text-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Database className="h-5 w-5" /></span>
+          <div>
+            <p className="text-sm font-semibold text-slate-900">{month} {year}</p>
+            <p className="mt-1 max-w-md text-xs text-slate-500">Choose a month, then load the daily sales. After loading, switching the month reloads automatically.</p>
           </div>
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm mr-2">
-            <CalendarIcon className="w-4 h-4 text-blue-600" />
-            <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer">
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-            </select>
-          </div>
-
-          <button
-            onClick={handleDownloadExcel}
-            disabled={exportingExcel}
-            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10 cursor-pointer"
-          >
-            {exportingExcel ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            Export Excel
-          </button>
-
-          <button
-            onClick={handleDownloadPDF}
-            disabled={exportingPDF}
-            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl shadow-sm transition-colors text-sm font-bold h-10 cursor-pointer"
-          >
-            {exportingPDF ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            Export PDF
+          <button type="button" onClick={() => void loadData(period)}
+            className="mt-1 inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white transition hover:bg-blue-700">
+            <Database className="h-3.5 w-3.5" />Load data
           </button>
         </div>
-      </div>
+      ) : !data.length ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-16 text-sm text-slate-500">
+          {loading ? <><RefreshCw className="h-4 w-4 animate-spin text-blue-600" />Loading daily sales for {month} {year}…</> : 'No data to show.'}
+        </div>
+      ) : (
+      <div className={cn('space-y-5 transition-opacity', loading && 'pointer-events-none opacity-60')} aria-busy={loading}>
 
-      {/* ── PREMIUM INTERACTIVE KPI CARDS ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        
+      {/* ── KPI CARDS ── */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+
         {/* Card 1: Target Tracker (SVG Progress Ring) */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+        <motion.article initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(card, 'flex items-center gap-4')}>
           <div className="relative w-18 h-18 shrink-0 flex items-center justify-center">
-            {/* SVG Progress Circle */}
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
               <circle className="text-slate-100" strokeWidth="8" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"/>
-              <circle className="text-emerald-500 transition-all duration-1000" strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * Math.min(100, targetProgressPercent)) / 100} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"/>
+              <circle className={cn('transition-all duration-1000', targetProgressPercent >= 100 ? 'text-emerald-500' : 'text-blue-600')} strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * Math.max(0, Math.min(100, targetProgressPercent))) / 100} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"/>
             </svg>
-            <span className="absolute text-[11px] font-black text-slate-800 leading-none">
-              {targetProgressPercent.toFixed(0)}%
+            <span className="absolute text-[11px] font-bold text-slate-800 leading-none tabular-nums">
+              {monthlyTarget > 0 ? `${targetProgressPercent.toFixed(0)}%` : '—'}
             </span>
           </div>
           <div className="min-w-0">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1 block">MTD TARGET ACHIEVED</span>
-            <h4 className="text-lg font-black text-slate-900 leading-none mb-1"><Amt value={storeOnlySales} /></h4>
-            <p className="text-[10px] text-slate-400 font-medium">Target: <Amt value={monthlyTarget} /> <span className="text-slate-300 font-normal">(Exc HO)</span></p>
+            <p className={cardLabel}>Target achieved<InfoTip label="About Target achieved" text="Boutique net sales this month divided by the boutiques' monthly target. Head Office is excluded from both." /></p>
+            <p className="mt-1.5 text-lg font-semibold tracking-tight tabular-nums text-slate-900"><Amt value={storeOnlySales} /></p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Target {monthlyTarget > 0 ? <Amt value={monthlyTarget} /> : 'not set'} <span className="text-slate-400">· excl. HO</span></p>
           </div>
-        </div>
+        </motion.article>
 
-        {/* Card 2: Boutique Segment Share Contribution */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+        {/* Card 2: Boutique Share Contribution */}
+        <motion.article initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className={cn(card, 'flex flex-col justify-between')}>
           <div>
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5 block">BOUTIQUE SHARE SHARE</span>
-            {/* Stacked Segment Bar */}
-            <div className="w-full h-3 bg-slate-150 rounded-full overflow-hidden flex mb-2 border border-slate-200/50">
-              {storeContributionShares.map((sc, i) => {
-                const cfg = STORE_THEME[sc.name];
-                if (sc.pct <= 0) return null;
-                return (
-                  <div 
-                    key={sc.name}
-                    className={cn("h-full transition-all duration-500", cfg?.fill)}
-                    style={{ width: `${sc.pct}%` }}
-                    title={`${sc.name}: ${sc.pct.toFixed(1)}%`}
-                  />
-                );
-              })}
+            <p className={cardLabel}>Boutique share<InfoTip label="About Boutique share" text="Each boutique's share of total boutique net sales this month. Head Office is excluded." /></p>
+            <div className="mt-3 mb-2 flex h-3 w-full overflow-hidden rounded-full border border-slate-200/50 bg-slate-100">
+              {storeContributionShares.map(sc => sc.pct > 0 && (
+                <div
+                  key={sc.name}
+                  className={cn("h-full transition-all duration-500", STORE_THEME[sc.name].fill)}
+                  style={{ width: `${sc.pct}%` }}
+                  title={`${sc.name}: ${sc.pct.toFixed(1)}%`}
+                />
+              ))}
             </div>
           </div>
-          <div className="flex justify-between items-center text-[9px] font-black text-slate-500 pt-1">
-            {storeContributionShares.map(sc => {
-              const cfg = STORE_THEME[sc.name];
-              const label = sc.name === 'Plaza Indonesia' ? 'PI' : sc.name === 'Plaza Senayan' ? 'PS' : 'BL';
-              return (
-                <span key={sc.name} className="flex items-center gap-1">
-                  <span className={cn("w-1.5 h-1.5 rounded-full", cfg?.fill)} />
-                  {label} {sc.pct.toFixed(0)}%
-                </span>
-              );
-            })}
+          <div className="flex justify-between items-center text-[10px] font-semibold text-slate-600 pt-1">
+            {storeContributionShares.map(sc => (
+              <span key={sc.name} className="flex items-center gap-1" title={sc.name}>
+                <span className={cn("w-1.5 h-1.5 rounded-full", STORE_THEME[sc.name].fill)} />
+                {STORE_THEME[sc.name].short} {sc.pct.toFixed(0)}%
+              </span>
+            ))}
           </div>
-        </div>
+        </motion.article>
 
-        {/* Card 3: Peak Sales Day (Trophy card with Gold Glow) */}
-        {bestDayIdx >= 0 && data[bestDayIdx] ? (
-          <div className="bg-gradient-to-br from-amber-50/60 to-orange-50/30 border border-amber-100 rounded-3xl p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-all relative overflow-hidden group">
-            <div className="absolute right-0 bottom-0 translate-y-4 translate-x-4 opacity-5 group-hover:scale-125 transition-transform duration-700 pointer-events-none">
-              <Trophy className="w-24 h-24 text-amber-600" />
-            </div>
-            <div>
-              <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest leading-none mb-1 block">MONTH'S PEAK SALES DAY</span>
-              <h4 className="text-lg font-black text-slate-900 leading-none mb-1"><Amt value={data[bestDayIdx].totalSales} /></h4>
-              <p className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
+        {/* Card 3: Peak Sales Day */}
+        <motion.article initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          className="group relative min-w-0 overflow-hidden rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50/60 to-orange-50/30 p-5 shadow-sm flex items-center justify-between">
+          <div className="absolute right-0 bottom-0 translate-y-4 translate-x-4 opacity-5 group-hover:scale-125 transition-transform duration-700 pointer-events-none">
+            <Trophy className="w-24 h-24 text-amber-600" />
+          </div>
+          <div className="min-w-0">
+            <p className={cn(cardLabel, 'text-amber-700')}>Peak sales day<InfoTip label="About Peak sales day" text="The day with the highest boutique net sales this month (Head Office excluded). It is highlighted in gold in the table." /></p>
+            {bestDayIdx >= 0 ? <>
+              <p className="mt-1.5 text-lg font-semibold tracking-tight tabular-nums text-slate-900"><Amt value={boutiqueSales(data[bestDayIdx])} /></p>
+              <p className="mt-0.5 text-[10px] text-amber-700 font-semibold flex items-center gap-1">
                 <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                 {data[bestDayIdx].dateStr} ({data[bestDayIdx].dayOfWeek})
               </p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shadow-inner shrink-0 relative">
-              <Trophy className="w-5 h-5 text-amber-600" />
-            </div>
+            </> : <p className="mt-1.5 text-sm text-slate-500">No boutique sales yet</p>}
           </div>
-        ) : (
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm" />
-        )}
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 relative">
+            <Trophy className="w-5 h-5 text-amber-600" />
+          </div>
+        </motion.article>
 
         {/* Card 4: Daily Performance Benchmark */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between">
-          <div>
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1 block">DAILY AVG BENCHMARK</span>
-            <h4 className="text-lg font-black text-slate-900 leading-none mb-1"><Amt value={activeDaysStats.avgSales} /></h4>
-            <p className="text-[10px] text-slate-400 font-medium">Over {activeDaysStats.activeDays} days with active sales</p>
+        <motion.article initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className={cn(card, 'flex items-center justify-between')}>
+          <div className="min-w-0">
+            <p className={cardLabel}>Daily average<InfoTip label="About Daily average" text="Boutique net sales divided by the number of days with boutique sales. Days without sales are not counted. Head Office is excluded." /></p>
+            <p className="mt-1.5 text-lg font-semibold tracking-tight tabular-nums text-slate-900"><Amt value={avgSales} /></p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Over {activeDays} day{activeDays === 1 ? '' : 's'} with boutique sales</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-50/50 text-blue-600 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <TrendingUp className="w-5 h-5" />
           </div>
-        </div>
+        </motion.article>
 
       </div>
 
-      {/* ── INTERACTIVE COLUMN TOGGLES ── */}
+      {/* ── COLUMN TOGGLES ── */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Info className="w-4 h-4 text-slate-400 shrink-0" />
-          <span className="text-xs font-bold text-slate-500">Toggle columns to focus comparison:</span>
+          <span className="text-xs font-semibold text-slate-500">Show or hide store columns to focus the comparison. The Excel export follows this selection.</span>
         </div>
         <div className="flex flex-wrap gap-2.5">
-          {Object.keys(visibleStores).map(storeName => {
+          {BREAKDOWN_STORES.map(storeName => {
             const visible = visibleStores[storeName];
             const cfg = STORE_THEME[storeName];
             return (
               <button
                 key={storeName}
+                type="button"
+                aria-pressed={visible}
                 onClick={() => toggleStoreVisibility(storeName)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer",
-                  visible 
-                    ? cn(cfg?.bg, cfg?.border, cfg?.text, "shadow-sm") 
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                  visible
+                    ? cn(cfg.bg, cfg.border, cfg.text, "shadow-sm")
                     : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100"
                 )}
               >
@@ -651,92 +597,83 @@ export default function DailyBreakdownPage() {
         </div>
       </div>
 
-      {/* ── MAIN INTERACTIVE TABLE ── */}
+      {/* ── MAIN TABLE ── */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight text-slate-800">Daily sales · {dataLabel}</h2>
+            <p className="mt-0.5 text-[11px] text-slate-500">Total columns include Head Office. Dates follow Jakarta time.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-[10px] font-medium text-slate-500">
+            <span className="inline-flex items-center gap-1"><Trophy className="h-3 w-3 text-amber-500" />Peak day</span>
+            {worstDayIdx >= 0 && <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-rose-400" />Lowest day</span>}
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-rose-200" />Weekend / holiday</span>
+            <span className="inline-flex items-center gap-1"><span className="font-bold text-rose-500">*</span>Public holiday</span>
+          </div>
+        </div>
+        <div className="max-h-[70vh] overflow-auto">
           <table className="w-full text-left border-collapse text-xs select-none">
-            <thead>
+            <thead className="sticky top-0 z-20">
               {/* Row 1: Stores */}
-              <tr className="bg-slate-50 border-b border-slate-200/50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-3 px-4 border-r border-slate-200/60" rowSpan={2}>Date</th>
-                <th className="py-3 px-4 border-r border-slate-200/60" rowSpan={2}>Day</th>
-                <th className="py-3 px-4 border-r border-slate-200/60 text-right" rowSpan={2}>Total Sales</th>
-                <th className="py-3 px-4 border-r border-slate-200/60 text-center" rowSpan={2}>Total Qty</th>
+              <tr className="bg-slate-50 border-b border-slate-200/50 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+                <th className="sticky left-0 z-10 bg-slate-50 py-3 px-4 border-r border-slate-200/60 text-center" rowSpan={2}>Date</th>
+                <th className="bg-slate-50 py-3 px-4 border-r border-slate-200/60" rowSpan={2}>Day</th>
+                <th className="bg-slate-50 py-3 px-4 border-r border-slate-200/60 text-right" rowSpan={2}>Total Sales</th>
+                <th className="bg-slate-50 py-3 px-4 border-r border-slate-200/60 text-center" rowSpan={2}>Total Qty</th>
 
-                {/* Dynamic Store Headers */}
-                {Object.keys(visibleStores).map(storeName => {
-                  if (!visibleStores[storeName]) return null;
-                  const theme = STORE_THEME[storeName];
-                  return (
-                    <th 
-                      key={storeName} 
-                      onMouseEnter={() => setHoveredCol(storeName)}
-                      onMouseLeave={() => setHoveredCol(null)}
-                      className={cn(
-                        "py-2 px-4 border-r border-slate-200/60 text-center transition-colors duration-150", 
-                        theme?.bg,
-                        hoveredCol === storeName && "bg-slate-200/40"
-                      )} 
-                      colSpan={2}
-                    >
-                      {storeName}
-                    </th>
-                  );
-                })}
+                {activeStoresList.map(storeName => (
+                  <th
+                    key={storeName}
+                    onMouseEnter={() => setHoveredCol(storeName)}
+                    onMouseLeave={() => setHoveredCol(null)}
+                    className={cn(
+                      "py-2 px-4 border-r border-slate-200/60 text-center transition-colors duration-150 bg-slate-50",
+                      STORE_THEME[storeName].text,
+                      hoveredCol === storeName && "bg-slate-200/60"
+                    )}
+                    colSpan={2}
+                  >
+                    {storeName}
+                  </th>
+                ))}
               </tr>
               {/* Row 2: Sub-headers */}
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
-                {Object.keys(visibleStores).map(storeName => {
-                  if (!visibleStores[storeName]) return null;
-                  const theme = STORE_THEME[storeName];
-                  return (
-                    <Fragment key={storeName}>
-                      <th 
-                        onMouseEnter={() => setHoveredCol(storeName)}
-                        onMouseLeave={() => setHoveredCol(null)}
-                        className={cn(
-                          "py-2 px-4 border-r border-slate-200/60 text-right transition-colors duration-150",
-                          theme?.bg,
-                          hoveredCol === storeName && "bg-slate-200/60"
-                        )}
-                      >
-                        Net Sales
-                      </th>
-                      <th 
-                        onMouseEnter={() => setHoveredCol(storeName)}
-                        onMouseLeave={() => setHoveredCol(null)}
-                        className={cn(
-                          "py-2 px-3 border-r border-slate-200/60 text-center transition-colors duration-150",
-                          theme?.bg,
-                          hoveredCol === storeName && "bg-slate-200/60"
-                        )}
-                      >
-                        Qty
-                      </th>
-                    </Fragment>
-                  );
-                })}
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-semibold uppercase tracking-wider text-[9px]">
+                {activeStoresList.map(storeName => (
+                  <Fragment key={storeName}>
+                    <th
+                      onMouseEnter={() => setHoveredCol(storeName)}
+                      onMouseLeave={() => setHoveredCol(null)}
+                      className={cn("py-2 px-4 border-r border-slate-200/60 text-right transition-colors duration-150 bg-slate-50", hoveredCol === storeName && "bg-slate-200/60")}
+                    >
+                      Net Sales
+                    </th>
+                    <th
+                      onMouseEnter={() => setHoveredCol(storeName)}
+                      onMouseLeave={() => setHoveredCol(null)}
+                      className={cn("py-2 px-3 border-r border-slate-200/60 text-center transition-colors duration-150 bg-slate-50", hoveredCol === storeName && "bg-slate-200/60")}
+                    >
+                      Qty
+                    </th>
+                  </Fragment>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {data.map((d, idx) => {
-                const dayNum = d.dayNum;
-                const dayType = getDayType(yearNum, monthIndex, dayNum);
-                const holidayName = getHolidayName(yearNum, monthIndex, dayNum);
-                const isRedDay = dayType === 'weekend' || dayType === 'holiday';
-                const isBestDay = idx === bestDayIdx;
-                const isWorstDay = idx === worstDayIdx;
+                const { holidayName, isRedDay, isBestDay, isWorstDay } = dayMeta(d, idx);
+                const rowHover = hoveredRow === idx;
 
                 return (
-                  <tr 
-                    key={d.dayNum} 
+                  <tr
+                    key={d.dayNum}
                     onMouseEnter={() => setHoveredRow(idx)}
                     onMouseLeave={() => setHoveredRow(null)}
                     className={cn(
-                      "transition-colors duration-150 group/row hover:bg-slate-50",
-                      isBestDay && "bg-amber-50/20 hover:bg-amber-50/40",
-                      isWorstDay && "bg-rose-50/10 hover:bg-rose-50/30",
-                      hoveredRow === idx && "bg-slate-50/90"
+                      "transition-colors duration-150",
+                      isBestDay && "bg-amber-50/30",
+                      isWorstDay && "bg-rose-50/20",
+                      rowHover && "bg-slate-50"
                     )}
                     style={{
                       animation: 'slideIn 0.3s ease-out forwards',
@@ -747,77 +684,72 @@ export default function DailyBreakdownPage() {
                   >
                     {/* Date */}
                     <td className={cn(
-                      "py-2.5 px-4 font-mono font-bold border-r border-slate-100 text-center transition-colors duration-150",
-                      isBestDay ? "text-amber-700 bg-amber-50/30" : "text-slate-600",
-                      isWorstDay && "text-rose-700 bg-rose-50/20",
-                      hoveredRow === idx && "bg-slate-100/50"
+                      "sticky left-0 z-10 py-2.5 px-4 font-mono font-semibold border-r border-slate-100 text-center whitespace-nowrap transition-colors duration-150",
+                      isBestDay ? "text-amber-700 bg-amber-50" : isWorstDay ? "text-rose-700 bg-rose-50" : "text-slate-600 bg-white",
+                      rowHover && "bg-slate-100"
                     )}>
                       <span className="flex items-center justify-center gap-1.5">
                         {isBestDay && <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                         {isWorstDay && <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
                         {d.dateStr}
                         {holidayName && (
-                          <span className="text-rose-500 font-black animate-pulse" title={holidayName}>*</span>
+                          <span className="text-rose-500 font-black" title={holidayName}>*</span>
                         )}
                       </span>
                     </td>
-                    
+
                     {/* Day */}
                     <td className={cn(
-                      "py-2.5 px-4 border-r border-slate-100 font-bold transition-colors duration-150",
-                      isBestDay && "text-amber-700 bg-amber-50/20",
-                      isWorstDay && "text-rose-700 bg-rose-50/10",
-                      !isBestDay && !isWorstDay && isRedDay ? "text-rose-500 bg-rose-50/30" : "text-slate-700",
-                      hoveredRow === idx && "bg-slate-100/50"
+                      "py-2.5 px-4 border-r border-slate-100 font-semibold transition-colors duration-150",
+                      isBestDay ? "text-amber-700" : isWorstDay ? "text-rose-700" : isRedDay ? "text-rose-500 bg-rose-50/40" : "text-slate-700",
+                      rowHover && "bg-slate-100/50"
                     )} title={holidayName || undefined}>
                       {d.dayOfWeek}
                     </td>
-                    
+
                     {/* Total Sales */}
                     <td className={cn(
-                      "py-2.5 px-4 border-r border-slate-100 text-right font-black font-mono text-slate-800 transition-colors duration-150",
-                      isBestDay && "text-amber-700 bg-amber-50/10",
-                      hoveredRow === idx && "bg-slate-100/50"
+                      "py-2.5 px-4 border-r border-slate-100 text-right font-bold font-mono tabular-nums transition-colors duration-150",
+                      isBestDay ? "text-amber-700" : "text-slate-800",
+                      rowHover && "bg-slate-100/50"
                     )}>
                       <Amt value={d.totalSales} />
                     </td>
-                    
+
                     {/* Total Qty */}
                     <td className={cn(
-                      "py-2.5 px-4 border-r border-slate-100 text-center font-black font-mono text-slate-700 transition-colors duration-150",
-                      isBestDay && "text-amber-700 bg-amber-50/10",
-                      hoveredRow === idx && "bg-slate-100/50"
+                      "py-2.5 px-4 border-r border-slate-100 text-center font-bold font-mono tabular-nums transition-colors duration-150",
+                      isBestDay ? "text-amber-700" : "text-slate-700",
+                      rowHover && "bg-slate-100/50"
                     )}>
                       {d.totalQty}
                     </td>
 
                     {/* Stores Columns */}
-                    {Object.keys(visibleStores).map(storeName => {
-                      if (!visibleStores[storeName]) return null;
+                    {activeStoresList.map(storeName => {
                       const sData = d.stores[storeName];
-                      const theme = STORE_THEME[storeName];
                       const colActive = hoveredCol === storeName;
 
                       return (
                         <Fragment key={storeName}>
-                          <td 
+                          <td
                             onMouseEnter={() => setHoveredCol(storeName)}
                             onMouseLeave={() => setHoveredCol(null)}
                             className={cn(
-                              "py-2.5 px-4 border-r border-slate-100 text-right font-mono text-slate-600 transition-colors duration-150",
-                              colActive && "bg-slate-100",
-                              sData.netSales > 0 && "font-semibold text-slate-800"
+                              "py-2.5 px-4 border-r border-slate-100 text-right font-mono tabular-nums transition-colors duration-150",
+                              sData.netSales !== 0 ? "font-semibold text-slate-800" : "text-slate-400",
+                              colActive && "bg-slate-100"
                             )}
                           >
                             <Amt value={sData.netSales} />
                           </td>
-                          <td 
+                          <td
                             onMouseEnter={() => setHoveredCol(storeName)}
                             onMouseLeave={() => setHoveredCol(null)}
                             className={cn(
-                              "py-2.5 px-3 border-r border-slate-100 text-center font-mono text-slate-400 transition-colors duration-150",
-                              colActive && "bg-slate-100",
-                              sData.qty > 0 && "font-bold text-slate-700"
+                              "py-2.5 px-3 border-r border-slate-100 text-center font-mono tabular-nums transition-colors duration-150",
+                              sData.qty !== 0 ? "font-bold text-slate-700" : "text-slate-400",
+                              colActive && "bg-slate-100"
                             )}
                           >
                             {sData.qty}
@@ -830,39 +762,24 @@ export default function DailyBreakdownPage() {
               })}
             </tbody>
             {/* Totals Footer */}
-            <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-800 relative z-10 shadow-lg">
+            <tfoot className="sticky bottom-0 z-20 bg-slate-50 border-t border-slate-200 font-bold text-slate-800 shadow-[0_-4px_8px_-4px_rgba(16,24,40,0.08)]">
               <tr>
-                <td className="py-3 px-4 text-center border-r border-slate-200/60" colSpan={2}>TOTAL</td>
-                <td className="py-3 px-4 border-r border-slate-200/60 text-right font-black font-mono text-slate-900"><Amt value={totals.totalSales} /></td>
-                <td className="py-3 px-4 border-r border-slate-200/60 text-center font-black font-mono text-slate-900">{totals.totalQty}</td>
-                
-                {/* Dynamic Store Totals */}
-                {Object.keys(visibleStores).map(storeName => {
-                  if (!visibleStores[storeName]) return null;
-                  let storeSalesTotal = 0;
-                  let storeQtyTotal = 0;
-                  if (storeName === 'Bali') {
-                    storeSalesTotal = totals.baliSales; storeQtyTotal = totals.baliQty;
-                  } else if (storeName === 'Head Office') {
-                    storeSalesTotal = totals.hoSales; storeQtyTotal = totals.hoQty;
-                  } else if (storeName === 'Plaza Indonesia') {
-                    storeSalesTotal = totals.piSales; storeQtyTotal = totals.piQty;
-                  } else if (storeName === 'Plaza Senayan') {
-                    storeSalesTotal = totals.psSales; storeQtyTotal = totals.psQty;
-                  }
-
-                  return (
-                    <Fragment key={storeName}>
-                      <td className="py-3 px-4 border-r border-slate-200/60 text-right font-black font-mono text-slate-800"><Amt value={storeSalesTotal} /></td>
-                      <td className="py-3 px-3 border-r border-slate-200/60 text-center font-black font-mono text-slate-800">{storeQtyTotal}</td>
-                    </Fragment>
-                  );
-                })}
+                <td className="sticky left-0 z-10 bg-slate-50 py-3 px-4 text-center border-r border-slate-200/60" colSpan={2}>TOTAL</td>
+                <td className="py-3 px-4 border-r border-slate-200/60 text-right font-mono tabular-nums text-slate-900"><Amt value={totals.totalSales} /></td>
+                <td className="py-3 px-4 border-r border-slate-200/60 text-center font-mono tabular-nums text-slate-900">{totals.totalQty}</td>
+                {activeStoresList.map(storeName => (
+                  <Fragment key={storeName}>
+                    <td className="py-3 px-4 border-r border-slate-200/60 text-right font-mono tabular-nums text-slate-800"><Amt value={totals.stores[storeName].netSales} /></td>
+                    <td className="py-3 px-3 border-r border-slate-200/60 text-center font-mono tabular-nums text-slate-800">{totals.stores[storeName].qty}</td>
+                  </Fragment>
+                ))}
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
+      </div>
+      )}
 
       {/* Load Animations Inject CSS */}
       <style jsx global>{`
@@ -875,8 +792,9 @@ export default function DailyBreakdownPage() {
       `}</style>
 
       {/* --- PROFESSIONAL LANDSCAPE PDF DOCUMENT (OFF-SCREEN) --- */}
-      <div 
-        id="pdf-document" 
+      {hasData && (
+      <div
+        id="pdf-document"
         className="absolute -left-[9999px] top-0 w-[1123px] bg-white text-black font-sans p-8 box-border"
         style={{ minHeight: '794px' }}
       >
@@ -887,8 +805,8 @@ export default function DailyBreakdownPage() {
             <h2 className="text-xs mt-0.5 font-medium text-slate-300 tracking-wider uppercase">Daily Sales Breakdown (All Stores)</h2>
           </div>
           <p className="text-xs font-mono text-slate-300 text-right">
-            Period: {month} {year}<br />
-            <span className="text-[10px] text-slate-400">Generated: {new Date().toLocaleDateString('en-US')}</span>
+            Period: {dataLabel}<br />
+            <span className="text-[10px] text-slate-400">Generated: {new Date().toLocaleDateString('en-GB')} · Amounts in IDR</span>
           </p>
         </div>
 
@@ -908,45 +826,36 @@ export default function DailyBreakdownPage() {
           </div>
           <div className="border border-slate-200 p-2.5 rounded-lg bg-slate-50">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Head Office (HO) Sales</span>
-            <div className="text-base font-black text-slate-600"><Amt value={totals.hoSales} /></div>
+            <div className="text-base font-black text-slate-600"><Amt value={totals.stores['Head Office'].netSales} /></div>
           </div>
         </div>
 
         {/* Printable Table */}
         <table className="w-full text-left border-collapse text-[10px] border border-slate-200">
           <thead>
-            {/* PDF Row 1 */}
             <tr className="bg-slate-800 text-white font-bold uppercase tracking-wider text-[9px]">
               <th className="py-1 px-2 border border-slate-700 text-center" rowSpan={2}>Date</th>
               <th className="py-1 px-2 border border-slate-700" rowSpan={2}>Day</th>
               <th className="py-1 px-2 border border-slate-700 text-right" rowSpan={2}>Total Sales</th>
               <th className="py-1 px-2 border border-slate-700 text-center" rowSpan={2}>Qty</th>
-              <th className="py-1 px-2 border border-slate-700 text-center bg-slate-700/40" colSpan={2}>Bali</th>
-              <th className="py-1 px-2 border border-slate-700 text-center bg-slate-700/60" colSpan={2}>Head Office</th>
-              <th className="py-1 px-2 border border-slate-700 text-center bg-slate-700/40" colSpan={2}>Plaza Indonesia</th>
-              <th className="py-1 px-2 border border-slate-700 text-center bg-slate-700/60" colSpan={2}>Plaza Senayan</th>
+              {BREAKDOWN_STORES.map((s, i) => (
+                <th key={s} className={cn("py-1 px-2 border border-slate-700 text-center", i % 2 ? "bg-slate-700/60" : "bg-slate-700/40")} colSpan={2}>{s}</th>
+              ))}
             </tr>
-            {/* PDF Row 2 */}
             <tr className="bg-slate-800 text-white font-bold uppercase tracking-wider text-[8px]">
-              <th className="py-1 px-2 border border-slate-700 text-right bg-slate-700/30">Net Sales</th>
-              <th className="py-1 px-1 border border-slate-700 text-center bg-slate-700/30">Qty</th>
-              <th className="py-1 px-2 border border-slate-700 text-right bg-slate-700/50">Net Sales</th>
-              <th className="py-1 px-1 border border-slate-700 text-center bg-slate-700/50">Qty</th>
-              <th className="py-1 px-2 border border-slate-700 text-right bg-slate-700/30">Net Sales</th>
-              <th className="py-1 px-1 border border-slate-700 text-center bg-slate-700/30">Qty</th>
-              <th className="py-1 px-2 border border-slate-700 text-right bg-slate-700/50">Net Sales</th>
-              <th className="py-1 px-1 border border-slate-700 text-center bg-slate-700/50">Qty</th>
+              {BREAKDOWN_STORES.map((s, i) => (
+                <Fragment key={s}>
+                  <th className={cn("py-1 px-2 border border-slate-700 text-right", i % 2 ? "bg-slate-700/50" : "bg-slate-700/30")}>Net Sales</th>
+                  <th className={cn("py-1 px-1 border border-slate-700 text-center", i % 2 ? "bg-slate-700/50" : "bg-slate-700/30")}>Qty</th>
+                </Fragment>
+              ))}
             </tr>
           </thead>
           <tbody>
             {data.map((d, idx) => {
-              const dayNum = d.dayNum;
-              const dayType = getDayType(yearNum, monthIndex, dayNum);
-              const holidayName = getHolidayName(yearNum, monthIndex, dayNum);
-              const isRedDay = dayType === 'weekend' || dayType === 'holiday';
-
+              const { holidayName, isRedDay } = dayMeta(d, idx);
               return (
-                <tr key={d.dayNum} className="border-b border-gray-150">
+                <tr key={d.dayNum} className="border-b border-slate-100">
                   <td className="py-1 px-2 border border-gray-100 font-mono text-center">
                     {d.dateStr}{holidayName ? ' *' : ''}
                   </td>
@@ -962,64 +871,27 @@ export default function DailyBreakdownPage() {
                   <td className="py-1 px-2 border border-gray-100 text-center font-bold font-mono">
                     {d.totalQty}
                   </td>
-
-                  {/* Bali */}
-                  <td className="py-1 px-2 border border-gray-100 text-right font-mono text-gray-500">
-                    <Amt value={d.stores['Bali'].netSales} />
-                  </td>
-                  <td className="py-1 px-1 border border-gray-100 text-center font-mono text-gray-400">
-                    {d.stores['Bali'].qty}
-                  </td>
-
-                  {/* Head Office */}
-                  <td className="py-1 px-2 border border-gray-100 text-right font-mono text-gray-400">
-                    <Amt value={d.stores['Head Office'].netSales} />
-                  </td>
-                  <td className="py-1 px-1 border border-gray-100 text-center font-mono text-gray-300">
-                    {d.stores['Head Office'].qty}
-                  </td>
-
-                  {/* Plaza Indonesia */}
-                  <td className="py-1 px-2 border border-gray-100 text-right font-mono text-gray-500">
-                    <Amt value={d.stores['Plaza Indonesia'].netSales} />
-                  </td>
-                  <td className="py-1 px-1 border border-gray-100 text-center font-mono text-gray-400">
-                    {d.stores['Plaza Indonesia'].qty}
-                  </td>
-
-                  {/* Plaza Senayan */}
-                  <td className="py-1 px-2 border border-gray-100 text-right font-mono text-gray-500">
-                    <Amt value={d.stores['Plaza Senayan'].netSales} />
-                  </td>
-                  <td className="py-1 px-1 border border-gray-100 text-center font-mono text-gray-400">
-                    {d.stores['Plaza Senayan'].qty}
-                  </td>
+                  {BREAKDOWN_STORES.map(s => (
+                    <Fragment key={s}>
+                      <td className="py-1 px-2 border border-gray-100 text-right font-mono text-gray-500"><Amt value={d.stores[s].netSales} /></td>
+                      <td className="py-1 px-1 border border-gray-100 text-center font-mono text-gray-400">{d.stores[s].qty}</td>
+                    </Fragment>
+                  ))}
                 </tr>
               );
             })}
           </tbody>
-          {/* PDF Totals */}
           <tfoot className="bg-slate-100 font-bold text-slate-800">
             <tr>
               <td className="py-1.5 px-2 text-center border border-slate-300" colSpan={2}>TOTAL</td>
               <td className="py-1.5 px-2 border border-slate-300 text-right font-mono"><Amt value={totals.totalSales} /></td>
               <td className="py-1.5 px-2 border border-slate-300 text-center font-mono">{totals.totalQty}</td>
-
-              {/* Bali */}
-              <td className="py-1.5 px-2 border border-slate-300 text-right font-mono"><Amt value={totals.baliSales} /></td>
-              <td className="py-1.5 px-1 border border-slate-300 text-center font-mono">{totals.baliQty}</td>
-
-              {/* Head Office */}
-              <td className="py-1.5 px-2 border border-slate-300 text-right font-mono"><Amt value={totals.hoSales} /></td>
-              <td className="py-1.5 px-1 border border-slate-300 text-center font-mono">{totals.hoQty}</td>
-
-              {/* Plaza Indonesia */}
-              <td className="py-1.5 px-2 border border-slate-300 text-right font-mono"><Amt value={totals.piSales} /></td>
-              <td className="py-1.5 px-1 border border-slate-300 text-center font-mono">{totals.piQty}</td>
-
-              {/* Plaza Senayan */}
-              <td className="py-1.5 px-2 border border-slate-300 text-right font-mono"><Amt value={totals.psSales} /></td>
-              <td className="py-1.5 px-1 border border-slate-300 text-center font-mono">{totals.psQty}</td>
+              {BREAKDOWN_STORES.map(s => (
+                <Fragment key={s}>
+                  <td className="py-1.5 px-2 border border-slate-300 text-right font-mono"><Amt value={totals.stores[s].netSales} /></td>
+                  <td className="py-1.5 px-1 border border-slate-300 text-center font-mono">{totals.stores[s].qty}</td>
+                </Fragment>
+              ))}
             </tr>
           </tfoot>
         </table>
@@ -1033,6 +905,7 @@ export default function DailyBreakdownPage() {
           <p className="text-right">Generated from Bvlgari Intelligence Portal</p>
         </div>
       </div>
+      )}
     </div>
   );
 }

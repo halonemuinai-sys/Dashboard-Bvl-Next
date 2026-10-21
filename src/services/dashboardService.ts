@@ -36,6 +36,7 @@ export const dashboardService = {
   // Daily
   getDailyReport:              daily.getDailyReport,
   getDailyBreakdown:           daily.getDailyBreakdown,
+  getBoutiqueMonthlyTarget:    daily.getBoutiqueMonthlyTarget,
 
   // Crossing
   getCrossingSalesData:        crossing.getCrossingSalesData,
