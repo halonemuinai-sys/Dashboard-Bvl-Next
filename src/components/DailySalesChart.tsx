@@ -63,7 +63,7 @@ export default function DailySalesChart({ dailyData, month, year, asOfDate = bus
           <ComposedChart accessibilityLayer data={points} margin={{ top: 12, right: 12, left: 0, bottom: 8 }} barCategoryGap="25%">
             <defs>
               <linearGradient id={id + '-weekday'} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#14b8a6" /><stop offset="100%" stopColor="#14b8a6" stopOpacity={0.55} /></linearGradient>
-              <linearGradient id={id + '-weekend'} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#93c5fd" /><stop offset="100%" stopColor="#93c5fd" stopOpacity={0.5} /></linearGradient>
+              <linearGradient id={id + '-weekend'} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fda4af" /><stop offset="100%" stopColor="#fda4af" stopOpacity={0.5} /></linearGradient>
               <linearGradient id={id + '-cumulative'} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.01} /></linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 5" stroke="#e2e8f0" vertical={false} />
@@ -79,7 +79,7 @@ export default function DailySalesChart({ dailyData, month, year, asOfDate = bus
         </ResponsiveContainer>
       </div>}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 text-[10px] text-slate-500">
-        <div className="flex flex-wrap gap-4">{mode === 'daily' ? <><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-teal-500" />Weekday</span><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-blue-300" />Weekend</span>{showAverage && <span className="flex items-center gap-1.5"><i className="h-0.5 w-4 rounded bg-blue-600" />Trailing 7-day average</span>}</> : <span>Cumulative net sales from the first day of the month</span>}</div>
+        <div className="flex flex-wrap gap-4">{mode === 'daily' ? <><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-teal-500" />Weekday</span><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-rose-300" />Weekend</span>{showAverage && <span className="flex items-center gap-1.5"><i className="h-0.5 w-4 rounded bg-blue-600" />Trailing 7-day average</span>}</> : <span>Cumulative net sales from the first day of the month</span>}</div>
         <span>As of {asOfDate}</span>
       </div>
       {!hasSales && <p className="mt-3 text-xs text-slate-400">No sales recorded for this period.</p>}
