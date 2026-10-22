@@ -143,6 +143,8 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
         AJ: [invoice.meta.other_remarks?.split('[PAYMENT_SPLITS]:')[0]?.split('[FINANCE_VERIFY]:')[0]?.trim(), !options.store || options.store === 'ALL' ? `Store: ${invoice.location}` : ''].filter(Boolean).join(' | '),
       };
       for (const [col, value] of Object.entries(values)) ws.getCell(`${col}${row}`).value = value;
+      // E "Cosmo CRM ID" comes from the POS customerCode; left blank until the POS sends it.
+      if (invoice.crm_cosmo) ws.getCell(`E${row}`).value = invoice.crm_cosmo;
       // Counts and invoice-level receipts are written only on the first item.
       if (index === 0) {
         const linkedDeposits = invoice.depositLinks || [];

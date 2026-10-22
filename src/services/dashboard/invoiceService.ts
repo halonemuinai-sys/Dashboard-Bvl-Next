@@ -34,6 +34,8 @@ export interface InvoiceMeta {
   other_remarks: string;
   entitle?: string;
   served_by?: string;
+  /** Where served_by came from: typed in Invoice Management, or the POS "inCharge" field. */
+  served_by_source?: 'manual' | 'pos';
   payment_splits?: unknown;
   updated_by?: string;
   updated_at?: string;
@@ -44,6 +46,8 @@ export interface InvoiceHeader {
   trans_no: string;
   transaction_date: string;
   customer: string;
+  /** CRM Cosmo customer code from the POS (customerCode); empty until the POS sends it. */
+  crm_cosmo: string;
   salesman: string;
   location: string;
   item_count: number;
@@ -65,7 +69,7 @@ export async function getInvoices(month: string, year: number, db: SupabaseClien
   // row limit must never silently truncate invoices or their line items.
   const [rawItems, salesData, metaData] = await Promise.all([
     fetchAllRows((from, to) => db.from('clean_master')
-      .select('id, trans_no, transaction_date, customer, salesman, location, main_category, collection, sap_code, catalogue_code, gross_sales, val_disc, disc_pct, net_sales, qty, cost, comm, type')
+      .select('id, trans_no, transaction_date, customer, salesman, location, main_category, collection, sap_code, catalogue_code, gross_sales, val_disc, disc_pct, net_sales, qty, cost, comm, type, in_charge, customer_code')
       .gte('transaction_date', start).lt('transaction_date', end)
       .order('id', { ascending: true }).range(from, to)),
     fetchAllRows((from, to) => db.from('bvlgari_sales')
@@ -129,6 +133,8 @@ export async function getInvoices(month: string, year: number, db: SupabaseClien
     customer: string;
     salesman: string;
     location: string;
+    in_charge: string;
+    crm_cosmo: string;
     items: InvoiceItem[];
   }>();
 
@@ -141,9 +147,14 @@ export async function getInvoices(month: string, year: number, db: SupabaseClien
         customer: r.customer || '',
         salesman: r.salesman || '',
         location: r.location || '',
+        in_charge: '',
+        crm_cosmo: '',
         items: [],
       });
     }
+    const group = groupMap.get(tNo)!;
+    if (!group.in_charge && r.in_charge?.trim()) group.in_charge = r.in_charge.trim();
+    if (!group.crm_cosmo && r.customer_code?.trim()) group.crm_cosmo = r.customer_code.trim();
 
     const extra = salesMap.get(tNo) ?? { collection_code: '', phone_no: '' };
     const rawExtra = rawItemMap.get(JSON.stringify([String(tNo), String(r.sap_code || ''), String(r.catalogue_code || '')]))?.shift();
@@ -169,6 +180,12 @@ export async function getInvoices(month: string, year: number, db: SupabaseClien
     });
   });
 
+  // A Served By typed in Invoice Management always wins; the POS inCharge only fills a blank one.
+  const withServedBy = (meta: InvoiceMeta, inCharge: string): InvoiceMeta => {
+    if (meta.served_by?.trim()) return { ...meta, served_by_source: 'manual' };
+    return inCharge ? { ...meta, served_by: inCharge, served_by_source: 'pos' } : meta;
+  };
+
   // Construct InvoiceHeader array with aggregate calculations
   const result: InvoiceHeader[] = [];
   groupMap.forEach((grp, tNo) => {
@@ -192,6 +209,7 @@ export async function getInvoices(month: string, year: number, db: SupabaseClien
       depositLinks: depositLinks.filter(link => link.invoiceNo === tNo),
       transaction_date: grp.transaction_date,
       customer: grp.customer,
+      crm_cosmo: grp.crm_cosmo,
       salesman: grp.salesman,
       location: grp.location,
       item_count: grp.items.length,
@@ -200,7 +218,7 @@ export async function getInvoices(month: string, year: number, db: SupabaseClien
       total_disc: totalDisc,
       total_net: totalNet,
       total_comm: totalComm,
-      meta: metaMap.get(tNo) || defaultMeta,
+      meta: withServedBy(metaMap.get(tNo) || defaultMeta, grp.in_charge),
       items: grp.items,
     });
   });

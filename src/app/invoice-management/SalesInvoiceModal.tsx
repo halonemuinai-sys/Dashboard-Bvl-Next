@@ -298,6 +298,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                 <h3 className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-800"><UserRound className="h-4 w-4 text-indigo-500" /> Customer & advisor</h3>
                 <dl className="divide-y divide-indigo-100/60">
                   <div className={detailClass}><dt className={labelClass}>Customer</dt><dd className={valueClass}>{activeInvoice.customer || 'Walk-in Guest'}</dd></div>
+                  <div className={detailClass}><dt className={labelClass}>CRM Cosmo</dt><dd className={valueClass}>{activeInvoice.crm_cosmo ? <span className="font-mono">{activeInvoice.crm_cosmo}</span> : '—'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Phone number</dt><dd className={valueClass}>{clientPhone || '\u2014'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Customer advisor</dt><dd className={valueClass}>{activeInvoice.salesman || '\u2014'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Served by</dt><dd className={valueClass}>{activeInvoice.meta.served_by || '\u2014'}<button type="button" onClick={() => setIsMetaModalOpen(true)} className="no-print-area ml-2 cursor-pointer rounded text-[10px] font-semibold text-indigo-600 hover:underline">{activeInvoice.meta.served_by ? 'Edit' : 'Add'}</button></dd></div>
@@ -330,7 +331,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                           <td className="px-3 py-4 text-center font-semibold tabular-nums">{item.qty}</td>
                           <td className="whitespace-nowrap px-3 py-4 text-right tabular-nums">Rp {formatCurrency(unitPrice)}</td>
                           <td className="whitespace-nowrap px-3 py-4 text-right tabular-nums">
-                            {item.val_disc > 0 ? <><div className="font-medium text-rose-600">-Rp {formatCurrency(item.val_disc)}</div>{item.disc_pct > 0 && <div className="mt-1 text-[10px] text-rose-500">{item.disc_pct}%</div>}</> : <span className="text-slate-400">&mdash;</span>}
+                            {item.val_disc > 0 ? <><div className="font-medium text-rose-600">-Rp {formatCurrency(item.val_disc)}</div>{item.disc_pct > 0 && <div className="mt-1 text-[10px] text-rose-500">{(item.disc_pct * 100).toFixed(2)}%</div>}</> : <span className="text-slate-400">&mdash;</span>}
                           </td>
                           <td className="whitespace-nowrap bg-teal-50/30 px-3 py-4 text-right font-bold tabular-nums text-slate-900">Rp {formatCurrency(item.net_sales)}</td>
                         </tr>
