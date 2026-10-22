@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 
 // ==========================================
 // --- SYNC SERVICE ---
@@ -31,6 +32,9 @@ interface ApiSalesItem {
   tax: number | string;
   subTotaltax?: number | string;
   subTotalTax?: number | string;
+  // Provided by the POS but still empty (null) as of Oct 2026; stored as soon as it is filled.
+  customerCode?: string | null;
+  inCharge?: string | null;
 }
 
 interface SyncResult {
@@ -38,6 +42,7 @@ interface SyncResult {
   rawInserted: number;     // Baris baru di bvlgari_sales
   normalizedInserted: number; // Baris baru di clean_master
   skippedDuplicates: number;
+  backfilledRows?: number;  // Existing rows that received in_charge / customer_code from the POS
   error?: string;
 }
 
@@ -133,13 +138,17 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
     }
 
     // 4. Cek transaksi yang sudah ada di bvlgari_sales (deduplikasi)
-    const { data: existingRaw } = await supabase
+    // Paginated: a month above the 1,000-row API page must not look "new" and be inserted twice.
+    const existingRaw = await fetchAllRows<{ transaction_no: string }>((from, to) => supabase
       .from('bvlgari_sales')
       .select('transaction_no')
       .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate);
+      .lte('transaction_date', endDate)
+      .order('id')
+      .range(from, to));
 
-    const existingTxSet = new Set((existingRaw || []).map(r => r.transaction_no));
+    const existingTxSet = new Set(existingRaw.map(r => r.transaction_no));
+    const backfilledRows = await backfillPosFields(apiData, existingTxSet);
 
     // 5. Process & Calculate Net Sales (porting dari GAS line 52-97)
     const rawRows: any[] = [];
@@ -197,12 +206,14 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
         price: unitPrice,
         sub_total_discount: discount,
         sub_total_tax: taxAmount,
-        net_sales: netSales
+        net_sales: netSales,
+        customer_code: itm.customerCode?.trim() || null,
+        in_charge: itm.inCharge?.trim() || null
       });
     }
 
     if (rawRows.length === 0) {
-      return { success: true, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: skipped };
+      return { success: true, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: skipped, backfilledRows };
     }
 
     // 5. Insert ke bvlgari_sales (raw data)
@@ -265,7 +276,9 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
           cost: cost,
           net_sales: row.net_sales,
           type: 'Regular',
-          catalogue_code: row.catalogue_code
+          catalogue_code: row.catalogue_code,
+          customer_code: row.customer_code,
+          in_charge: row.in_charge
         };
       });
 
@@ -280,7 +293,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
       normalizedInserted += batch.length;
     }
 
-    return { success: true, rawInserted, normalizedInserted, skippedDuplicates: skipped };
+    return { success: true, rawInserted, normalizedInserted, skippedDuplicates: skipped, backfilledRows };
 
   } catch (err: any) {
     return { success: false, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: 0, error: err.message || 'Unknown error' };
@@ -294,3 +307,38 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
 export const syncService = {
   syncSalesData
 };
+
+/**
+ * Fills in_charge / customer_code on invoices that were synced before the POS started sending them.
+ * Only empty (NULL) columns are written, so a re-sync never overwrites a value already stored.
+ */
+export async function backfillPosFields(apiData: ApiSalesItem[], existingTxSet: Set<string>): Promise<number> {
+  const fields = [
+    { api: 'inCharge', column: 'in_charge' },
+    { api: 'customerCode', column: 'customer_code' },
+  ] as const;
+  let updated = 0;
+  for (const field of fields) {
+    // value -> invoice numbers, so one UPDATE covers every invoice with the same value
+    const byValue = new Map<string, Set<string>>();
+    for (const item of apiData) {
+      const value = item[field.api]?.trim();
+      if (!value || !item.transactionNo || !existingTxSet.has(item.transactionNo)) continue;
+      (byValue.get(value) || byValue.set(value, new Set()).get(value)!).add(item.transactionNo);
+    }
+    for (const [value, numbers] of byValue) {
+      const list = [...numbers];
+      for (let i = 0; i < list.length; i += 200) {
+        const batch = list.slice(i, i + 200);
+        const [raw, clean] = await Promise.all([
+          supabase.from('bvlgari_sales').update({ [field.column]: value }).in('transaction_no', batch).is(field.column, null).select('id'),
+          supabase.from('clean_master').update({ [field.column]: value }).in('trans_no', batch).is(field.column, null).select('id'),
+        ]);
+        if (raw.error) throw new Error(`bvlgari_sales ${field.column} backfill: ${raw.error.message}`);
+        if (clean.error) throw new Error(`clean_master ${field.column} backfill: ${clean.error.message}`);
+        updated += (raw.data?.length || 0) + (clean.data?.length || 0);
+      }
+    }
+  }
+  return updated;
+}

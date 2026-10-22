@@ -59,6 +59,7 @@ async function handleCronSync(request: Request) {
       rawInserted: result.rawInserted,
       normalizedInserted: result.normalizedInserted,
       skippedDuplicates: result.skippedDuplicates,
+      backfilledRows: result.backfilledRows ?? 0,
     }, { headers: corsHeaders });
 
   } catch (error: any) {
