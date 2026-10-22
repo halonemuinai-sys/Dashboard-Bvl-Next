@@ -1,4 +1,5 @@
 import type { InvoiceHeader } from '@/services/dashboard/invoiceService';
+import { crmCosmoId } from './crm-cosmo';
 
 export const INVOICE_FILTER_TYPES = ['all', 'multi', 'single', 'has_cb', 'missing_cb'] as const;
 export type InvoiceFilterType = typeof INVOICE_FILTER_TYPES[number];
@@ -20,7 +21,7 @@ export function filterInvoices(invoices: InvoiceHeader[], { store, search = '', 
     if (filterType === 'single' && invoice.item_count > 1) return false;
     if (filterType === 'has_cb' && !invoice.meta.cash_bill_no) return false;
     if (filterType === 'missing_cb' && invoice.meta.cash_bill_no) return false;
-    return !q || [invoice.trans_no, invoice.customer, invoice.crm_cosmo, invoice.salesman, invoice.meta.cash_bill_no, invoice.meta.dwa_no, invoice.meta.discount_given_reason, invoice.meta.after_sales_support,
+    return !q || [invoice.trans_no, invoice.customer, crmCosmoId(invoice), invoice.salesman, invoice.meta.cash_bill_no, invoice.meta.dwa_no, invoice.meta.discount_given_reason, invoice.meta.after_sales_support,
       ...invoice.items.flatMap(item => [item.collection, item.catalogue_code, item.sap_code])].some(value => value?.toLowerCase().includes(q));
   });
 }

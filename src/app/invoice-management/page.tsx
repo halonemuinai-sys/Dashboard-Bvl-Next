@@ -28,6 +28,7 @@ import {
   deleteInvoice,
 } from '@/services/dashboard/invoiceService';
 import InvoiceTable from './InvoiceTable';
+import { crmCosmoId } from '@/lib/crm-cosmo';
 import InvoiceOverview from './InvoiceOverview';
 import InvoiceDepositModal from './InvoiceDepositModal';
 import InvoiceMetaModal from './InvoiceMetaModal';
@@ -415,7 +416,7 @@ function InvoiceManagementContent() {
           q(inv.transaction_date ? inv.transaction_date.slice(0, 10) : ''),
           q(inv.meta.cash_bill_no),
           q(inv.customer),
-          q(inv.crm_cosmo),
+          q(crmCosmoId(inv)),
           q(inv.salesman),
           q(inv.meta.served_by),
           q(inv.meta.entitle),

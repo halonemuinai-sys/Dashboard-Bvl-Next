@@ -1,5 +1,6 @@
 ﻿import ExcelJS from 'exceljs';
 import type { InvoiceHeader } from '@/services/dashboard/invoiceService';
+import { crmCosmoId } from '@/lib/crm-cosmo';
 import type { InvoiceReportFilters } from '@/lib/invoice-report-filters';
 
 export interface CrmReportProfile { nama_lengkap: string | null; no_hp: string | null; kewarganegaraan: string | null; status_pelanggan: string | null }
@@ -144,7 +145,8 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
       };
       for (const [col, value] of Object.entries(values)) ws.getCell(`${col}${row}`).value = value;
       // E "Cosmo CRM ID" comes from the POS customerCode; left blank until the POS sends it.
-      if (invoice.crm_cosmo) ws.getCell(`E${row}`).value = invoice.crm_cosmo;
+      const cosmoId = crmCosmoId(invoice);
+      if (cosmoId) ws.getCell(`E${row}`).value = cosmoId;
       // Counts and invoice-level receipts are written only on the first item.
       if (index === 0) {
         const linkedDeposits = invoice.depositLinks || [];

@@ -49,6 +49,7 @@ function InvoiceDetailsEditor({
   const [systemSuffix] = useState(() => raw.slice(markerIndex).trim());
   const [cashBillNo, setCashBillNo] = useState(invoice.meta.cash_bill_no || '');
   const [dwaNo, setDwaNo] = useState(invoice.meta.dwa_no || '');
+  const [crmCosmo, setCrmCosmo] = useState(invoice.meta.crm_cosmo_id || '');
   const [discountReason, setDiscountReason] = useState(invoice.meta.discount_given_reason || '');
   const [afterSales, setAfterSales] = useState(invoice.meta.after_sales_support || '');
   const [otherRemarks, setOtherRemarks] = useState(() => raw.slice(0, markerIndex).trim());
@@ -126,6 +127,7 @@ function InvoiceDetailsEditor({
       const updated = await saveInvoiceMeta(invoice.trans_no, {
         cash_bill_no: cashBillNo.trim(),
         dwa_no: dwaNo.trim(),
+        crm_cosmo_id: crmCosmo.trim(),
         discount_given_reason: discountReason.trim(),
         after_sales_support: afterSales.trim(),
         other_remarks: [otherRemarks.trim(), systemSuffix].filter(Boolean).join('\n'),
@@ -191,6 +193,12 @@ function InvoiceDetailsEditor({
                   <div>
                     <label htmlFor="invoice-details-dwa" className={labelClass}>DWA approval reference</label>
                     <input id="invoice-details-dwa" value={dwaNo} onChange={event => setDwaNo(event.target.value)} placeholder="e.g. DWA-042/2026" className={cn(inputClass, 'font-mono')} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="invoice-details-crm-cosmo" className={labelClass}>CRM Cosmo ID</label>
+                    <input id="invoice-details-crm-cosmo" value={crmCosmo} onChange={event => setCrmCosmo(event.target.value)}
+                      placeholder={invoice.crm_cosmo ? `From POS: ${invoice.crm_cosmo}` : 'Customer ID in CRM Cosmo'} className={cn(inputClass, 'font-mono')} />
+                    <p className="mt-1.5 text-[11px] text-slate-400">Leave blank to use the ID sent by the POS.</p>
                   </div>
                 </div>
               </section>

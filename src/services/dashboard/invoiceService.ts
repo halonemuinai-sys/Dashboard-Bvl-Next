@@ -34,6 +34,8 @@ export interface InvoiceMeta {
   other_remarks: string;
   entitle?: string;
   served_by?: string;
+  /** CRM Cosmo ID typed in Invoice Management. Wins over the POS customerCode. */
+  crm_cosmo_id?: string;
   /** Where served_by came from: typed in Invoice Management, or the POS "inCharge" field. */
   served_by_source?: 'manual' | 'pos';
   payment_splits?: unknown;
@@ -46,7 +48,7 @@ export interface InvoiceHeader {
   trans_no: string;
   transaction_date: string;
   customer: string;
-  /** CRM Cosmo customer code from the POS (customerCode); empty until the POS sends it. */
+  /** CRM Cosmo customer code from the POS (customerCode); empty until the POS sends it. Read via crmCosmoId(). */
   crm_cosmo: string;
   salesman: string;
   location: string;
@@ -113,6 +115,7 @@ export async function getInvoices(month: string, year: number, db: SupabaseClien
         other_remarks: m.other_remarks || '',
         entitle: m.entitle || '',
         served_by: m.served_by || '',
+        crm_cosmo_id: m.crm_cosmo_id || '',
         payment_splits: m.payment_splits,
         updated_by: m.updated_by || '',
         updated_at: m.updated_at || '',

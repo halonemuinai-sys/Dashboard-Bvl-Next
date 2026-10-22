@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
-import { InvoiceHeader } from '@/services/dashboard/invoiceService';
+import type { InvoiceHeader } from '@/services/dashboard/invoiceService';
+import { crmCosmoId } from '@/lib/crm-cosmo';
 
 interface Props {
   invoices: InvoiceHeader[];
@@ -270,7 +271,7 @@ export default function InvoiceTable({
                     {/* Customer */}
                     <td className="min-w-44 max-w-56 px-4 py-4" title={`${inv.customer} · ${inv.salesman}`}>
                       <span className="block truncate font-semibold text-slate-800">{inv.customer || '—'}</span>
-                      {inv.crm_cosmo && <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-500" title="CRM Cosmo">CRM Cosmo · {inv.crm_cosmo}</span>}
+                      {crmCosmoId(inv) && <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-500" title="CRM Cosmo ID">CRM Cosmo · {crmCosmoId(inv)}</span>}
                       <span className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-400"><User size={11} />{inv.salesman || 'Unassigned'}</span>
                     </td>
 

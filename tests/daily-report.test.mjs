@@ -14,6 +14,13 @@ function loadTS(relative) {
   const compiledModule = new Module(filename);
   compiledModule.filename = filename;
   compiledModule.paths = Module._nodeModulePaths(path.dirname(filename));
+  // Resolve project TS imports ('@/…' and relative) the same way the app does.
+  const realRequire = compiledModule.require.bind(compiledModule);
+  compiledModule.require = id => {
+    if (id.startsWith('@/')) return loadTS(path.join('src', id.slice(2)) + '.ts');
+    if (id.startsWith('.') && fs.existsSync(path.resolve(path.dirname(filename), id) + '.ts')) return loadTS(path.resolve(path.dirname(filename), id) + '.ts');
+    return realRequire(id);
+  };
   compiledModule._compile(compiled, filename);
   return compiledModule.exports;
 }

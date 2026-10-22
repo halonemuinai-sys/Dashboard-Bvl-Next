@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, FileText, Copy, Check, Building2, UserRound, CreditCard, FileEdit, Package, Link2, ArrowUpRight } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
-import { InvoiceHeader, InvoiceMeta } from '@/services/dashboard/invoiceService';
+import type { InvoiceHeader, InvoiceMeta } from '@/services/dashboard/invoiceService';
+import { crmCosmoId } from '@/lib/crm-cosmo';
 import { extractPaymentAndVerification } from '@/services/dashboard/paymentEngine';
 import { supabase } from '@/lib/supabase';
 import { useUserAccess } from '@/lib/user-access-context';
@@ -298,7 +299,6 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                 <h3 className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-800"><UserRound className="h-4 w-4 text-indigo-500" /> Customer & advisor</h3>
                 <dl className="divide-y divide-indigo-100/60">
                   <div className={detailClass}><dt className={labelClass}>Customer</dt><dd className={valueClass}>{activeInvoice.customer || 'Walk-in Guest'}</dd></div>
-                  <div className={detailClass}><dt className={labelClass}>CRM Cosmo</dt><dd className={valueClass}>{activeInvoice.crm_cosmo ? <span className="font-mono">{activeInvoice.crm_cosmo}</span> : '—'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Phone number</dt><dd className={valueClass}>{clientPhone || '\u2014'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Customer advisor</dt><dd className={valueClass}>{activeInvoice.salesman || '\u2014'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Served by</dt><dd className={valueClass}>{activeInvoice.meta.served_by || '\u2014'}<button type="button" onClick={() => setIsMetaModalOpen(true)} className="no-print-area ml-2 cursor-pointer rounded text-[10px] font-semibold text-indigo-600 hover:underline">{activeInvoice.meta.served_by ? 'Edit' : 'Add'}</button></dd></div>
@@ -349,6 +349,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                   <button type="button" onClick={() => setIsMetaModalOpen(true)} className="no-print-area cursor-pointer rounded-lg bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100">Edit details</button>
                 </div>
                 <dl className="divide-y divide-slate-100">
+                  <div className={detailClass}><dt className={labelClass}>CRM Cosmo ID</dt><dd className={cn(valueClass, 'font-mono')}>{crmCosmoId(activeInvoice) || '—'}{!activeInvoice.meta.crm_cosmo_id?.trim() && activeInvoice.crm_cosmo && <span className="ml-1.5 font-sans text-[10px] font-normal text-slate-400">from POS</span>}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Entitled advisor</dt><dd className={valueClass}>{activeInvoice.meta.entitle || '\u2014'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>DWA approval no.</dt><dd className={cn(valueClass, 'font-mono')}>{activeInvoice.meta.dwa_no || '\u2014'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Discount reason</dt><dd className={valueClass}>{activeInvoice.meta.discount_given_reason || '\u2014'}</dd></div>
