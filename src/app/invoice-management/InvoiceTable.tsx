@@ -107,7 +107,7 @@ export default function InvoiceTable({
   };
 
   return (
-    <div className="max-h-[70vh] overflow-auto overscroll-contain">
+    <div role="region" aria-label="Invoice table, scroll horizontally for all columns" tabIndex={0} className="w-full min-w-0 max-w-full max-h-[70vh] overflow-auto overscroll-x-contain focus-visible:outline-2 focus-visible:outline-blue-500">
       <table className="w-full text-left whitespace-nowrap">
         <thead className="sticky top-0 z-10 border-b border-blue-100 bg-linear-to-r from-slate-100 via-blue-50 to-slate-100 text-[10px] font-semibold uppercase tracking-wider text-slate-600 shadow-xs">
           <tr>

@@ -14,18 +14,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isStandalonePage = pathname === '/login' || pathname === '/m/login' || pathname.startsWith('/public');
 
   useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
     const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
+      const mobile = media.matches;
       setIsMobile(mobile);
       if (!mobile) {
-        setIsOpen(true); // Always keep sidebar open on desktop/laptop
+        setIsOpen(true);
       } else {
         setIsOpen(false); // Mobile drawer starts closed
       }
     };
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    // Preserve the user's collapsed sidebar while resizing within desktop mode.
+    media.addEventListener('change', checkMobile);
+    return () => media.removeEventListener('change', checkMobile);
   }, []);
 
   if (isStandalonePage) return <>{children}</>;
@@ -48,7 +50,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       />
 
       <main className={cn(
-        "flex-1 min-h-screen transition-all duration-300 w-full max-w-full flex flex-col",
+        "flex-1 min-w-0 min-h-screen transition-all duration-300 w-0 max-w-full flex flex-col",
         !isMobile ? (isOpen ? "md:ml-72" : "md:ml-20") : "ml-0"
       )}>
         {isMobile && (
@@ -72,7 +74,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           </div>
         )}
 
-        <div className={cn("flex-1", isMobile ? "p-4" : "p-8")}>
+        <div className={cn("flex-1 min-w-0 w-full max-w-full", isMobile ? "p-4" : "p-8")}>
           {children}
         </div>
       </main>

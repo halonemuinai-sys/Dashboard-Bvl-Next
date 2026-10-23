@@ -30,6 +30,7 @@ import {
 import InvoiceTable from './InvoiceTable';
 import { crmCosmoId } from '@/lib/crm-cosmo';
 import InvoiceOverview from './InvoiceOverview';
+import overviewStyles from './InvoiceOverview.module.css';
 import InvoiceDepositModal from './InvoiceDepositModal';
 import InvoiceMetaModal from './InvoiceMetaModal';
 import SalesInvoiceModal from './SalesInvoiceModal';
@@ -52,7 +53,7 @@ function InvoiceManagementContent() {
   const { assignedStore, isAdmin, userEmail, canAccess } = useUserAccess();
   // DP & SVC tab reuses the standalone page's panel; shown only to users allowed to open that page.
   const canViewDpsSvc = canAccess('/monthly-dps-svc');
-  const [activeView, setActiveView] = useState<'invoices' | 'dps'>('invoices');
+  const [activeView, setActiveView] = useState<'invoices' | 'DPS' | 'SVC' | 'PACK'>('invoices');
   const [dpsRefreshKey, setDpsRefreshKey] = useState(0);
   const isStoreScoped = Boolean(assignedStore && assignedStore !== 'ALL');
 
@@ -522,7 +523,7 @@ function InvoiceManagementContent() {
   }
 
   return (
-    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
+    <div className={cn(overviewStyles.page, 'space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12')}>
       {(loadError || dailyReportError) && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{loadError || dailyReportError}</div>}
       <InvoiceOverview
         month={month} year={year} months={MONTHS} store={(isStoreScoped ? assignedStore : filterLoc) || 'All stores'}
@@ -551,8 +552,8 @@ function InvoiceManagementContent() {
       )}
 
       {canViewDpsSvc && (
-        <div role="tablist" aria-label="Invoice views" className="flex border-b border-slate-200">
-          {([['invoices', 'Sales invoices'], ['dps', 'DP, Service & Packaging']] as const).map(([key, label]) => (
+        <div role="tablist" aria-label="Invoice views" className="flex flex-wrap border-b border-slate-200">
+          {([['invoices', 'Sales invoices'], ['DPS', 'Down Payment'], ['SVC', 'Service'], ['PACK', 'Packaging']] as const).map(([key, label]) => (
             <button key={key} type="button" role="tab" aria-selected={activeView === key} onClick={() => setActiveView(key)}
               className={cn('px-5 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors cursor-pointer',
                 activeView === key ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700')}>
@@ -562,14 +563,14 @@ function InvoiceManagementContent() {
         </div>
       )}
 
-      {canViewDpsSvc && activeView === 'dps' && (
-        <DpSvcPanel month={month} year={year} embedded refreshKey={dpsRefreshKey} />
+      {canViewDpsSvc && activeView !== 'invoices' && (
+        <DpSvcPanel key={activeView} fixedTab={activeView} month={month} year={year} embedded refreshKey={dpsRefreshKey} />
       )}
 
       {/* Main Table Container */}
       {activeView === 'invoices' && <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-          <div><div className="flex items-center gap-2.5"><h2 className="text-sm font-bold text-slate-900">Invoice register</h2><span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500">{filtered.length} invoices</span></div><p className="mt-1 text-xs text-slate-400">Expand an invoice to review its items, payments and supporting details.</p></div>
+          <div><div className="flex items-center gap-2.5"><h2 className="text-sm font-bold text-slate-900">Invoice register</h2><span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500">{filtered.length} invoices</span></div><p className="mt-1 text-xs text-slate-400">Expand an invoice for details. Scroll the table sideways to see all columns.</p></div>
           <div className="flex items-center gap-1">
             <button type="button" onClick={expandAllMultiItems} title="Expand invoices with multiple items" className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-blue-600"><ChevronDown size={14} />Expand multi-item</button>
             <button type="button" onClick={collapseAll} title="Collapse all invoice items" className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-blue-600"><ChevronUp size={14} />Collapse</button>
