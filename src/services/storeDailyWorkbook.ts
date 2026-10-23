@@ -134,39 +134,40 @@ export function buildStoreDailyWorkbook(template: ExcelJS.Workbook, report: Stor
   for (const merge of [...(sheet.model.merges || [])]) {
     if (Number(merge.split(':').pop()?.replace(/[A-Z]/g, '')) <= 3) sheet.unMergeCells(merge);
   }
-  for (let r = 1; r <= 3; r++) for (let c = 1; c <= 40; c++) { sheet.getCell(r, c).value = null; sheet.getCell(r, c).style = {}; }
-  mergeText(sheet, 1, 1, 40, `BVLGARI — ${options.store && options.store !== 'ALL' ? options.store : 'All stores'}`);
-  band(sheet, 1, 40); sheet.getRow(1).height = 36; sheet.getCell('A1').font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+  for (let r = 1; r <= 3; r++) for (let c = 1; c <= 38; c++) { sheet.getCell(r, c).value = null; sheet.getCell(r, c).style = {}; }
+  mergeText(sheet, 1, 1, 38, `BVLGARI — ${options.store && options.store !== 'ALL' ? options.store : 'All stores'}`);
+  band(sheet, 1, 38); sheet.getRow(1).height = 36; sheet.getCell('A1').font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
   const period = new Date(Date.UTC(options.year, options.month - 1, 1)).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-  mergeText(sheet, 2, 1, 40, `Daily Sales Transaction Report | ${period} | Amounts in IDR`); sheet.getRow(2).height = 28; sheet.getCell('A2').font = { name: 'Calibri', size: 12, bold: true };
+  mergeText(sheet, 2, 1, 38, `Daily Sales Transaction Report | ${period} | Amounts in IDR`); sheet.getRow(2).height = 28; sheet.getCell('A2').font = { name: 'Calibri', size: 12, bold: true };
   mergeText(sheet, 3, 1, 20, 'Full month / selected store — screen search and invoice filters are not applied');
-  mergeText(sheet, 3, 21, 40, 'Achievement = Net Sales / 1.11');
+  mergeText(sheet, 3, 21, 38, 'Achievement = Net Sales / 1.11');
   sheet.getRow(3).height = 32;
   sheet.getCell('A3').alignment = { wrapText: true }; sheet.getCell('U3').alignment = { wrapText: true };
   // The summary has its own compact sheet; freeze the ledger column headers.
   sheet.views = [{ state: 'frozen', xSplit: 3, ySplit: header, showGridLines: false }];
   sheet.headerFooter.oddFooter = 'Created by Aris Setiyono | &P of &N';
   ['Sales Type', 'Sales Location', 'Advisor Home', 'Crossing'].forEach((label, index) => {
-    const col = index + 37;
+    // Starts right after DS Other Remarks (AH = 34): AI Sales Type, AJ Sales Location, AK Advisor Home, AL Crossing.
+    const col = index + 35;
     sheet.getColumn(col).width = index === 0 ? 14 : 25;
     sheet.getCell(header, col).value = label;
-    sheet.getCell(header, col).style = structuredClone(sheet.getCell(header, 36).style);
+    sheet.getCell(header, col).style = structuredClone(sheet.getCell(header, 34).style);
   });
   const lineMap = new Map(report.physical.map(line => [line.item.id, line]));
   let row = first;
   const sorted = [...report.invoices].sort((a, b) => a.transaction_date.localeCompare(b.transaction_date) || a.trans_no.localeCompare(b.trans_no));
   for (const invoice of sorted) for (const item of invoice.items) {
     const line = lineMap.get(item.id)!;
-    sheet.getCell(row, 37).value = line.type; sheet.getCell(row, 38).value = line.store; sheet.getCell(row, 39).value = line.home;
-    sheet.getCell(row, 40).value = line.crossing ? 'IN' : 'Local';
-    for (let col = 37; col <= 40; col++) sheet.getCell(row, col).alignment = { vertical: 'middle', wrapText: true };
-    sheet.getCell(row, 37).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: line.type === 'SMI' ? 'FFEDE9FE' : 'FFDCFCE7' } };
-    sheet.getCell(row, 37).font = { bold: true, color: { argb: line.type === 'SMI' ? 'FF6D28D9' : 'FF166534' } };
+    sheet.getCell(row, 35).value = line.type; sheet.getCell(row, 36).value = line.store; sheet.getCell(row, 37).value = line.home;
+    sheet.getCell(row, 38).value = line.crossing ? 'IN' : 'Local';
+    for (let col = 35; col <= 38; col++) sheet.getCell(row, col).alignment = { vertical: 'middle', wrapText: true };
+    sheet.getCell(row, 35).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: line.type === 'SMI' ? 'FFEDE9FE' : 'FFDCFCE7' } };
+    sheet.getCell(row, 35).font = { bold: true, color: { argb: line.type === 'SMI' ? 'FF6D28D9' : 'FF166534' } };
     row++;
   }
   const last = Math.max(first, row - 1);
-  sheet.autoFilter = `A${header}:AN${last}`;
-  sheet.pageSetup.printArea = `A1:AN${Math.max(first + 1, row) + 2}`;
+  sheet.autoFilter = `A${header}:AL${last}`;
+  sheet.pageSetup.printArea = `A1:AL${Math.max(first + 1, row) + 2}`;
   // Required tabs are kept before the optional POS split detail tab.
   const paymentSheet = workbook.getWorksheet('Payment Details');
   const paymentModel = paymentSheet?.model;

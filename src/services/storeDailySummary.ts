@@ -57,7 +57,7 @@ export function populateStoreSummary(sheet: ExcelJS.Worksheet, report: StoreRepo
       let formula: string;
       if (row === 6) {
         formula = key === 'regular' || key === 'smi'
-          ? `SUMIFS('DS'!S${ds.first}:S${ds.last},'DS'!AK${ds.first}:AK${ds.last},"${key === 'smi' ? 'SMI' : 'Regular'}")`
+          ? `SUMIFS('DS'!S${ds.first}:S${ds.last},'DS'!AI${ds.first}:AI${ds.last},"${key === 'smi' ? 'SMI' : 'Regular'}")`
           : `SUM('DS'!${key === 'qty' ? 'P' : 'S'}${ds.first}:${key === 'qty' ? 'P' : 'S'}${ds.last})`;
       } else if (row === 7 || row === 8) {
         const name = row === 7 ? 'IN' : 'OUT', range = row === 7 ? incoming : outgoing;

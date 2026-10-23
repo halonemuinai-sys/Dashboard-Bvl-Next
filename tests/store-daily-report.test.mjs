@@ -95,7 +95,7 @@ test('monthly workbook retains template details, emits all requested tabs and re
   // DS is now a pure ledger: header on row 6, first transaction on row 7.
   const first = 7;
   assert.equal(ds.getCell(`C${first}`).value, 'INV-1');
-  assert.equal(ds.getCell(`AK${first + 1}`).value, 'SMI');
+  assert.equal(ds.getCell(`AI${first + 1}`).value, 'SMI');
   assert.equal(ds.getCell(`AC${first}`).formula, `S${first}/1.11`);
   assert.equal(ds.getCell(`S${first + 4}`).result, 320);
   assert.equal(ds.getCell(`V${first}`).value, 100);

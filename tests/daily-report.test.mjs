@@ -64,6 +64,17 @@ test('uses invoice metadata, totals and real commission; preserves zero quantiti
   const result = buildDailySalesWorkbook(template, [inv], [profile], { month: 9, year: 2026, store: 'Plaza Indonesia' });
   const sheet = result.workbook.getWorksheet('DS');
   assert.equal(sheet.getCell('B7').value, 'CB-001');
+  // After Sales Support and DWA are not exported; Other Remarks moves to AH.
+  const headers = Array.from({ length: 40 }, (_, i) => String(sheet.getRow(6).getCell(i + 1).value ?? '').trim());
+  assert.ok(!headers.includes('After Sales Support') && !headers.includes('DWA'), 'dropped columns are gone');
+  assert.equal(sheet.getCell('AH6').value, 'Other Remarks');
+  assert.equal(sheet.getCell('AE4').value, null, 'HARUS DI ISI marker removed');
+  // Invoice Management inputs are blue; synced POS values keep the template colour.
+  assert.equal(sheet.getCell('B7').font?.color?.argb, 'FF2563EB');
+  assert.equal(sheet.getCell('T7').font?.color?.argb, 'FF2563EB');
+  assert.equal(sheet.getCell('W7').font?.color?.argb, 'FF2563EB');
+  assert.notEqual(sheet.getCell('C7').font?.color?.argb, 'FF2563EB');
+  assert.notEqual(sheet.getCell('S7').font?.color?.argb, 'FF2563EB');
   assert.equal(sheet.getCell('N7').value, 'SERIAL-1');
   assert.equal(sheet.getCell('Q7').value, 222);
   assert.equal(sheet.getCell('S7').value, 200);

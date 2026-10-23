@@ -26,6 +26,19 @@ export function summarizeReportPayments(payments: ReportPayment[]) {
     cardType: unique(cardPayments.map(payment => payment.cardType)),
   };
 }
+// The template's After Sales Support (AH) and DWA (AI) columns are not exported; every template
+// column after them moves two places left, so Other Remarks lands in AH.
+const TEMPLATE_COLUMNS = 36;
+const DROPPED_TEMPLATE_COLUMNS = new Set([34, 35]);
+export const DS_LAST_COLUMN = 'AH';
+const outputColumn = (templateCol: number) => (templateCol < 34 ? templateCol : templateCol - DROPPED_TEMPLATE_COLUMNS.size);
+const columnNumber = (letters: string) => letters.split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+const columnLetters = (n: number): string => (n > 26 ? columnLetters(Math.floor((n - 1) / 26)) : '') + String.fromCharCode(65 + ((n - 1) % 26));
+const keptTemplateColumns = Array.from({ length: TEMPLATE_COLUMNS }, (_, i) => i + 1).filter(col => !DROPPED_TEMPLATE_COLUMNS.has(col));
+
+/** Font colour for values typed in Invoice Management (blue-600). */
+export const MANUAL_INPUT_COLOR = 'FF2563EB';
+
 export const SA_INITIALS: Record<string, string> = { AJENG: 'AJ', SYANDY: 'SD', SISKA: 'SK', HERDY: 'HS', DIAN: 'DP', IRMA: 'IR', JOJO: 'JJ', ARIF: 'AR', ARI: 'AK', ALVIN: 'AL', MONIQ: 'MM', MONICA: 'MM' };
 export function getSaInitial(name: string | null | undefined): string {
   const words = (name || '').trim().toUpperCase().split(/\s+/).filter(Boolean);
@@ -64,19 +77,28 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
   const headerRow = 6 + offset;
   const dataStart = headerRow + 1;
   const layoutRow = (row: number) => row > 3 ? row + offset : row;
-  for (let col = 1; col <= 36; col++) ws.getColumn(col).width = original.getColumn(col).width || 14;
+  for (const col of keptTemplateColumns) ws.getColumn(outputColumn(col)).width = original.getColumn(col).width || 14;
   for (let row = 1; row <= 6; row++) {
     ws.getRow(layoutRow(row)).height = original.getRow(row).height;
-    for (let col = 1; col <= 36; col++) {
+    for (const col of keptTemplateColumns) {
       const source = original.getCell(row, col);
-      const cell = ws.getCell(layoutRow(row), col);
+      const cell = ws.getCell(layoutRow(row), outputColumn(col));
       cell.style = structuredClone(source.style);
       if (!source.isMerged || source.address === source.master.address) cell.value = source.value;
     }
   }
   for (const merge of original.model.merges || []) {
     const end = Number(merge.split(':').pop()?.replace(/[A-Z]/g, ''));
-    if (end <= 6) ws.mergeCells(merge.replace(/(\d+)/g, value => String(layoutRow(Number(value)))));
+    if (end > 6) continue;
+    const refs = merge.split(':');
+    if (refs.some(ref => DROPPED_TEMPLATE_COLUMNS.has(columnNumber(ref.replace(/\d+/g, ''))))) continue;
+    ws.mergeCells(refs.map(ref => columnLetters(outputColumn(columnNumber(ref.replace(/\d+/g, '')))) + layoutRow(Number(ref.replace(/[A-Z]+/g, '')))).join(':'));
+  }
+  // Served By and Entitle are now filled from the POS / Invoice Management, so the template's
+  // red "HARUS DI ISI" (must fill) markers above them are removed.
+  for (const col of ['AE', 'AG']) {
+    const marker = ws.getCell(`${col}${layoutRow(4)}`);
+    if (String(marker.value || '').toUpperCase().includes('HARUS DI ISI')) { marker.value = null; marker.fill = { type: 'pattern', pattern: 'none' }; }
   }
   ws.getCell('A1').value = `BVLGARI – ${options.store && options.store !== 'ALL' ? options.store : 'All stores'}`;
   ws.getCell('A2').value = 'Daily Sales Transaction Report';
@@ -130,7 +152,7 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
       const item = invoice.items[index];
       const date = item.transaction_date.slice(0, 10);
       if (date !== currentDate) { finishDate(); currentDate = date; dateStart = row; dayTotal = 0; }
-      for (let col = 1; col <= 36; col++) ws.getCell(row, col).style = structuredClone(original.getCell(7, col).style);
+      for (const col of keptTemplateColumns) ws.getCell(row, outputColumn(col)).style = structuredClone(original.getCell(7, col).style);
       ws.getRow(row).height = 28;
       ws.getCell(`A${row}`).value = new Date(`${date}T00:00:00Z`);
       ws.getCell(`A${row}`).numFmt = 'dd mmm yyyy';
@@ -140,8 +162,9 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
         M: item.catalogue_code, N: item.serial_no || '', O: item.description || '',
         P: amount(item.qty), Q: amount(item.gross_sales), S: amount(item.net_sales), T: invoice.meta.discount_given_reason || '',
         // AE Served By and AG Entitle are manual Data Penunjang inputs; AF CA is the API salesman.
-        AB: amount(item.comm), AE: invoice.meta.served_by || '', AF: invoice.salesman || '', AG: invoice.meta.entitle || '', AH: invoice.meta.after_sales_support || '', AI: invoice.meta.dwa_no || '',
-        AJ: [invoice.meta.other_remarks?.split('[PAYMENT_SPLITS]:')[0]?.split('[FINANCE_VERIFY]:')[0]?.trim(), !options.store || options.store === 'ALL' ? `Store: ${invoice.location}` : ''].filter(Boolean).join(' | '),
+        AB: amount(item.comm), AE: invoice.meta.served_by || '', AF: invoice.salesman || '', AG: invoice.meta.entitle || '',
+        // AH Other Remarks (After Sales Support and DWA are no longer exported).
+        AH: [invoice.meta.other_remarks?.split('[PAYMENT_SPLITS]:')[0]?.split('[FINANCE_VERIFY]:')[0]?.trim(), !options.store || options.store === 'ALL' ? `Store: ${invoice.location}` : ''].filter(Boolean).join(' | '),
       };
       for (const [col, value] of Object.entries(values)) ws.getCell(`${col}${row}`).value = value;
       // E "Cosmo CRM ID" comes from the POS customerCode; left blank until the POS sends it.
@@ -181,6 +204,14 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
       addTotal('AC', net / 1.11); dayTotal += net / 1.11;
       for (const col of ['Q', 'S', 'V', 'W', 'AB', 'AC', 'AD']) ws.getCell(`${col}${row}`).numFmt = '#,##0.00;[Red](#,##0.00);–';
       ws.getCell(`R${row}`).numFmt = '0.00"%"';
+      // Values typed in Invoice Management are shown in blue; POS / sync values keep the template colour.
+      const manual = ['B', 'T', 'AG', 'AH', 'U', 'V', 'W', 'Y', 'Z', 'AA'];
+      if (invoice.meta.crm_cosmo_id?.trim()) manual.push('E');
+      if (invoice.meta.served_by_source === 'manual') manual.push('AE');
+      for (const col of manual) {
+        const cell = ws.getCell(`${col}${row}`);
+        if (cell.value !== null && cell.value !== undefined && cell.value !== '') cell.font = { ...cell.font, color: { argb: MANUAL_INPUT_COLOR } };
+      }
       row++;
     }
   }
@@ -195,12 +226,12 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
   ws.getRow(row).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   ws.getRow(row).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF183E32' } };
   ws.getRow(row).height = 30;
-  ws.pageSetup.printArea = `A1:AJ${row}`;
-  ws.getCell(`A${row + 2}`).value = 'Blank fields indicate unavailable data. Sales and POS payments are recorded once; linked DP references do not add sales or payments. Created by Aris Setiyono.';
-  ws.mergeCells(`A${row + 2}:AJ${row + 2}`);
+  ws.pageSetup.printArea = `A1:${DS_LAST_COLUMN}${row}`;
+  ws.getCell(`A${row + 2}`).value = 'Blue text was entered in Invoice Management (cash bill, discount reason, DP links, POS payments and supporting details). Blank fields indicate unavailable data. Sales and POS payments are recorded once; linked DP references do not add sales or payments. Created by Aris Setiyono.';
+  ws.mergeCells(`A${row + 2}:${DS_LAST_COLUMN}${row + 2}`);
   ws.getCell(`A${row + 2}`).alignment = { wrapText: true, vertical: 'middle' };
   ws.getRow(row + 2).height = 32;
-  ws.pageSetup.printArea = `A1:AJ${row + 2}`;
+  ws.pageSetup.printArea = `A1:${DS_LAST_COLUMN}${row + 2}`;
 
   if (paymentRows.length) {
     const sheet = workbook.addWorksheet('Payment Details');
