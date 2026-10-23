@@ -165,6 +165,9 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
 
       const qtyRaw = parseInt(String(itm.qty));
       const qtyForCalc = (isNaN(qtyRaw) || qtyRaw === 0) ? 1 : qtyRaw;
+      // Packaging (PACK) lines are usually sent with qty 0; keep that instead of the 1 used for pricing.
+      const isPackaging = (itm.collectionCode || '').trim().toUpperCase().startsWith('PACK');
+      const storedQty = isPackaging ? (isNaN(qtyRaw) ? 0 : qtyRaw) : qtyForCalc;
       const unitPrice = parseFloat(String(itm.price)) || 0;
       const gross = qtyForCalc * unitPrice;
       const discount = parseFloat(String(itm.subTotalDiscount)) || 0;
@@ -205,7 +208,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
         catalogue_code: itm.catalogueCode || null,
         description: itm.description || null,
         collection: itm.collectionCode || null,
-        qty: qtyForCalc,
+        qty: storedQty,
         price: unitPrice,
         sub_total_discount: discount,
         sub_total_tax: taxAmount,

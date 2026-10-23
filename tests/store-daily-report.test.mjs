@@ -79,7 +79,7 @@ test('monthly workbook retains template details, emits all requested tabs and re
   ];
   const { workbook, totalNet } = buildStoreDailyWorkbook(template, report, [], raw, [{ transNo: 'DP-1', invoiceNo: 'PAST-INV', invoiceDate: '2026-10-03' }], { metrics: [], details: [] }, { month: 10, year: 2026, store: 'Plaza Indonesia' });
   assert.equal(totalNet, 320);
-  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), ['Summary', 'DS', 'DP', 'Service', 'IN', 'OUT', 'SPPR_', 'Payment Details']);
+  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), ['Summary', 'DS', 'DP', 'Service', 'Packaging', 'IN', 'OUT', 'SPPR_', 'Payment Details']);
   const reopened = new ExcelJS.Workbook(); await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
   // Store totals live on the compact Summary sheet: B=Net, C=Regular, D=SMI, F=Achievement.
   const summary = reopened.getWorksheet('Summary');
@@ -113,7 +113,7 @@ test('monthly workbook retains template details, emits all requested tabs and re
 test('empty monthly report still contains the summary and all detail sheets with zero summary totals', () => {
   const report = buildStoreReportData([], [], [], 'Plaza Indonesia');
   const { workbook } = buildStoreDailyWorkbook(template, report, [], [], [], { metrics: [], details: [] }, { month: 2, year: 2024, store: 'Plaza Indonesia' });
-  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), ['Summary', 'DS', 'DP', 'Service', 'IN', 'OUT', 'SPPR_']);
+  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), ['Summary', 'DS', 'DP', 'Service', 'Packaging', 'IN', 'OUT', 'SPPR_']);
   const summary = workbook.getWorksheet('Summary');
   assert.equal(summary.getCell('B10').result, 0);
   assert.equal(summary.getCell('C11').result, 0);
@@ -135,4 +135,33 @@ test('SPPR loader includes the full last day, paginates, scopes stores, and clas
   const report = await getAdvisorProductivity(10, 2026, db, 'Plaza Indonesia');
   assert.equal(report.details.length, 501); assert.equal(report.metrics[0].totalNetSales, 501); assert.equal(report.metrics[0].totalQty, 500);
   assert.equal(report.details[0].customerType, 'EXISTING'); assert.equal(report.details[1].customerType, 'NEW');
+});
+
+test('service center sheet reports RB service-counter SVC under its boutique', async () => {
+  const { serviceCenterStore, normalizeReportStore } = loadTS('src/lib/report-attribution.ts');
+  assert.equal(serviceCenterStore('RBPlaza Indonesia'), 'Plaza Indonesia');
+  assert.equal(serviceCenterStore('RBPlaza Senayan'), 'Plaza Senayan');
+  assert.equal(serviceCenterStore('RBBali'), 'Bali');
+  assert.equal(serviceCenterStore('RB Bali'), 'Bali');
+  assert.equal(serviceCenterStore('Plaza Senayan'), 'Plaza Senayan', 'boutique names are unchanged');
+  assert.equal(normalizeReportStore('RBPlaza Indonesia'), 'RBPlaza Indonesia', 'sales attribution is not affected');
+  const report = buildStoreReportData(invoices, homes, rotations, 'Plaza Indonesia');
+  const raw = [{ id: 'uuid-1', transaction_no: 'SVC-RB-1', transaction_date: '2026-10-05', customer_name: 'Repair Customer', salesman: 'A', location: 'RBPlaza Indonesia', collection: 'SVC', sap_code: 'SVC', catalogue_code: 'SVC', qty: 1, price: 500, sub_total_discount: 0, net_sales: 450, card_comm: 0, type: 'Regular' }];
+  const { workbook } = buildStoreDailyWorkbook(template, report, [], raw, [], { metrics: [], details: [] }, { month: 10, year: 2026, store: 'Plaza Indonesia' });
+  const service = workbook.getWorksheet('Service');
+  assert.equal(service.getCell('B6').value, 'SVC-RB-1');
+  assert.equal(service.getCell('E6').value, 'Plaza Indonesia');
+  assert.equal(service.getCell('M6').value, 450);
+});
+
+test('packaging (PACK) lines get their own tab with the quantity as sent', async () => {
+  const report = buildStoreReportData(invoices, homes, rotations, 'Plaza Indonesia');
+  const raw = [{ id: 'uuid-2', transaction_no: 'SI-PI/2611/1', transaction_date: '2026-11-02', customer_name: 'Gift Customer', salesman: 'A', location: 'Plaza Indonesia', collection: 'PACK', sap_code: 'BOX01', catalogue_code: 'BOX01', description: 'Gift box', qty: 0, price: 0, sub_total_discount: 0, net_sales: 0, card_comm: 0, type: 'Regular' }];
+  const { workbook, totalNet } = buildStoreDailyWorkbook(template, report, [], raw, [], { metrics: [], details: [] }, { month: 10, year: 2026, store: 'Plaza Indonesia' });
+  const pack = workbook.getWorksheet('Packaging');
+  assert.equal(pack.getCell('B6').value, 'SI-PI/2611/1');
+  assert.equal(pack.getCell('I6').value, 'Gift box');
+  assert.equal(pack.getCell('J6').value, 0);
+  assert.equal(totalNet, 320, 'packaging never changes the sales totals');
+  assert.equal(workbook.getWorksheet('Service').getCell('A6').value, 'No records for this period and store.');
 });

@@ -7,7 +7,7 @@ export interface CrossingFlow extends SalesTotals { home: string; store: string;
 export interface DpServiceRow {
   id: number; transaction_no: string; transaction_date: string; customer_name: string; salesman: string; location: string;
   collection: string; sap_code: string; catalogue_code: string; price: number; qty: number; sub_total_discount: number;
-  net_sales: number; card_comm: number; type: string;
+  net_sales: number; card_comm: number; type: string; description?: string;
 }
 export const sumReportLines = (lines: ReportLine[]): SalesTotals => lines.reduce((sum, { item, type }) => ({
   net: sum.net + Number(item.net_sales), regular: sum.regular + (type === 'Regular' ? Number(item.net_sales) : 0),

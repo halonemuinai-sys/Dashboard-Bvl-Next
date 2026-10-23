@@ -37,14 +37,17 @@ interface Row {
   type: string;
 }
 
-type Tab = 'DPS' | 'SVC';
+type Tab = 'DPS' | 'SVC' | 'PACK';
+// PACK may arrive with a suffix (e.g. "PACK,1"); every packaging line belongs to the PACK tab.
+const tabOf = (collection: string): string => ((collection || '').toUpperCase().startsWith('PACK') ? 'PACK' : collection);
 type SortKey = 'transaction_date' | 'net_sales' | 'gross_sales' | 'qty' | 'val_disc';
 type SortDir = 'asc' | 'desc';
 type Settlement = 'claimed' | 'unclaimed' | 'rb' | 'return' | 'unknown';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const PAGE_SIZES = [25, 50, 100];
-const TABS: { key: Tab; label: string }[] = [{ key: 'DPS', label: 'Down payment (DPS)' }, { key: 'SVC', label: 'Service (SVC)' }];
+const TABS: { key: Tab; label: string }[] = [{ key: 'DPS', label: 'Down payment (DPS)' }, { key: 'SVC', label: 'Service (SVC)' }, { key: 'PACK', label: 'Packaging (PACK)' }];
+const TAB_NOUN: Record<Tab, string> = { DPS: 'down payment', SVC: 'service', PACK: 'packaging' };
 const TYPE_PILL: Record<string, string> = {
   SMI: 'bg-blue-50 text-blue-700 ring-blue-200',
   Regular: 'bg-slate-100 text-slate-600 ring-slate-200',
@@ -193,12 +196,13 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
     }
   };
 
-  const tabRows = useMemo(() => rows.filter(r => r.collection === activeTab), [rows, activeTab]);
+  const tabRows = useMemo(() => rows.filter(r => tabOf(r.collection) === activeTab), [rows, activeTab]);
   const locations = useMemo(() => [...new Set(tabRows.map(r => r.location).filter(Boolean))].sort(), [tabRows]);
   const types = useMemo(() => [...new Set(tabRows.map(r => r.type).filter(Boolean))].sort(), [tabRows]);
   const tabCounts = useMemo(() => ({
     DPS: rows.filter(r => r.collection === 'DPS').length,
     SVC: rows.filter(r => r.collection === 'SVC').length,
+    PACK: rows.filter(r => tabOf(r.collection) === 'PACK').length,
   }), [rows]);
 
   const filtered = useMemo(() => {
@@ -319,7 +323,7 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
     { icon: Receipt, tone: 'bg-slate-100 text-slate-600', label: 'Transactions', value: kpi.transactions.toLocaleString('en-GB'), sub: `${kpi.qty.toLocaleString('en-GB')} pcs · ${kpi.customers.toLocaleString('en-GB')} customers` },
     activeTab === 'DPS'
       ? { icon: Link2, tone: 'bg-emerald-50 text-emerald-600', label: 'Claimed DP', value: `${kpi.claimed} / ${kpi.claimable}`, sub: <>Unclaimed <Amt value={kpi.unclaimedNet} />{kpi.rbCount > 0 && ` · ${kpi.rbCount} RB not claimable`}</> }
-      : { icon: Users, tone: 'bg-emerald-50 text-emerald-600', label: 'Customers served', value: kpi.customers.toLocaleString('en-GB'), sub: `${kpi.transactions.toLocaleString('en-GB')} service transactions` },
+      : { icon: Users, tone: 'bg-emerald-50 text-emerald-600', label: 'Customers served', value: kpi.customers.toLocaleString('en-GB'), sub: `${kpi.transactions.toLocaleString('en-GB')} ${TAB_NOUN[activeTab]} transactions` },
     canViewCardComm
       ? { icon: Percent, tone: 'bg-amber-50 text-amber-600', label: 'Card commission', value: <Amt value={kpi.comm} />, sub: `${kpi.withoutComm} rows without commission` }
       : { icon: Percent, tone: 'bg-rose-50 text-rose-600', label: 'Discount', value: <Amt value={kpi.disc} />, sub: kpi.gross > 0 ? `${((kpi.disc / kpi.gross) * 100).toFixed(1)}% of gross` : '0% of gross' },
@@ -488,7 +492,7 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
                         <><p className="text-sm font-semibold text-slate-700">No transactions match your filters</p>
                           <button type="button" onClick={clearFilters} className="mt-2 text-xs font-semibold text-blue-600 hover:underline">Clear filters</button></>
                       ) : (
-                        <><p className="text-sm font-semibold text-slate-700">No {activeTab === 'DPS' ? 'down payment' : 'service'} transactions for {month} {year}</p>
+                        <><p className="text-sm font-semibold text-slate-700">No {TAB_NOUN[activeTab]} transactions for {month} {year}</p>
                           <p className="mt-1 text-xs text-slate-400">Run Sync to API if transactions are expected for this period.</p></>
                       )}
                     </td></tr>

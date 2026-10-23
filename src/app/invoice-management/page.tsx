@@ -552,7 +552,7 @@ function InvoiceManagementContent() {
 
       {canViewDpsSvc && (
         <div role="tablist" aria-label="Invoice views" className="flex border-b border-slate-200">
-          {([['invoices', 'Sales invoices'], ['dps', 'DP & Service']] as const).map(([key, label]) => (
+          {([['invoices', 'Sales invoices'], ['dps', 'DP, Service & Packaging']] as const).map(([key, label]) => (
             <button key={key} type="button" role="tab" aria-selected={activeView === key} onClick={() => setActiveView(key)}
               className={cn('px-5 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors cursor-pointer',
                 activeView === key ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700')}>

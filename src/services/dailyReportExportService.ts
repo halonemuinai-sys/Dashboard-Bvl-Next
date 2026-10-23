@@ -10,7 +10,7 @@ import type { CrmReportProfile } from './dailyReportWorkbook';
 import { buildStoreDailyWorkbook } from './storeDailyWorkbook';
 import { buildStoreReportData, type DpServiceRow } from './storeDailyReport';
 import { getAdvisorProductivity } from './dashboard/productivityService';
-import { normalizeReportStore, type AdvisorHome, type AdvisorRotation } from '@/lib/report-attribution';
+import { normalizeReportStore, serviceCenterStore, type AdvisorHome, type AdvisorRotation } from '@/lib/report-attribution';
 import { DEPOSIT_LINK_PREFIX, readDepositLink } from '@/lib/deposit-links';
 export { getSaInitial, SA_INITIALS } from './dailyReportWorkbook';
 
@@ -26,7 +26,7 @@ export async function generateDailySalesReportExcel(options: ExportReportOptions
     fetchAllRows((from, to) => db.from('crm_profiling').select('id,nama_lengkap,no_hp,kewarganegaraan,status_pelanggan').order('id').range(from, to)),
     fetchAllRows((from, to) => db.from('advisors').select('name,home_location').order('name').range(from, to)),
     fetchAllRows((from, to) => db.from('advisor_rotations').select('advisor_name,assigned_location').eq('year', options.year).eq('month_number', options.month).order('advisor_name').range(from, to)),
-    fetchAllRows((from, to) => db.from('bvlgari_sales').select('id,transaction_no,transaction_date,customer_name,salesman,location,collection,sap_code,catalogue_code,price,qty,sub_total_discount,net_sales,card_comm,type').gte('transaction_date', start).lt('transaction_date', end).in('collection', ['DPS', 'SVC']).order('id').range(from, to)),
+    fetchAllRows((from, to) => db.from('bvlgari_sales').select('id,transaction_no,transaction_date,customer_name,salesman,location,collection,sap_code,catalogue_code,description,price,qty,sub_total_discount,net_sales,card_comm,type').gte('transaction_date', start).lt('transaction_date', end).or('collection.in.(DPS,SVC),collection.ilike.PACK*').order('id').range(from, to)),
     fetchAllRows((from, to) => db.from('transaction_records_meta').select('trans_no,other_remarks').like('trans_no', `${DEPOSIT_LINK_PREFIX.replaceAll('_', '\\_')}%`).order('trans_no').range(from, to)),
     getAdvisorProductivity(options.month, options.year, db, selectedStore),
   ]);
@@ -36,7 +36,9 @@ export async function generateDailySalesReportExcel(options: ExportReportOptions
     if (!link) throw new Error('A saved DP reference could not be read.');
     return link;
   });
-  const scopedRaw = (dpService as DpServiceRow[]).filter(row => selectedStore === 'ALL' || normalizeReportStore(row.location) === selectedStore);
+  // SVC and PACK rows can live at the RB service counters (e.g. RBPlaza Indonesia) and belong to that boutique.
+  const rowStore = (row: DpServiceRow) => (row.collection === 'DPS' ? normalizeReportStore(row.location) : serviceCenterStore(row.location));
+  const scopedRaw = (dpService as DpServiceRow[]).filter(row => selectedStore === 'ALL' || rowStore(row) === selectedStore);
   const template = new ExcelJS.Workbook();
   await template.xlsx.readFile(templatePath);
   const result = buildStoreDailyWorkbook(template, report, profiles as CrmReportProfile[], scopedRaw, links, productivity, { month: options.month, year: options.year, store: selectedStore });

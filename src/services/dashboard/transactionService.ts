@@ -155,7 +155,8 @@ export async function getDpsSvcTransactions(month: string, year: number) {
     .select('id, transaction_no, transaction_date, customer_name, salesman, location, collection, sap_code, catalogue_code, price, qty, sub_total_discount, net_sales, card_comm, type, phone_no')
     .gte('transaction_date', mStart)
     .lte('transaction_date', mEnd)
-    .in('collection', ['DPS', 'SVC'])
+    // DP, service and packaging (PACK*) lines; none of them are merchandise sales.
+    .or('collection.in.(DPS,SVC),collection.ilike.PACK*')
     .order('transaction_date', { ascending: true })
     .order('transaction_no', { ascending: true });
 

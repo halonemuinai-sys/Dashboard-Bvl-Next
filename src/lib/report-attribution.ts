@@ -6,6 +6,8 @@ export const normalizeReportStore = (value: string) => {
   if (key === 'bali' || key === 'bali boutique') return 'Bali';
   return store;
 };
+/** Service (SVC) is booked at each boutique's RB service counter; report it under that boutique. */
+export const serviceCenterStore = (value: string) => normalizeReportStore((value || '').trim().replace(/^RB\s*/i, ''));
 export const reportSalesType = (type: string) => type?.trim().toUpperCase() === 'SMI' ? 'SMI' : 'Regular';
 export interface AdvisorHome { name: string; home_location: string }
 export interface AdvisorRotation { advisor_name: string; assigned_location: string }

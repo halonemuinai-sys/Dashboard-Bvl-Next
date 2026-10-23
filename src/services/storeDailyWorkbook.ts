@@ -4,7 +4,7 @@ import { buildDailySalesWorkbook, type CrmReportProfile } from './dailyReportWor
 import type { StoreReportData, ReportLine, DpServiceRow } from './storeDailyReport';
 import type { DepositLink } from '@/lib/deposit-links';
 import type { AdvisorMetrics, DetailTransaction } from './dashboard/productivityService';
-import { normalizeReportStore, reportSalesType } from '@/lib/report-attribution';
+import { normalizeReportStore, reportSalesType, serviceCenterStore } from '@/lib/report-attribution';
 
 const MONEY = '#,##0.00;[Red](#,##0.00);"–"';
 const NAVY = 'FF183E32';
@@ -81,16 +81,28 @@ function addCrossingSheet(book: ExcelJS.Workbook, name: 'IN' | 'OUT', lines: Rep
 function addDpServiceSheet(book: ExcelJS.Workbook, name: 'DP' | 'Service', rows: DpServiceRow[], links: DepositLink[], options: ReportOptions) {
   const linked = new Map(links.map(link => [link.transNo, link]));
   const sheet = detailSheet(book, name, name === 'DP' ? 'DOWN PAYMENTS' : 'SALES SERVICE CENTER', ['Date', 'Invoice / Transaction', 'Customer', 'Advisor', 'Store', 'Sales Type', 'Collection', 'SAP Code', 'Catalogue', 'Qty', 'Gross Amount', 'Discount', 'Net Sales', 'Card Commission', 'DP Status', 'Linked Sales Invoice', 'Linked Invoice Date'], options,
-    'All records for the selected month and store from DP & Service Transactions. Gross = Qty × Price; net sales and commission use saved values.');
+    name === 'DP' ? 'All records for the selected month and store from DP & Service Transactions. Gross = Qty × Price; net sales and commission use saved values.'
+      : 'All service (SVC) records for the selected month and store, including the boutique RB service counter (e.g. RBPlaza Indonesia). Gross = Qty × Price; net sales and commission use saved values.');
   rows.sort((a, b) => a.transaction_date.localeCompare(b.transaction_date) || a.transaction_no.localeCompare(b.transaction_no)).forEach((row, index) => {
     const link = linked.get(row.transaction_no);
     const target = index + 6;
     const isReturn = Number(row.qty) < 0 || /^RB/i.test(row.location) || /^SI-RB/i.test(row.transaction_no);
-    sheet.getRow(target).values = [new Date(`${row.transaction_date.slice(0, 10)}T00:00:00Z`), row.transaction_no, row.customer_name, row.salesman, normalizeReportStore(row.location), reportSalesType(row.type), row.collection, row.sap_code, row.catalogue_code, Number(row.qty), Number(row.qty) * Number(row.price), Number(row.sub_total_discount || 0), Number(row.net_sales || 0), Number(row.card_comm || 0), name === 'DP' ? link ? 'Claimed' : isReturn ? 'Return' : 'Unclaimed' : '', link?.invoiceNo || '', link?.invoiceDate.slice(0, 10) || ''];
+    sheet.getRow(target).values = [new Date(`${row.transaction_date.slice(0, 10)}T00:00:00Z`), row.transaction_no, row.customer_name, row.salesman, name === 'Service' ? serviceCenterStore(row.location) : normalizeReportStore(row.location), reportSalesType(row.type), row.collection, row.sap_code, row.catalogue_code, Number(row.qty), Number(row.qty) * Number(row.price), Number(row.sub_total_discount || 0), Number(row.net_sales || 0), Number(row.card_comm || 0), name === 'DP' ? link ? 'Claimed' : isReturn ? 'Return' : 'Unclaimed' : '', link?.invoiceNo || '', link?.invoiceDate.slice(0, 10) || ''];
     sheet.getCell(target, 1).numFmt = 'dd mmm yyyy';
   });
   styleDetails(sheet, 6, 5 + rows.length, 17, [11, 12, 13, 14]);
   finishDetails(sheet, rows.length, 17, [10, 11, 12, 13, 14]);
+}
+function addPackagingSheet(book: ExcelJS.Workbook, rows: DpServiceRow[], options: ReportOptions) {
+  const sheet = detailSheet(book, 'Packaging', 'PACKAGING', ['Date', 'Invoice / Transaction', 'Customer', 'Advisor', 'Store', 'Collection', 'SAP Code', 'Catalogue', 'Description', 'Qty', 'Price', 'Net Sales'], options,
+    'Packaging (PACK) lines from the POS for the selected month and store. They are not merchandise sales and are excluded from DS and Summary; quantity is kept as sent (often 0).');
+  rows.sort((a, b) => a.transaction_date.localeCompare(b.transaction_date) || a.transaction_no.localeCompare(b.transaction_no)).forEach((row, index) => {
+    const target = index + 6;
+    sheet.getRow(target).values = [new Date(`${row.transaction_date.slice(0, 10)}T00:00:00Z`), row.transaction_no, row.customer_name, row.salesman, serviceCenterStore(row.location), row.collection, row.sap_code, row.catalogue_code, row.description || '', Number(row.qty || 0), Number(row.price || 0), Number(row.net_sales || 0)];
+    sheet.getCell(target, 1).numFmt = 'dd mmm yyyy';
+  });
+  styleDetails(sheet, 6, 5 + rows.length, 12, [11, 12]);
+  finishDetails(sheet, rows.length, 12, [10, 12]);
 }
 function addSppr(book: ExcelJS.Workbook, data: { metrics: AdvisorMetrics[]; details: DetailTransaction[] }, options: ReportOptions) {
   const sheet = detailSheet(book, 'SPPR_', 'SALES PERSON PRODUCTIVITY REPORT', ['Store', 'Advisor', 'Net Sales', 'Invoices', 'Qty', 'New Customers', 'New Customer Sales', '% New Sales', 'Existing Customers', 'Existing Customer Sales', '% Existing Sales', 'ATV', 'UPT', 'Walk In', 'Follow Up'], options,
@@ -174,6 +186,7 @@ export function buildStoreDailyWorkbook(template: ExcelJS.Workbook, report: Stor
   if (paymentSheet) workbook.removeWorksheet(paymentSheet.id);
   addDpServiceSheet(workbook, 'DP', raw.filter(row => row.collection === 'DPS'), links, options);
   addDpServiceSheet(workbook, 'Service', raw.filter(row => row.collection === 'SVC'), links, options);
+  addPackagingSheet(workbook, raw.filter(row => (row.collection || '').toUpperCase().startsWith('PACK')), options);
   const inRange = addCrossingSheet(workbook, 'IN', [...report.incoming], options);
   const outRange = addCrossingSheet(workbook, 'OUT', [...report.outgoing], options);
   addSppr(workbook, productivity, options);
