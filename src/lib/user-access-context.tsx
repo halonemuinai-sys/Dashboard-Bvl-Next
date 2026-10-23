@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
+import { DP_TRANSACTION_PATHS } from '@/lib/access-policy';
+
 type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | 'finance' | null;
 
 interface UserAccessState {
@@ -100,12 +102,13 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const canAccess = (path: string): boolean => {
+    if (DP_TRANSACTION_PATHS.includes(path)) path = '/monthly-dps-svc';
     // Super admin & management IT mendapatkan akses penuh
     if (role === 'super_admin' || role === 'management_it') return true;
     if (allowedPaths.has('*')) return true;
 
     // Panduan cicilan & MDR terbuka sebagai referensi operasional bagi operations_sales
-    if (path === '/installment-guide' && role === 'operations_sales') return true;
+    if ((path === '/installment-guide' || path === '/monthly-dps-svc') && role === 'operations_sales') return true;
 
     // Role finance: HANYA dashboard Operations Sales dan modul Finance
     if (role === 'finance') {

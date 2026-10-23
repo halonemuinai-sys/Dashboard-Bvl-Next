@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ClipboardList, CircleCheck, AlertCircle, RefreshCw, Lock, LockOpen, ShieldAlert, FileDown, Trash2,
@@ -8,14 +8,15 @@ import {
   Percent, Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { dashboardService } from '@/services/dashboardService';
+import { loadSupplementaryTransactions, updateSupplementaryTransaction, deleteSupplementaryTransaction } from './actions';
+import { supplementaryKind, TRANSACTION_SECTIONS, type SupplementaryKind } from '@/lib/supplementary-transactions';
 import Amt from '@/components/Amt';
 import { useUserAccess } from '@/lib/user-access-context';
 import { getDepositLinksAction } from '@/app/invoice-management/deposit-actions';
 import type { DepositLink } from '@/lib/deposit-links';
 
 interface Row {
-  id: number;
+  id: number | string;
   trans_no: string;
   transaction_date: string;
   customer: string;
@@ -37,9 +38,9 @@ interface Row {
   type: string;
 }
 
-type Tab = 'DPS' | 'SVC' | 'PACK';
+type Tab = SupplementaryKind;
 // PACK may arrive with a suffix (e.g. "PACK,1"); every packaging line belongs to the PACK tab.
-const tabOf = (collection: string): string => ((collection || '').toUpperCase().startsWith('PACK') ? 'PACK' : collection);
+const tabOf = supplementaryKind;
 type SortKey = 'transaction_date' | 'net_sales' | 'gross_sales' | 'qty' | 'val_disc';
 type SortDir = 'asc' | 'desc';
 type Settlement = 'claimed' | 'unclaimed' | 'rb' | 'return' | 'unknown';
@@ -89,6 +90,12 @@ function Pill({ tone, children, title }: { tone: 'emerald' | 'amber' | 'slate' |
   );
 }
 
+function subscribeLocks(listener: () => void) {
+  window.addEventListener('storage', listener);
+  window.addEventListener('dps-lock-change', listener);
+  return () => { window.removeEventListener('storage', listener); window.removeEventListener('dps-lock-change', listener); };
+}
+
 export interface DpSvcPanelProps {
   /** Controlled period (e.g. from Invoice Management). When omitted the panel owns its own month/year. */
   month?: string;
@@ -97,10 +104,11 @@ export interface DpSvcPanelProps {
   embedded?: boolean;
   /** Bump to reload (e.g. after the host page ran Sync to API). Ignored until data has been loaded. */
   refreshKey?: number;
+  fixedTab?: Tab;
 }
 
-export default function DpSvcPanel({ month: controlledMonth, year: controlledYear, embedded = false, refreshKey = 0 }: DpSvcPanelProps) {
-  const { isAdmin, role } = useUserAccess();
+export default function DpSvcPanel({ month: controlledMonth, year: controlledYear, embedded = false, refreshKey = 0, fixedTab }: DpSvcPanelProps) {
+  const { isAdmin, role, assignedStore, userEmail } = useUserAccess();
   // Card commission is finance data: only admin and finance see or edit it.
   const canViewCardComm = isAdmin || role === 'finance';
   const today = new Date();
@@ -114,7 +122,11 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [loadError, setLoadError] = useState('');
-  const [activeTab, setActiveTab] = useState<Tab>('DPS');
+  const [selectedTab, setActiveTab] = useState<Tab>('DPS');
+  const activeTab = fixedTab ?? selectedTab;
+  const sectionTitle = fixedTab ? TRANSACTION_SECTIONS.find(s => s.kind === fixedTab)!.label + ' transactions' : 'DP, Service & Packaging';
+  const requestId = useRef(0);
+  useEffect(() => () => { requestId.current++; }, []);
   const [depositLinks, setDepositLinks] = useState<Record<string, DepositLink>>({});
   const [depositLinkError, setDepositLinkError] = useState('');
 
@@ -128,23 +140,25 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
 
   // Lock/unlock — persisted per month+year in localStorage (separate from the invoice lock)
   const lockKey = `dps_svc_locked_${month}_${year}`;
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  const isUnlocked = useSyncExternalStore(subscribeLocks, () => localStorage.getItem(lockKey) === 'unlocked', () => false);
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
-  useEffect(() => {
-    setIsUnlocked(localStorage.getItem(lockKey) === 'unlocked');
-  }, [lockKey]);
 
-  const [deleteTarget, setDeleteTarget] = useState<{ id: number; transNo: string } | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number | string; transNo: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [savingId, setSavingId] = useState<number | null>(null);
-  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
-  const [commEdits, setCommEdits] = useState<Record<number, string>>({});
+  const [savingId, setSavingId] = useState<number | string | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<number | string>>(new Set());
+  const [commEdits, setCommEdits] = useState<Record<string, string>>({});
 
   const loadData = useCallback(async () => {
+    const request = ++requestId.current;
     setLoading(true);
+    setRows([]);
+    setDepositLinks({});
     setLoadError('');
     try {
-      const data = (await dashboardService.getDpsSvcTransactions(month, parseInt(year))) as Row[];
+      const data = await loadSupplementaryTransactions(month, Number(year), fixedTab);
+      if (request !== requestId.current) return;
       setRows(data);
       setPage(1);
       setDepositLinkError('');
@@ -152,33 +166,39 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
       const saved: DepositLink[] = [];
       for (let index = 0; index < numbers.length; index += 500) {
         const result = await getDepositLinksAction(numbers.slice(index, index + 500));
+        if (request !== requestId.current) return;
         if (!result.ok) { setDepositLinks({}); setDepositLinkError(result.error); return; }
         saved.push(...result.data);
       }
       setDepositLinks(Object.fromEntries(saved.map(link => [link.transNo, link])));
     } catch (e) {
+      if (request !== requestId.current) return;
       console.error(e);
       setRows([]);
       setDepositLinks({});
-      setLoadError('DP & Service transactions could not be loaded. Check your connection and try again.');
+      if (request !== requestId.current) return;
+      setLoadError(e instanceof Error ? e.message : 'Transactions could not be loaded. Please try again.');
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
-  }, [month, year]);
+  }, [month, year, fixedTab]);
 
   // After the first load, a new period or a host Sync reloads automatically.
   useEffect(() => {
-    if (loaded) void loadData();
-  }, [loaded, loadData, refreshKey]);
+    if (!loaded) return;
+    const timer = window.setTimeout(() => void loadData(), 0);
+    const counter = requestId;
+    return () => { window.clearTimeout(timer); counter.current++; };
+  }, [loaded, loadData, refreshKey, userEmail, assignedStore, role]);
 
-  const handleLock = () => { localStorage.setItem(lockKey, 'locked'); setIsUnlocked(false); setCommEdits({}); };
+  const handleLock = () => { localStorage.setItem(lockKey, 'locked'); window.dispatchEvent(new Event('dps-lock-change')); setCommEdits({}); };
   const handleUnlock = () => {
     if (localStorage.getItem(lockKey) === 'locked') setShowUnlockConfirm(true);
-    else { localStorage.setItem(lockKey, 'unlocked'); setIsUnlocked(true); }
+    else { localStorage.setItem(lockKey, 'unlocked'); window.dispatchEvent(new Event('dps-lock-change')); }
   };
-  const confirmUnlock = () => { localStorage.setItem(lockKey, 'unlocked'); setIsUnlocked(true); setShowUnlockConfirm(false); };
+  const confirmUnlock = () => { localStorage.setItem(lockKey, 'unlocked'); window.dispatchEvent(new Event('dps-lock-change')); setShowUnlockConfirm(false); };
 
-  const handleDeleteRequest = (id: number, transNo: string) => {
+  const handleDeleteRequest = (id: number | string, transNo: string) => {
     if (!isAdmin || depositLinks[transNo] || (activeTab === 'DPS' && depositLinkError)) return;
     setDeleteTarget({ id, transNo });
   };
@@ -186,11 +206,11 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
     if (!isAdmin || !deleteTarget) return;
     setDeleting(true);
     try {
-      await dashboardService.deleteDpsSvcTransaction(deleteTarget.id);
+      await deleteSupplementaryTransaction(deleteTarget.id);
       setRows(prev => prev.filter(r => r.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (e) {
-      console.error(e);
+      setLoadError(e instanceof Error ? e.message : 'Unable to save the transaction.');
     } finally {
       setDeleting(false);
     }
@@ -253,15 +273,15 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
     else { setSortKey(key); setSortDir('desc'); }
   };
 
-  const flashSaved = (id: number) => {
+  const flashSaved = (id: number | string) => {
     setSavedIds(prev => new Set(prev).add(id));
     setTimeout(() => setSavedIds(prev => { const s = new Set(prev); s.delete(id); return s; }), 1800);
   };
 
-  const saveType = async (id: number, newType: string) => {
+  const saveType = async (id: number | string, newType: string) => {
     setSavingId(id);
     try {
-      await dashboardService.updateDpsSvcTransaction(id, { type: newType });
+      await updateSupplementaryTransaction(id, { type: newType });
       setRows(prev => prev.map(r => (r.id === id ? { ...r, type: newType } : r)));
       flashSaved(id);
     } catch (e) {
@@ -271,7 +291,7 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
     }
   };
 
-  const saveComm = async (id: number) => {
+  const saveComm = async (id: number | string) => {
     const raw = commEdits[id];
     if (raw === undefined) return;
     const val = parseInt(raw.trim().replace(/[,.]00$/, '').replace(/[^0-9-]/g, ''), 10) || 0;
@@ -279,7 +299,7 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
     if (val === current) { setCommEdits(prev => { const n = { ...prev }; delete n[id]; return n; }); return; }
     setSavingId(id);
     try {
-      await dashboardService.updateDpsSvcTransaction(id, { card_comm: val });
+      await updateSupplementaryTransaction(id, { card_comm: val });
       setRows(prev => prev.map(r => (r.id === id ? { ...r, comm: val } : r)));
       setCommEdits(prev => { const n = { ...prev }; delete n[id]; return n; });
       flashSaved(id);
@@ -350,6 +370,7 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
 
   return (
     <div className="space-y-5">
+      {assignedStore && assignedStore !== 'ALL' && <p className="text-xs text-slate-500">Boutique access: <strong>{assignedStore}</strong> / Includes the assigned service counter.</p>}
       {/* Hero (standalone page only — inside Invoice Management the host owns period & sync) */}
       {!embedded && (
         <motion.div initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
@@ -359,8 +380,8 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
           <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-300">Operations</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight">DP &amp; Service transactions</h1>
-              <p className="mt-1 text-sm text-slate-300">Down payments and service orders with their settlement status and card commission.</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight">{sectionTitle}</h1>
+              <p className="mt-1 text-sm text-slate-300">{fixedTab === 'DPS' ? 'Review deposits and their linked sales invoices.' : fixedTab === 'SVC' ? 'Review service center transactions for your boutique.' : fixedTab === 'PACK' ? 'Review packaging quantities and transactions separately from merchandise sales.' : 'Review deposits, service orders and packaging by category.'}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <select aria-label="Select month" value={month} onChange={e => setMonth(e.target.value)}
@@ -369,7 +390,7 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
               </select>
               <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
                 className="h-9 rounded-lg border border-white/20 bg-white/5 px-3 text-xs font-semibold text-white outline-none [&>option]:text-slate-900">
-                {['2026', '2025', '2024', '2023'].map(y => <option key={y} value={y}>{y}</option>)}
+                {Array.from({ length: Math.max(1, today.getFullYear() - 2022) }, (_, i) => String(today.getFullYear() - i)).map(y => <option key={y} value={y}>{y}</option>)}
               </select>
               {loaded && (
                 <button type="button" onClick={() => void loadData()} disabled={loading}
@@ -424,7 +445,7 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
               <div role="tablist" aria-label="Transaction type" className="relative flex rounded-lg bg-slate-100 p-1">
-                {TABS.map(tab => (
+                {(fixedTab ? TABS.filter(tab => tab.key === fixedTab) : TABS).map(tab => (
                   <button key={tab.key} type="button" role="tab" aria-selected={activeTab === tab.key}
                     onClick={() => { setActiveTab(tab.key); setPage(1); setFilterLoc(''); setFilterType(''); }}
                     className={cn('relative rounded-md px-3 py-1.5 text-xs font-semibold transition-colors', activeTab === tab.key ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700')}>
@@ -449,9 +470,9 @@ export default function DpSvcPanel({ month: controlledMonth, year: controlledYea
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <select aria-label="Filter store" value={filterLoc} onChange={e => { setFilterLoc(e.target.value); setPage(1); }}
+                <select aria-label="Filter store" disabled={Boolean(assignedStore && assignedStore !== 'ALL')} value={filterLoc} onChange={e => { setFilterLoc(e.target.value); setPage(1); }}
                   className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 outline-none focus:border-blue-400">
-                  <option value="">All stores</option>
+                  <option value="">{assignedStore && assignedStore !== 'ALL' ? assignedStore + ' (assigned boutique)' : 'All stores'}</option>
                   {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
                 </select>
                 <select aria-label="Filter type" value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1); }}

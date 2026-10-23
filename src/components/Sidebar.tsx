@@ -85,6 +85,9 @@ const menuGroups = [
       { name: 'Daily Report',        icon: Calendar,        href: '/daily-report' },
       { name: 'Daily Breakdown',     icon: Table,           href: '/daily-breakdown' },
       { name: 'Invoice Management',  icon: Receipt,         href: '/invoice-management', badge: 'POS', badgeColor: 'bg-blue-600' },
+      { name: 'Down Payment', icon: Receipt, href: '/monthly-dps-svc/down-payment', sub: true },
+      { name: 'Service', icon: ClipboardList, href: '/monthly-dps-svc/service', sub: true },
+      { name: 'Packaging transactions', icon: Package, href: '/monthly-dps-svc/packaging', sub: true },
       { name: 'Installment & MDR Guide', icon: CreditCard,  href: '/installment-guide', badge: 'GUIDE', badgeColor: 'bg-emerald-600' },
       { name: 'Monthly Trans.',      icon: ClipboardList,   href: '/monthly-transactions', badge: 'INPUT', badgeColor: 'bg-blue-600' },
       { name: 'Heatmap Calendar',    icon: CalendarRange,   href: '/heatmap-calendar' },
@@ -227,7 +230,7 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
                   aria-current={active ? 'page' : undefined}
                   title={item.name}
                   onClick={() => { if (isMobile) setIsOpen(false); }}
-                  className={cn(styles.menuItem, active && styles.active)}
+                  className={cn(styles.menuItem, active && styles.active, 'sub' in item && item.sub && isExpanded && 'ml-4 border-l border-slate-200')}
                 >
                   <item.icon size={18} strokeWidth={1.7} aria-hidden="true" />
                   {isExpanded && (

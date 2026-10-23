@@ -8,13 +8,15 @@ export const STORES = ['ALL', 'Plaza Indonesia', 'Plaza Senayan', 'Bali', 'Head 
 export const FINANCE_PATHS = ['/', '/operations-sales', '/finance-reconciliation', '/finance-payment-analytics', '/finance-mdr-setup', '/installment-guide'];
 export function isRole(value: unknown): value is Role { return typeof value === 'string' && ROLES.includes(value as Role); }
 export function isAdminRole(role: unknown) { return role === 'super_admin' || role === 'management_it'; }
-export function isFixedPermission(role: Role, path: string) { return isAdminRole(role) || role === 'finance' || path === '/user-access' || (role === 'operations_sales' && path === '/installment-guide'); }
+export const DP_TRANSACTION_PATHS = ['/monthly-dps-svc', '/monthly-dps-svc/down-payment', '/monthly-dps-svc/service', '/monthly-dps-svc/packaging'];
+export function isFixedPermission(role: Role, path: string) { return isAdminRole(role) || role === 'finance' || path === '/user-access' || (role === 'operations_sales' && (path === '/installment-guide' || DP_TRANSACTION_PATHS.includes(path))); }
 export function hasMenuAccess(role: Role | null, paths: Iterable<string>, path: string): boolean {
+  if (DP_TRANSACTION_PATHS.includes(path)) path = '/monthly-dps-svc';
   if (!role) return false;
   if (isAdminRole(role)) return true;
   if (path === '/user-access') return false;
   if (role === 'finance') return FINANCE_PATHS.includes(path);
-  if (role === 'operations_sales' && path === '/installment-guide') return true;
+  if (role === 'operations_sales' && (path === '/installment-guide' || path === '/monthly-dps-svc')) return true;
   return new Set(paths).has(path);
 }
 export function assertUserChange(actor: Pick<DashboardUser, 'id' | 'role'>, target: Pick<DashboardUser, 'id' | 'role'>, changes: { role?: Role; is_active?: boolean }, deleting = false) {
@@ -59,7 +61,7 @@ export const MENU_GROUPS = [
       { path: '/invoice-management',   label: 'Invoice Management' },
       { path: '/installment-guide',    label: 'Installment & MDR Guide' },
       { path: '/monthly-transactions', label: 'Monthly Transactions' },
-      { path: '/monthly-dps-svc',      label: 'DP & SVC Transactions' },
+      { path: '/monthly-dps-svc',      label: 'DP, Service & Packaging' },
       { path: '/heatmap-calendar',     label: 'Heatmap Calendar' },
       { path: '/sales-journal', label: 'Sales Journal' },
       { path: '/inventory', label: 'Inventory Valuation' },

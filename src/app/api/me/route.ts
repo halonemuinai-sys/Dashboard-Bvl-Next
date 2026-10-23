@@ -1,3 +1,4 @@
+import { DP_TRANSACTION_PATHS } from '@/lib/access-policy';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/utils/supabase/server';
@@ -59,6 +60,8 @@ export async function GET() {
     let allowedPaths = (accessRows || [])
       .filter((r: { allowed: boolean }) => r.allowed)
       .map((r: { menu_path: string }) => r.menu_path);
+
+    if (dbUser.role === 'operations_sales') allowedPaths = [...new Set([...allowedPaths, ...DP_TRANSACTION_PATHS])];
 
     // Permissions khusus role finance: HANYA dashboard Operations Sales dan modul Finance
     if (dbUser.role === 'finance') {
