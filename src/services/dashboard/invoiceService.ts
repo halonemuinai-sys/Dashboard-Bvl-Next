@@ -85,7 +85,8 @@ export async function getInvoices(month: string, year: number, db: SupabaseClien
   // Build lookup map for bvlgari_sales (collection_code, phone_no)
   const salesMap = new Map<string, { collection_code: string; phone_no: string }>();
   (salesData || []).forEach((s: { transaction_no: string; collection: string; phone_no: string }) => {
-    if (s.transaction_no && !salesMap.has(s.transaction_no)) {
+    // Packaging lines share the invoice number but never describe the sold item.
+    if (s.transaction_no && !salesMap.has(s.transaction_no) && !(s.collection || '').toUpperCase().startsWith('PACK')) {
       salesMap.set(s.transaction_no, {
         collection_code: s.collection || '',
         phone_no: s.phone_no || '',

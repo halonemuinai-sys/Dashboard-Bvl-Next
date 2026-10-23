@@ -60,6 +60,8 @@ async function handleCronSync(request: Request) {
       normalizedInserted: result.normalizedInserted,
       skippedDuplicates: result.skippedDuplicates,
       backfilledRows: result.backfilledRows ?? 0,
+      packagingInserted: result.packagingInserted ?? 0,
+      ...(result.packagingError ? { packagingError: result.packagingError } : {}),
     }, { headers: corsHeaders });
 
   } catch (error: any) {

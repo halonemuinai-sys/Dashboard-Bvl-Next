@@ -46,6 +46,8 @@ interface SyncResult {
   normalizedInserted: number; // Baris baru di clean_master
   skippedDuplicates: number;
   backfilledRows?: number;  // Existing rows that received in_charge / customer_code from the POS
+  packagingInserted?: number; // New PACK lines from dailysalestransaction2
+  packagingError?: string;    // Packaging endpoint failed; sales were still synced
   error?: string;
 }
 
@@ -157,12 +159,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
     const rawRows: any[] = [];
     let skipped = 0;
 
-    for (const itm of apiData) {
-      if (existingTxSet.has(itm.transactionNo)) {
-        skipped++;
-        continue;
-      }
-
+    const toRawRow = (itm: ApiSalesItem) => {
       const qtyRaw = parseInt(String(itm.qty));
       const qtyForCalc = (isNaN(qtyRaw) || qtyRaw === 0) ? 1 : qtyRaw;
       // Packaging (PACK) lines are usually sent with qty 0; keep that instead of the 1 used for pricing.
@@ -196,7 +193,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
       })();
 
       // Mapping kolom sesuai server.js (baris 104-121) yang sudah berfungsi
-      rawRows.push({
+      return {
         transaction_date: itm.transactionDate || null,
         transaction_time: itm.transactionTime || null,
         salesman: normalizedSalesman,
@@ -215,11 +212,29 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
         net_sales: netSales,
         customer_code: posCrmId(itm),
         in_charge: posServedBy(itm)
-      });
+      };
+    };
+
+    for (const itm of apiData) {
+      // Packaging comes from its own endpoint below and is matched per line, not per invoice.
+      if (isPackagingItem(itm)) continue;
+      if (existingTxSet.has(itm.transactionNo)) {
+        skipped++;
+        continue;
+      }
+      rawRows.push(toRawRow(itm));
     }
 
+    // PACK lines (shopping bags, boxes, receipt folders) are published by dailysalestransaction2.
+    // They share invoice numbers with already-synced sales, so each line is matched individually.
+    let packaging: ApiSalesItem[] = [];
+    let packagingError: string | undefined;
+    try { packaging = await newPackagingLines(startDate, endDate); }
+    catch (error) { packagingError = error instanceof Error ? error.message : 'Packaging sync failed.'; console.error('Packaging sync failed:', error); }
+    rawRows.push(...packaging.map(toRawRow));
+
     if (rawRows.length === 0) {
-      return { success: true, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: skipped, backfilledRows };
+      return { success: true, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: skipped, backfilledRows, packagingInserted: 0, packagingError };
     }
 
     // 5. Insert ke bvlgari_sales (raw data)
@@ -314,7 +329,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
       normalizedInserted += batch.length;
     }
 
-    return { success: true, rawInserted, normalizedInserted, skippedDuplicates: skipped, backfilledRows: backfilledRows + cleanBackfilled };
+    return { success: true, rawInserted, normalizedInserted, skippedDuplicates: skipped, backfilledRows: backfilledRows + cleanBackfilled, packagingInserted: packaging.length, packagingError };
 
   } catch (err: any) {
     return { success: false, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: 0, error: err.message || 'Unknown error' };
@@ -328,6 +343,40 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
 export const syncService = {
   syncSalesData
 };
+
+export const isPackagingItem = (item: Pick<ApiSalesItem, 'collectionCode'>) => (item.collectionCode || '').trim().toUpperCase().startsWith('PACK');
+
+/**
+ * Packaging lines from the POS that bvlgari_sales does not hold yet. A line is the same when the
+ * invoice, SAP code, catalogue code and quantity match; repeated identical lines are counted.
+ */
+export async function newPackagingLines(startDate: string, endDate: string): Promise<ApiSalesItem[]> {
+  const response = await fetch(`${BVLGARI_API_BASE}/dailysalestransaction2?startdate=${encodeURIComponent(startDate)}&enddate=${encodeURIComponent(endDate)}`, {
+    headers: BVLGARI_API_TOKEN ? { 'Authorization': BVLGARI_API_TOKEN } : {},
+  });
+  if (!response.ok) throw new Error(`Packaging API error: HTTP ${response.status}`);
+  const lines = await response.json();
+  if (!Array.isArray(lines)) throw new Error('Packaging API returned an unexpected response.');
+  const packs = (lines as ApiSalesItem[]).filter(isPackagingItem);
+  if (!packs.length) return [];
+  const existing = await fetchAllRows<{ transaction_no: string; sap_code: string | null; catalogue_code: string | null; qty: number | null }>((from, to) => supabase
+    .from('bvlgari_sales')
+    .select('transaction_no,sap_code,catalogue_code,qty')
+    .gte('transaction_date', startDate)
+    .lte('transaction_date', endDate)
+    .ilike('collection', 'PACK%')
+    .order('id')
+    .range(from, to));
+  const key = (no: string, sap: unknown, cat: unknown, qty: unknown) => [no, sap ?? '', cat ?? '', Number(qty) || 0].join('|');
+  const stored = new Map<string, number>();
+  existing.forEach(row => { const k = key(row.transaction_no, row.sap_code, row.catalogue_code, row.qty); stored.set(k, (stored.get(k) || 0) + 1); });
+  return packs.filter(item => {
+    const k = key(item.transactionNo, item.sapCode || null, item.catalogueCode || null, parseInt(String(item.qty)) || 0);
+    const left = stored.get(k) || 0;
+    if (left > 0) { stored.set(k, left - 1); return false; }
+    return true;
+  });
+}
 
 /** Served By from the POS: servedBy, falling back to the older inCharge field. */
 export const posServedBy = (item: ApiSalesItem) => item.servedBy?.trim() || item.inCharge?.trim() || null;

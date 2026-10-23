@@ -112,3 +112,28 @@ test('sync never re-inserts into clean_master an invoice it already holds from a
     assert.equal(inserts.bvlgari_sales.length, 2, 'raw mirror still records both invoices');
   } finally { global.fetch = original; }
 });
+
+test('packaging lines from dailysalestransaction2 are matched per line, so re-syncs never duplicate them', async () => {
+  const stored = [{ transaction_no: 'INV-BL/2601/01078', sap_code: '804197', catalogue_code: 'RECEIPT FOLDER PF/2G', qty: 1 }];
+  const db = { from() {
+    const q = {};
+    for (const m of ['select', 'gte', 'lte', 'ilike', 'order', 'range']) q[m] = () => q;
+    q.then = (resolve, reject) => Promise.resolve({ data: stored, error: null }).then(resolve, reject);
+    return q;
+  } };
+  const sync = loadTS('src/services/syncService.ts', {
+    '@/lib/supabase': { supabase: db },
+    '@/lib/fetch-all-rows': loadTS('src/lib/fetch-all-rows.ts'),
+  });
+  const line = (sap, catalogue, qty = 1) => ({ transactionNo: 'INV-BL/2601/01078', sapCode: sap, catalogueCode: catalogue, collectionCode: 'PACK', qty, price: 0 });
+  const urls = [];
+  const original = global.fetch;
+  global.fetch = async url => { urls.push(String(url)); return { ok: true, json: async () => [line('804197', 'RECEIPT FOLDER PF/2G'), line('804188', 'SHOPPING BAG S SB/1G'), line('804188', 'SHOPPING BAG S SB/1G'), { ...line('904330', 'SUNG'), collectionCode: 'ACCS,5' }] }; };
+  try {
+    const fresh = await sync.newPackagingLines('2026-01-01', '2026-01-31');
+    assert.match(urls[0], /\/dailysalestransaction2\?startdate=2026-01-01&enddate=2026-01-31$/);
+    assert.deepEqual(fresh.map(x => x.sapCode), ['804188', '804188'], 'the stored receipt folder is skipped; two identical bags are both kept');
+    assert.equal(sync.isPackagingItem({ collectionCode: 'pack' }), true);
+    assert.equal(sync.isPackagingItem({ collectionCode: 'PFM' }), false);
+  } finally { global.fetch = original; }
+});

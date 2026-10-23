@@ -712,7 +712,8 @@ export async function saveInvoicePaymentSplits(params: {
   const bvlgariUpdate = supabase
     .from('bvlgari_sales')
     .update({ card_comm: totalCardComm })
-    .eq('transaction_no', transNo);
+    .eq('transaction_no', transNo)
+    .not('collection', 'ilike', 'PACK%'); // packaging lines carry no card commission
 
   // 3. Save splits payload into transaction_records_meta (with graceful fallback if payment_splits column does not exist yet)
   const metaPayload: any = {
@@ -981,7 +982,7 @@ export async function verifyOrOverrideInvoiceFinance(params: {
           supabase.from('clean_master').update({ comm: alloc.comm }).eq('id', alloc.itemId)
         )
       );
-      await supabase.from('bvlgari_sales').update({ card_comm: realComm }).eq('transaction_no', transNo);
+      await supabase.from('bvlgari_sales').update({ card_comm: realComm }).eq('transaction_no', transNo).not('collection', 'ilike', 'PACK%');
     }
 
     // Build new other_remarks payload preserving [PAYMENT_SPLITS]
