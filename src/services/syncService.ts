@@ -154,6 +154,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
 
     const existingTxSet = new Set(existingRaw.map(r => r.transaction_no));
     const backfilledRows = await backfillPosFields(apiData, existingTxSet);
+    const caseNumbersFilled = await backfillCaseNumbers(apiData, startDate, endDate);
 
     // 5. Process & Calculate Net Sales (porting dari GAS line 52-97)
     const rawRows: any[] = [];
@@ -202,6 +203,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
         transaction_no: itm.transactionNo || null,
         location: itm.location || null,
         sap_code: itm.sapCode || null,
+        case_no: itm.caseNo?.trim() || null,
         catalogue_code: itm.catalogueCode || null,
         description: itm.description || null,
         collection: itm.collectionCode || null,
@@ -234,7 +236,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
     rawRows.push(...packaging.map(toRawRow));
 
     if (rawRows.length === 0) {
-      return { success: true, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: skipped, backfilledRows, packagingInserted: 0, packagingError };
+      return { success: true, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: skipped, backfilledRows: backfilledRows + caseNumbersFilled, packagingInserted: 0, packagingError };
     }
 
     // 5. Insert ke bvlgari_sales (raw data)
@@ -329,7 +331,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
       normalizedInserted += batch.length;
     }
 
-    return { success: true, rawInserted, normalizedInserted, skippedDuplicates: skipped, backfilledRows: backfilledRows + cleanBackfilled, packagingInserted: packaging.length, packagingError };
+    return { success: true, rawInserted, normalizedInserted, skippedDuplicates: skipped, backfilledRows: backfilledRows + cleanBackfilled + caseNumbersFilled, packagingInserted: packaging.length, packagingError };
 
   } catch (err: any) {
     return { success: false, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: 0, error: err.message || 'Unknown error' };
@@ -376,6 +378,38 @@ export async function newPackagingLines(startDate: string, endDate: string): Pro
     if (left > 0) { stored.set(k, left - 1); return false; }
     return true;
   });
+}
+
+/**
+ * Fills the serial number (case_no) on already-synced lines that do not have it. Lines are matched on
+ * invoice + SAP code + catalogue code; repeated identical lines take the POS serials in order.
+ */
+export async function backfillCaseNumbers(apiData: ApiSalesItem[], startDate: string, endDate: string): Promise<number> {
+  const key = (no: unknown, sap: unknown, cat: unknown) => [no ?? '', sap ?? '', cat ?? ''].join('|');
+  const serials = new Map<string, string[]>();
+  for (const item of apiData) {
+    const caseNo = item.caseNo?.trim();
+    if (!caseNo || !item.transactionNo) continue;
+    const k = key(item.transactionNo, item.sapCode || null, item.catalogueCode || null);
+    (serials.get(k) || serials.set(k, []).get(k)!).push(caseNo);
+  }
+  if (!serials.size) return 0;
+  const missing = await fetchAllRows<{ id: string; transaction_no: string; sap_code: string | null; catalogue_code: string | null }>((from, to) => supabase
+    .from('bvlgari_sales').select('id,transaction_no,sap_code,catalogue_code')
+    .gte('transaction_date', startDate).lte('transaction_date', endDate).is('case_no', null)
+    .order('id').range(from, to));
+  const updates: { id: string; caseNo: string }[] = [];
+  for (const row of missing) {
+    const queue = serials.get(key(row.transaction_no, row.sap_code, row.catalogue_code));
+    const caseNo = queue?.shift();
+    if (caseNo) updates.push({ id: row.id, caseNo });
+  }
+  for (let i = 0; i < updates.length; i += 25) {
+    const results = await Promise.all(updates.slice(i, i + 25).map(u => supabase.from('bvlgari_sales').update({ case_no: u.caseNo }).eq('id', u.id).is('case_no', null)));
+    const failed = results.find(r => r.error);
+    if (failed?.error) throw new Error(`case_no backfill: ${failed.error.message}`);
+  }
+  return updates.length;
 }
 
 /** Served By from the POS: servedBy, falling back to the older inCharge field. */
