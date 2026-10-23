@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer,
 } from 'recharts';
-import { Heart, RefreshCw, Calendar as CalendarIcon } from 'lucide-react';
+import { Heart, RefreshCw, Calendar as CalendarIcon, Users, Repeat2, Gem, BellRing, ArrowUpRight } from 'lucide-react';
+import { useReducedMotion } from 'motion/react';
+import styles from './clienteling.module.css';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import BvlgariLoader from '@/components/BvlgariLoader';
@@ -26,12 +28,6 @@ const TIER_CFG: Record<string, { icon: string; color: string; bg: string; text: 
 const TIER_ORDER = ['Top', 'Elite', 'High Potential', 'Potential', 'Prospect', 'Inactive'];
 
 const fmtPct = (n: number) => n.toFixed(1) + '%';
-const fmtDays = (d: number) => d >= 365 ? `${(d/365).toFixed(1)}yr` : `${d}d`;
-function fmtShort(n: number) {
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(0) + 'M';
-  return n.toLocaleString('id-ID');
-}
 
 function TierBadge({ tier }: { tier: string }) {
   const cfg = TIER_CFG[tier] || TIER_CFG['Prospect'];
@@ -52,16 +48,26 @@ export default function ClientelingHubPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData]       = useState<CData | null>(null);
 
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
+  const reducedMotion = useReducedMotion();
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try { setData(await dashboardService.getClientelingData(parseInt(year))); }
-      catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    })();
-  }, [year]);
+    let cancelled = false;
+    async function load() {
+      setLoading(true); setError('');
+      try {
+        const result = await dashboardService.getClientelingData(Number(year));
+        if (!cancelled) setData(result);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Unable to load client insights.');
+      } finally { if (!cancelled) setLoading(false); }
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [year, reload]);
 
-  if (loading || !data) return <BvlgariLoader message="Loading Clienteling Hub..." />;
+  if (loading) return <BvlgariLoader message="Loading client insights..." />;
+  if (error || !data) return <div className={styles.error} role="alert"><BellRing size={28} /><h1>Client insights could not be loaded</h1><p>{error}</p><button onClick={() => setReload(n => n + 1)}>Try again</button></div>;
 
   const { kpi, tierCounts, tierRevenue, topClients, lapsedAlerts,
           recencyBuckets, freqBuckets, locationSummary, tierMigration, retention } = data;
@@ -74,49 +80,39 @@ export default function ClientelingHubPage() {
   const maxRfm     = Math.max(...rfmRecency.map(r => r.count), ...rfmFreq.map(f => f.count), 1);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
+    <div className={styles.page}>
 
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Heart className="w-5 h-5 text-rose-500" />
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Clienteling & Loyalty Hub</h1>
-          </div>
-          <p className="text-slate-500 text-sm">CRM Deep Dive — Customer Retention & Tier Intelligence</p>
-        </div>
-        <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
-          <CalendarIcon className="w-4 h-4 text-rose-500" />
-          <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
-            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer">
-            {['2026','2025','2024','2023'].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-      </div>
+      <header className={styles.hero}>
+        <div className={styles.heroCopy}><span className={styles.eyebrow}><Heart size={15} /> CLIENT RELATIONSHIPS</span><h1>Clienteling &amp; Loyalty Hub</h1><p>Understand loyalty. Recognize your most valued clients. Make every reconnection count.</p></div>
+        <div className={styles.controls}><label><CalendarIcon size={17} /><span className="sr-only">Reporting year</span><select value={year} onChange={e => setYear(e.target.value)}>{Array.from({ length: Math.max(1, new Date().getFullYear() - 2022) }, (_, i) => String(new Date().getFullYear() - i)).map(y => <option key={y}>{y}</option>)}</select></label><button onClick={() => setReload(n => n + 1)} aria-label="Refresh client insights" title="Refresh client insights"><RefreshCw size={17} /></button></div>
+        <div className={styles.heroFoot}><span><span className={styles.dot} /> Snapshot as of {data.asOf}</span><span>Lifetime insights through the selected date <ArrowUpRight size={14} /></span></div>
+      </header>
+      <div className={styles.scope}><span>Client intelligence <b>/ {year}</b></span><span>Amounts in IDR &bull; Unique invoices, not store visits</span></div>
 
       {/* ── Row 1: 4 KPI Cards ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-400 to-rose-600 shadow-sm shadow-rose-200 w-fit mb-4">
-            <Heart className="w-4 h-4 text-white" />
+            <Users className="w-4 h-4 text-white" />
           </div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active Clients</p>
           <h3 className="text-3xl font-black text-slate-900">{kpi.totalActive.toLocaleString('id-ID')}</h3>
-          <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Last 24 months</p>
+          <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Purchased within 730 days of snapshot</p>
         </div>
 
         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-sm shadow-emerald-200 w-fit mb-4">
-            <Heart className="w-4 h-4 text-white" />
+            <Repeat2 className="w-4 h-4 text-white" />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Retention Rate</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Repeat Client Rate</p>
           <h3 className="text-3xl font-black text-emerald-600">{fmtPct(kpi.retentionRate)}</h3>
-          <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Repeat / Active</p>
+          <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">2+ lifetime invoices / active clients</p>
         </div>
 
         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm shadow-purple-200 w-fit mb-4">
-            <Heart className="w-4 h-4 text-white" />
+            <Gem className="w-4 h-4 text-white" />
           </div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Avg. Lifetime Value</p>
           <h3 className="text-2xl font-black text-slate-900"><Amt value={kpi.avgLtv} short /></h3>
@@ -125,11 +121,11 @@ export default function ClientelingHubPage() {
 
         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm shadow-amber-200 w-fit mb-4">
-            <Heart className="w-4 h-4 text-white" />
+            <BellRing className="w-4 h-4 text-white" />
           </div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Lapsed Alert</p>
           <h3 className="text-3xl font-black text-orange-600">{kpi.lapsedCount.toLocaleString('id-ID')}</h3>
-          <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">VIP inactive 6-24 months</p>
+          <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Spend 50M+ / last purchase 180-730 days ago</p>
         </div>
       </div>
 
@@ -140,7 +136,7 @@ export default function ClientelingHubPage() {
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100">
             <h3 className="text-sm font-black text-slate-900">Client Tier Distribution</h3>
-            <p className="text-[10px] text-slate-400 mt-0.5">Lifetime spend segmentation</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Lifetime net sales / inactive after 730 days</p>
           </div>
           <div className="p-5 space-y-3">
             {TIER_ORDER.map(tier => {
@@ -158,12 +154,12 @@ export default function ClientelingHubPage() {
                     </div>
                     <div className="flex items-center gap-3 text-xs">
                       <span className="font-black text-slate-800">{count}</span>
-                      <span className="text-slate-400 font-mono text-[10px]">{fmtShort(revenue)}</span>
+                      <span className="text-slate-400 font-mono text-[10px]"><Amt value={revenue} short /></span>
                     </div>
                   </div>
                   <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${Math.max(pct, 0.5)}%`, backgroundColor: cfg.color }} />
+                      style={{ width: `${Math.max(0, Math.min(pct, 100))}%`, backgroundColor: cfg.color }} />
                   </div>
                 </div>
               );
@@ -175,7 +171,7 @@ export default function ClientelingHubPage() {
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-black text-slate-900">Acquisition & Retention</h3>
+              <h3 className="text-sm font-black text-slate-900">New & Returning Clients</h3>
               <p className="text-[10px] text-slate-400 mt-0.5">New vs Returning clients — {year}</p>
             </div>
             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400">
@@ -183,7 +179,7 @@ export default function ClientelingHubPage() {
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Returning</span>
             </div>
           </div>
-          <div className="p-4">
+          <div className="p-4"><p className="text-xs text-slate-500 mb-3">New in the first purchase month; returning in later months. Each client is counted once per month.</p>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={retention} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -191,10 +187,10 @@ export default function ClientelingHubPage() {
                 <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 11 }}
-                  formatter={((v: unknown, name: unknown) => [v, name === 'newCust' ? 'New' : 'Returning']) as any}
+                  formatter={(value, name) => [value, name === 'newCust' ? 'New' : 'Returning']}
                 />
-                <Bar dataKey="newCust"   name="newCust"   stackId="a" fill="#3b82f6" radius={[0,0,0,0]} />
-                <Bar dataKey="returning" name="returning" stackId="a" fill="#10b981" radius={[4,4,0,0]} />
+                <Bar isAnimationActive={!reducedMotion} animationDuration={650} maxBarSize={32} dataKey="newCust"   name="newCust"   stackId="a" fill="#3b82f6" radius={[0,0,0,0]} />
+                <Bar isAnimationActive={!reducedMotion} animationDuration={650} maxBarSize={32} dataKey="returning" name="returning" stackId="a" fill="#10b981" radius={[4,4,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -217,13 +213,14 @@ export default function ClientelingHubPage() {
                   <th className="py-2.5 px-4 text-center">#</th>
                   <th className="py-2.5 px-4">Name</th>
                   <th className="py-2.5 px-4 text-right">Spend</th>
-                  <th className="py-2.5 px-4 text-center">Visits</th>
+                  <th className="py-2.5 px-4 text-center">Invoices</th>
                   <th className="py-2.5 px-4">Tier</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
+                {topClients.length === 0 && <tr><td colSpan={5} className="py-12 text-center text-slate-500">No named clients in this reporting period.</td></tr>}
                 {topClients.map((c, i) => (
-                  <tr key={c.name} className="hover:bg-slate-50 transition-colors">
+                  <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                     <td className="py-2.5 px-4 text-center">
                       {i < 3
                         ? <span className="text-sm">{MEDALS[i]}</span>
@@ -251,7 +248,7 @@ export default function ClientelingHubPage() {
             <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
             <h3 className="text-sm font-black text-slate-900">Lapsed VIP Alerts</h3>
             <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full ml-auto">
-              {lapsedAlerts.length} clients
+              {lapsedAlerts.length} of {kpi.lapsedCount} clients
             </span>
           </div>
           <div className="overflow-auto max-h-[420px]">
@@ -266,7 +263,7 @@ export default function ClientelingHubPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {lapsedAlerts.map(c => (
-                  <tr key={c.name} className="hover:bg-rose-50/30 transition-colors">
+                  <tr key={c.id} className="hover:bg-rose-50/30 transition-colors">
                     <td className="py-2.5 px-4">
                       <p className="font-bold text-slate-800 max-w-[140px] truncate">{c.name}</p>
                       <p className="text-[9px] text-slate-400">{c.location} · {c.lastVisit}</p>
@@ -287,7 +284,7 @@ export default function ClientelingHubPage() {
         </div>
       </div>
 
-      {/* ── Row 4: RFM + Tier Migration + Location Loyalty ──────────── */}
+      {/* ── Row 4: RFM + Annual Spend Movement + Location Loyalty ──────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* RFM Analysis */}
@@ -336,7 +333,7 @@ export default function ClientelingHubPage() {
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100">
             <h3 className="text-sm font-black text-slate-900">Tier Migration</h3>
-            <p className="text-[10px] text-slate-400 mt-0.5">YoY tier changes ({data.year - 1} → {data.year})</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Same-period spend tiers: {data.year - 1} to {data.year}</p>
           </div>
           <div className="overflow-auto max-h-[360px]">
             {tierMigration.length === 0 && (
@@ -356,8 +353,8 @@ export default function ClientelingHubPage() {
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-[10px] font-black text-slate-700">{fmtShort(m.currSpend)}</p>
-                    <p className="text-[9px] text-slate-400">{fmtShort(m.prevSpend)}</p>
+                    <p className="text-[10px] font-black text-slate-700"><Amt value={m.currSpend} short /></p>
+                    <p className="text-[9px] text-slate-400"><Amt value={m.prevSpend} short /></p>
                   </div>
                 </div>
               ))}
@@ -369,11 +366,11 @@ export default function ClientelingHubPage() {
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100">
             <h3 className="text-sm font-black text-slate-900">Location Loyalty</h3>
-            <p className="text-[10px] text-slate-400 mt-0.5">Primary store preference</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Active clients grouped by highest-spend boutique</p>
           </div>
           <div className="p-5 space-y-4">
             {locationSummary.map(loc => {
-              const pct = (loc.spend / maxLocSpend) * 100;
+              const pct = Math.max(0, Math.min(100, (loc.spend / maxLocSpend) * 100));
               return (
                 <div key={loc.name}>
                   <div className="flex items-center justify-between mb-1">
@@ -385,8 +382,8 @@ export default function ClientelingHubPage() {
                       style={{ width: `${pct}%` }} />
                   </div>
                   <div className="flex justify-between text-[9px] text-slate-400">
-                    <span>{fmtShort(loc.spend)}</span>
-                    <span>Avg: {fmtShort(loc.avgSpend)}</span>
+                    <span><Amt value={loc.spend} short /></span>
+                    <span>Avg: <Amt value={loc.avgSpend} short /></span>
                   </div>
                 </div>
               );
@@ -397,7 +394,8 @@ export default function ClientelingHubPage() {
           </div>
         </div>
       </div>
-
+      <details className={styles.method}><summary>How these insights are calculated</summary><p>Client identity uses customer code when available; records without a code are grouped by exact name. Inconsistent or missing codes may split a client profile. Lifetime spend includes available sales history through {data.asOf}. Anonymous clients and invalid rows are excluded ({data.excludedRows} rows).</p><p>Active means a purchase within 730 days. Repeat client rate is the share of active clients with at least two distinct invoice numbers. Missing invoice numbers appear as Unknown frequency. This is not cohort retention.</p><p>Top: 1.35B+; Elite: 200M+; High Potential: 50M+; Potential: positive spend below 50M; Prospect: zero or negative net spend. Inactive overrides spend tiers after 730 days.</p><p>Annual spend movement compares purchases through {data.asOf} with the same period through {data.priorCutoff}, for clients with positive spend in both periods. Boutique totals represent the lifetime value of assigned clients, not sales recorded at that store.</p></details>
+      <footer className={styles.footer}><span>BVLGARI &bull; Client intelligence</span><span>Aris Setiyono</span></footer>
     </div>
   );
 }
