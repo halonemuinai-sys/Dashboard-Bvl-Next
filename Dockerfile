@@ -1,5 +1,5 @@
 # Stage 1: Dependency & Build Stage
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -25,7 +25,7 @@ ENV NODE_OPTIONS="--max-old-space-size=1536"
 RUN npm run build
 
 # Stage 2: Production Running Stage
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
