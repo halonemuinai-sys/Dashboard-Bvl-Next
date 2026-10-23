@@ -16,7 +16,8 @@ export function summarizeReportPayments(payments: ReportPayment[]) {
     }
   }
   const cardPayments = payments.filter(payment => CARD_PAYMENT_TYPES.has(payment.paymentType));
-  const nonCardPayments = payments.filter(payment => NON_CARD_PAYMENT_TYPES.has(payment.paymentType));
+  // A DP applied to the invoice is shown only as its reference number (column U), never as an amount.
+  const nonCardPayments = payments.filter(payment => NON_CARD_PAYMENT_TYPES.has(payment.paymentType) && payment.paymentType !== 'Deposit');
   const unique = (values: (string | undefined)[]) => [...new Set(values.map(paymentLabel).filter(Boolean))].join(', ');
   return {
     nonCard: nonCardPayments.reduce((sum, payment) => sum + payment.amount, 0),
@@ -113,7 +114,7 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
   ws.getCell(`AB${headerRow}`).note = 'Saved clean_master.comm per item. No estimated MDR rate is applied.';
   ws.getCell(`U${headerRow}`).value = 'Deposit Reference';
   ws.getCell(`U${headerRow}`).note = 'Linked sales DP transaction references from Invoice Management. These references do not add payment amounts; amounts come from POS Split Payment.';
-  ws.getCell(`V${headerRow}`).note = 'Saved non-card payments: Cash, Transfer, Deposit, Voucher, Rounding and QRIS. Written once per invoice. See Payment Details for each split.';
+  ws.getCell(`V${headerRow}`).note = 'Saved non-card payments: Cash, Transfer, Voucher, Rounding and QRIS. Written once per invoice. DP (Deposit) amounts are excluded; the DP reference is in Deposit Reference.';
   ws.getCell(`W${headerRow}`).note = 'Saved Credit Card, Debit Card and Link Payment amounts, once per invoice.';
   ws.getCell(`X${headerRow}`).note = 'OR number is not collected by the current POS Split Payment form and is left blank.';
   ws.getCell(`Y${headerRow}`).note = 'Bank selected on saved Transfer splits only. Left blank when the destination bank is not recorded.';
@@ -186,7 +187,7 @@ export function buildDailySalesWorkbook(template: ExcelJS.Workbook, invoices: In
           ws.getCell(`W${row}`).value = paymentSummary.card;
           addTotal('V', paymentSummary.nonCard);
           addTotal('W', paymentSummary.card);
-          const paymentNote = payments.map(payment => `${payment.paymentType}: ${payment.amount.toLocaleString('en-US')} IDR${paymentLabel(payment.bank) ? `; bank: ${payment.bank}` : ''}${paymentLabel(payment.edc) ? `; EDC: ${payment.edc}` : ''}${paymentLabel(payment.cardType) ? `; card: ${payment.cardType}` : ''}`).join('\n');
+          const paymentNote = payments.map(payment => `${payment.paymentType}${payment.paymentType === 'Deposit' ? ' (reference only, not counted)' : ''}: ${payment.amount.toLocaleString('en-US')} IDR${paymentLabel(payment.bank) ? `; bank: ${payment.bank}` : ''}${paymentLabel(payment.edc) ? `; EDC: ${payment.edc}` : ''}${paymentLabel(payment.cardType) ? `; card: ${payment.cardType}` : ''}`).join('\n');
           ws.getCell(`V${row}`).note = paymentNote;
           ws.getCell(`W${row}`).note = paymentNote;
         }

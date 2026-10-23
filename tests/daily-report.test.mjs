@@ -166,20 +166,23 @@ test('POS split payments populate Rp, Card, transfer bank, EDC and card type exa
   ];
   const result = buildDailySalesWorkbook(template, [inv], [], { month: 9, year: 2026 });
   const sheet = result.workbook.getWorksheet('DS');
-  assert.equal(sheet.getCell('V7').value, 70);
+  // Deposit (10) is excluded: DPs appear only as references in column U.
+  assert.equal(sheet.getCell('V7').value, 60);
   assert.equal(sheet.getCell('W7').value, 130);
-  assert.equal(sheet.getCell('V7').value + sheet.getCell('W7').value, 200);
+  // Payments total 200, of which 10 is the DP applied: DS shows 190 (DP stays a reference).
+  assert.equal(sheet.getCell('V7').value + sheet.getCell('W7').value, 190);
   assert.equal(sheet.getCell('Y7').value, 'BNI');
   assert.equal(sheet.getCell('Z7').value, 'BCA, Mandiri');
   assert.equal(sheet.getCell('AA7').value, 'VISA, MASTER');
   assert.equal(sheet.getCell('X7').value, null);
   for (const col of ['V', 'W', 'Y', 'Z', 'AA']) assert.equal(sheet.getCell(`${col}8`).value, null);
-  assert.equal(sheet.getCell('V9').result, 70);
+  assert.equal(sheet.getCell('V9').result, 60);
   assert.equal(sheet.getCell('W9').result, 130);
   assert.equal(result.workbook.getWorksheet('Payment Details').rowCount, 10);
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(await result.workbook.xlsx.writeBuffer());
-  assert.equal(reopened.getWorksheet('DS').getCell('V7').value, 70);
+  assert.equal(reopened.getWorksheet('DS').getCell('V7').value, 60);
+  assert.match(JSON.stringify(reopened.getWorksheet('DS').getCell('V7').note), /Deposit \(reference only, not counted\)/);
   assert.match(JSON.stringify(reopened.getWorksheet('DS').getCell('V7').note), /Cash: 20 IDR/);
 });
 
