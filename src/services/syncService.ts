@@ -285,9 +285,24 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
         };
       });
 
+    // clean_master can already hold an invoice that bvlgari_sales does not (legacy imports stored
+    // at 17:00 UTC). Never insert those again; only fill their empty POS fields.
+    const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+    const existingClean = await fetchAllRows<{ trans_no: string }>((from, to) => supabase
+      .from('clean_master')
+      .select('trans_no')
+      .gte('transaction_date', `${startDate}T00:00:00+07:00`)
+      .lt('transaction_date', `${nextMonth}T00:00:00+07:00`)
+      .order('id')
+      .range(from, to));
+    const existingCleanSet = new Set(existingClean.map(r => r.trans_no));
+    const freshRows = normalizedRows.filter(row => !existingCleanSet.has(row.trans_no));
+    const alreadyClean = new Set(normalizedRows.filter(row => existingCleanSet.has(row.trans_no)).map(row => row.trans_no));
+    const cleanBackfilled = alreadyClean.size ? await backfillPosFields(apiData, alreadyClean) : 0;
+
     let normalizedInserted = 0;
-    for (let i = 0; i < normalizedRows.length; i += 500) {
-      const batch = normalizedRows.slice(i, i + 500);
+    for (let i = 0; i < freshRows.length; i += 500) {
+      const batch = freshRows.slice(i, i + 500);
       const { error: normErr } = await supabase.from('clean_master').insert(batch);
       if (normErr) {
         console.error('clean_master insert error:', normErr);
@@ -296,7 +311,7 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
       normalizedInserted += batch.length;
     }
 
-    return { success: true, rawInserted, normalizedInserted, skippedDuplicates: skipped, backfilledRows };
+    return { success: true, rawInserted, normalizedInserted, skippedDuplicates: skipped, backfilledRows: backfilledRows + cleanBackfilled };
 
   } catch (err: any) {
     return { success: false, rawInserted: 0, normalizedInserted: 0, skippedDuplicates: 0, error: err.message || 'Unknown error' };

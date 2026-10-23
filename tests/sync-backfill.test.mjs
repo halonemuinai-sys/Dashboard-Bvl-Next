@@ -81,3 +81,34 @@ test('servedBy and crmId take priority over the older inCharge and customerCode 
   assert.equal(tables.clean_master[0].in_charge, 'Siska Nurhalimah');
   assert.equal(tables.clean_master[0].customer_code, '13278246');
 });
+
+test('sync never re-inserts into clean_master an invoice it already holds from a legacy import', async () => {
+  const inserts = { bvlgari_sales: [], clean_master: [] };
+  const existing = { bvlgari_sales: [], clean_master: [{ trans_no: 'SI-OLD' }], master_main_category: [], master_collection: [] };
+  const db = { from(table) {
+    let action = 'select'; let payload;
+    const q = {};
+    for (const m of ['select', 'gte', 'lte', 'lt', 'order', 'range', 'in', 'is', 'eq']) q[m] = () => q;
+    q.insert = rows => { action = 'insert'; payload = rows; return q; };
+    q.update = () => { action = 'update'; return q; };
+    q.then = (resolve, reject) => {
+      if (action === 'insert') inserts[table].push(...payload);
+      const data = action === 'select' ? (existing[table] || []) : [];
+      return Promise.resolve({ data, error: null }).then(resolve, reject);
+    };
+    return q;
+  } };
+  const sync = loadTS('src/services/syncService.ts', {
+    '@/lib/supabase': { supabase: db },
+    '@/lib/fetch-all-rows': loadTS('src/lib/fetch-all-rows.ts'),
+  });
+  const item = (no, sap) => ({ transactionDate: '2025-05-02', transactionNo: no, sapCode: sap, location: 'Plaza Indonesia', collectionCode: 'JWL,TB', qty: 1, price: 100, subTotalDiscount: 0, tax: 1.11, subTotaltax: 10, servedBy: 'Ayu', crmId: '123' });
+  const original = global.fetch;
+  global.fetch = async () => ({ ok: true, json: async () => [item('SI-OLD', '1'), item('SI-NEW', '2')] });
+  try {
+    const result = await sync.syncService.syncSalesData(5, 2025);
+    assert.equal(result.success, true);
+    assert.deepEqual(inserts.clean_master.map(r => r.trans_no), ['SI-NEW']);
+    assert.equal(inserts.bvlgari_sales.length, 2, 'raw mirror still records both invoices');
+  } finally { global.fetch = original; }
+});
