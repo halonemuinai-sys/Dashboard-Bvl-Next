@@ -52,20 +52,21 @@ export interface InventorySummary {
  */
 export async function syncInventory(
   locationCode: string,
-  snapshotDate: string // YYYY-MM-DD (e.g. 2026-05-01)
+  snapshotDate: string, // YYYY-MM-DD (e.g. 2026-05-01)
+  // Browser calls go through the /api/sync-inventory proxy; the scheduled server job calls the POS API directly.
+  fetchStock: (locationCode: string) => Promise<Response> = code => fetch(`/api/sync-inventory?location=${encodeURIComponent(code)}`)
 ): Promise<SyncInventoryResult> {
   try {
     const locationName = LOCATION_MAPPING[locationCode] || locationCode;
 
-    // 1. Fetch data dari proxy API dan Master data dari Supabase
-    const proxyUrl = `/api/sync-inventory?location=${encodeURIComponent(locationCode)}`;
-    
+    // 1. Fetch data dari API (proxy atau langsung) dan Master data dari Supabase
+
     const [
       response,
       { data: masterCats },
       { data: masterColls }
     ] = await Promise.all([
-      fetch(proxyUrl),
+      fetchStock(locationCode),
       supabase.from('master_main_category').select('*'),
       supabase.from('master_collection').select('*')
     ]);

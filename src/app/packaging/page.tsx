@@ -13,6 +13,8 @@ import { supabase } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { serviceCenterStore } from '@/lib/report-attribution';
 import { useUserAccess } from '@/lib/user-access-context';
+import SapSummaryTable from './SapSummaryTable';
+import { loadLatestPackagingStock, summarizeBySap, SUMMARY_STORES, type StoreStock } from './packagingSummary';
 
 interface PackRow {
   id: string;
@@ -54,6 +56,8 @@ export default function PackagingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [rows, setRows] = useState<Line[]>([]);
+  const [stock, setStock] = useState<StoreStock[]>([]);
+  const [view, setView] = useState<'lines' | 'sap'>('sap');
 
   const [search, setSearch] = useState('');
   const [item, setItem] = useState('');
@@ -71,10 +75,11 @@ export default function PackagingPage() {
       const m = month === 'all' ? null : Number(month);
       const start = m ? `${y}-${String(m).padStart(2, '0')}-01` : `${y}-01-01`;
       const end = m ? new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10) : `${y + 1}-01-01`;
-      const data = await fetchAllRows<PackRow>((from, to) => supabase.from('bvlgari_sales')
+      const [data, latestStock] = await Promise.all([fetchAllRows<PackRow>((from, to) => supabase.from('bvlgari_sales')
         .select('id,transaction_no,transaction_date,customer_name,salesman,location,sap_code,catalogue_code,description,qty')
         .ilike('collection', 'PACK%').gte('transaction_date', start).lt('transaction_date', end)
-        .order('transaction_date', { ascending: false }).order('id').range(from, to));
+        .order('transaction_date', { ascending: false }).order('id').range(from, to)), loadLatestPackagingStock()]);
+      setStock(latestStock);
       const lines = data.map(row => ({ ...row, store: serviceCenterStore(row.location || ''), item: (row.description || row.catalogue_code || row.sap_code || 'Unnamed item').trim() }));
       setRows(lockedStore ? lines.filter(line => line.store === lockedStore) : lines);
       setPage(1);
@@ -122,6 +127,10 @@ export default function PackagingPage() {
     filtered.forEach(r => map.set(r.item, (map.get(r.item) || 0) + (Number(r.qty) || 0)));
     return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [filtered]);
+
+  // Stock compares against the boutiques in view: the locked store, the chosen store, or all boutiques.
+  const scopeStores = useMemo(() => (lockedStore ? [lockedStore] : store ? [store] : [...SUMMARY_STORES]), [lockedStore, store]);
+  const sapSummary = useMemo(() => summarizeBySap(filtered, stock, scopeStores), [filtered, stock, scopeStores]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     const av = sortKey === 'qty' ? Number(a.qty) || 0 : String(a[sortKey] || '');
@@ -304,14 +313,26 @@ export default function PackagingPage() {
                   </select>
                 )}
                 {hasFilters && <button type="button" onClick={clearFilters} className="h-9 rounded-lg px-2 text-xs font-semibold text-blue-600 hover:bg-blue-50">Clear filters</button>}
-                <span aria-live="polite" className="text-xs text-slate-400"><span className="font-semibold tabular-nums text-slate-700">{units(filtered.length)}</span> lines</span>
-                <button type="button" onClick={exportCsv} disabled={!sorted.length}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40">
-                  <FileDown className="h-4 w-4 text-slate-500" />Export CSV
-                </button>
+                <div role="tablist" aria-label="View" className="relative flex rounded-lg bg-slate-100 p-1">
+                  {([['sap', 'Per SAP code'], ['lines', 'Per transaction']] as const).map(([key, label]) => (
+                    <button key={key} type="button" role="tab" aria-selected={view === key} onClick={() => setView(key)}
+                      className={cn('relative rounded-md px-3 py-1 text-[11px] font-semibold transition-colors', view === key ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700')}>
+                      {view === key && <motion.span layoutId="packaging-view" className="absolute inset-0 rounded-md bg-white shadow-sm" transition={{ type: 'spring', damping: 30, stiffness: 260 }} />}
+                      <span className="relative">{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <span aria-live="polite" className="text-xs text-slate-400"><span className="font-semibold tabular-nums text-slate-700">{units(view === 'sap' ? sapSummary.length : filtered.length)}</span> {view === 'sap' ? 'SAP codes' : 'lines'}</span>
+                {view === 'lines' && (
+                  <button type="button" onClick={exportCsv} disabled={!sorted.length}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40">
+                    <FileDown className="h-4 w-4 text-slate-500" />Export CSV
+                  </button>
+                )}
               </div>
             </div>
 
+            {view === 'lines' ? (<>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] table-fixed text-left text-xs">
                 <thead className="border-b border-slate-100 bg-slate-50/80 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -366,6 +387,10 @@ export default function PackagingPage() {
                 </div>
               </div>
             </div>
+            </>) : (
+              <SapSummaryTable rows={sapSummary} stock={stock} scopeStores={scopeStores} period={period}
+                onOpenSap={sap => { setView('lines'); setItem(''); setSearch(sap === '—' ? '' : sap); setPage(1); }} />
+            )}
           </div>
         </div>
       )}
