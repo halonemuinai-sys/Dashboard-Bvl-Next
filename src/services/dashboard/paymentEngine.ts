@@ -1,3 +1,4 @@
+import { validateMdrConfiguration } from '@/lib/mdr-config';
 import { supabase } from '@/lib/supabase';
 import { InvoiceItem } from './invoiceService';
 
@@ -575,7 +576,7 @@ export function computePaymentMdr(
     }
 
     // B. Installment 0% on Credit Card
-    const targetBank = bank !== '--' ? bank : (edc !== '--' ? edc : '');
+    const targetBank = split.cardType?.toUpperCase().trim() === 'AMEX' ? 'AMEX' : bank !== '--' ? bank : (edc !== '--' ? edc : '');
     const activeRules = customRules ?? BANK_MDR_RULES;
     const bankRule = activeRules[targetBank];
 
@@ -608,10 +609,11 @@ export function computePaymentMdr(
           warningNote: warning,
         };
       } else {
-        const fallbackRate = isSameBank ? 0.017 : 0.020;
+        const regular = computePaymentMdr({ ...split, installment: '--' }, customRules, debitConfig, creditConfig);
+        const fallbackRate = regular.mdrPct;
         return {
           mdrPct: fallbackRate,
-          cardComm: Math.round(amount * fallbackRate),
+          cardComm: regular.cardComm,
           processMethod: bankRule.processMethod,
           warningNote: `Tenor ${installment} tidak terdaftar pada program cicilan 0% ${bankRule.bank}. Menggunakan rate ${isSameBank ? 'On-Us' : 'Off-Us'} ${(fallbackRate * 100).toFixed(2)}%.`,
         };
@@ -619,10 +621,11 @@ export function computePaymentMdr(
     }
 
     // Fallback if bank is not in standard installment list
-    const fallbackRate = isSameBank ? 0.017 : 0.020;
+    const regular = computePaymentMdr({ ...split, installment: '--' }, customRules, debitConfig, creditConfig);
+    const fallbackRate = regular.mdrPct;
     return {
       mdrPct: fallbackRate,
-      cardComm: Math.round(amount * fallbackRate),
+      cardComm: regular.cardComm,
       processMethod: 'EDC',
       warningNote: `Bank ${targetBank} belum terdaftar pada program cicilan khusus. Menggunakan standar ${isSameBank ? 'On-Us' : 'Off-Us'} ${(fallbackRate * 100).toFixed(2)}%.`,
     };
@@ -745,7 +748,7 @@ export async function saveInvoicePaymentSplits(params: {
 /**
  * Loads merged custom MDR rules from Supabase (or fallback to default BANK_MDR_RULES)
  */
-export async function getMergedBankMdrRules(): Promise<{
+export async function getMergedBankMdrRules(options: { strict?: boolean } = {}): Promise<{
   rules: Record<string, BankMdrRule>;
   debitConfig: DebitConfig;
   creditConfig: CreditConfig;
@@ -763,8 +766,10 @@ export async function getMergedBankMdrRules(): Promise<{
       .eq('trans_no', '__CONFIG_MDR_RULES__')
       .maybeSingle();
 
+    if (error && options.strict) throw error;
     if (!error && data?.other_remarks) {
       const parsed = JSON.parse(data.other_remarks);
+      if (options.strict && (!parsed || !parsed.rules || typeof parsed.rules !== 'object' || Array.isArray(parsed.rules))) throw new Error('Saved MDR configuration has no valid installment rules.');
       if (parsed) {
         if (parsed.debitConfig) {
           const rawBankRates = parsed.debitConfig.bankRates || {};
@@ -800,7 +805,7 @@ export async function getMergedBankMdrRules(): Promise<{
             onUsRate: typeof parsed.debitConfig.onUsRate === 'number' ? parsed.debitConfig.onUsRate : DEFAULT_DEBIT_CONFIG.onUsRate,
             offUsRate: typeof parsed.debitConfig.offUsRate === 'number' ? parsed.debitConfig.offUsRate : DEFAULT_DEBIT_CONFIG.offUsRate,
             bankRates: mergedBankRates,
-            edcRates: {},
+            edcRates: { ...(parsed.debitConfig.edcRates || {}) },
           };
         }
 
@@ -845,12 +850,14 @@ export async function getMergedBankMdrRules(): Promise<{
               merged[bKey] = {
                 ...merged[bKey],
                 ...customRule,
-                rates: { ...merged[bKey].rates, ...customRule.rates },
+                // Saved rates are a complete bank snapshot; omitted tenors stay disabled.
+                rates: customRule.rates !== undefined ? { ...customRule.rates } : { ...merged[bKey].rates },
               };
             } else {
               merged[bKey] = customRule;
             }
           });
+          if (options.strict) validateMdrConfiguration({ rules: merged, debitConfig, creditConfig });
           return {
             rules: merged,
             debitConfig,
@@ -863,6 +870,7 @@ export async function getMergedBankMdrRules(): Promise<{
       }
     }
   } catch (err) {
+    if (options.strict) throw err;
     console.error('Failed to load custom MDR rules, using baseline:', err);
   }
 
@@ -876,53 +884,26 @@ export async function saveCustomBankMdrRules(
   rules: Record<string, BankMdrRule>,
   userEmail: string,
   debitConfig?: DebitConfig,
-  creditConfig?: CreditConfig
-): Promise<{ success: boolean; error?: string }> {
+  creditConfig?: CreditConfig,
+  expectedUpdatedAt?: string
+): Promise<{ success: boolean; error?: string; updatedAt?: string; updatedBy?: string }> {
+  void userEmail; // Audit identity is verified from the server session.
   try {
-    const payload = {
-      rules,
-      debitConfig: debitConfig || DEFAULT_DEBIT_CONFIG,
-      creditConfig: creditConfig || DEFAULT_CREDIT_CONFIG,
-      updatedBy: userEmail,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const { error } = await supabase
-      .from('transaction_records_meta')
-      .upsert({
-        trans_no: '__CONFIG_MDR_RULES__',
-        other_remarks: JSON.stringify(payload),
-        updated_by: userEmail,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'trans_no' });
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Unknown error' };
-  }
+    const config = { rules, debitConfig: debitConfig || DEFAULT_DEBIT_CONFIG, creditConfig: creditConfig || DEFAULT_CREDIT_CONFIG };
+    validateMdrConfiguration(config);
+    const response = await fetch('/api/finance/mdr-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save', config, expectedUpdatedAt }) });
+    const result = await response.json();
+    return response.ok ? result : { success: false, error: result.error || 'Unable to save settings.' };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Unable to save settings.' }; }
 }
 
-/**
- * Resets custom MDR rules back to Excel baseline
- */
-export async function resetCustomBankMdrRules(userEmail: string): Promise<{ success: boolean; error?: string }> {
+export async function resetCustomBankMdrRules(userEmail: string, expectedUpdatedAt?: string): Promise<{ success: boolean; error?: string }> {
+  void userEmail;
   try {
-    const { error } = await supabase
-      .from('transaction_records_meta')
-      .delete()
-      .eq('trans_no', '__CONFIG_MDR_RULES__');
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Unknown error' };
-  }
+    const response = await fetch('/api/finance/mdr-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reset', expectedUpdatedAt }) });
+    const result = await response.json();
+    return response.ok ? result : { success: false, error: result.error || 'Unable to reset settings.' };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Unable to reset settings.' }; }
 }
 
 export interface FinanceVerificationInfo {
