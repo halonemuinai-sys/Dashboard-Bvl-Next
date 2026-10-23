@@ -110,6 +110,10 @@ export interface BankMdrRule {
   validStores?: string;
 }
 
+export function getInstallmentMinimum(bank: string, tenor: InstallmentOption, rule: BankMdrRule): number {
+  return bank === 'BCA' && tenor === '3 mth' ? 10000000 : rule.minAmount;
+}
+
 export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
   'AMEX': {
     bank: 'AMEX BCA',
@@ -585,7 +589,7 @@ export function computePaymentMdr(
       let warning: string | undefined;
 
       // Minimum amount validation
-      const minRequired = (targetBank === 'BCA' && installment === '3 mth') ? 10000000 : bankRule.minAmount;
+      const minRequired = getInstallmentMinimum(targetBank, installment, bankRule);
       if (amount > 0 && amount < minRequired) {
         warning = `Min. ${bankRule.bank} installment transaction (${installment}) is Rp ${minRequired.toLocaleString('id-ID')}.`;
       }

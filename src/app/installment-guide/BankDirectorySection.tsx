@@ -1,28 +1,14 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { CreditCard, Search, Phone, FileText, Layers } from 'lucide-react';
+import Amt from '@/components/Amt';
+import { formatMdrRate, GUIDE_TENORS } from '@/lib/installment-guide';
+import { cn } from '@/lib/utils';
 import {
-  Building2,
-  CreditCard,
-  Search,
-  CheckCircle2,
-  AlertTriangle,
-  Phone,
-  Mail,
-  FileText,
-  Copy,
-  Calculator,
-  Printer,
-  X,
-  Layers,
-  ArrowRight
-} from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
-import {
-  BANK_MDR_RULES,
-  InstallmentOption,
-  BankMdrRule
+  getInstallmentMinimum,
+  type BankMdrRule
 } from '@/services/dashboard/paymentEngine';
 
 export interface BankContact {
@@ -37,7 +23,7 @@ export const BANK_CONTACTS: BankContact[] = [
   { bank: 'AMEX', pic: 'Stephanie / Irene Nathania', email: 'Phoa_Stephani@bca.co.id', phone: '0818-0833-8505' },
   { bank: 'BNI', pic: 'Samuel William', email: 'samuel.william@bni.co.id', phone: '0896-5548-5886' },
   { bank: 'BRI', pic: 'Erieny Kristianty / Alvatiar Alam', email: 'erieny.kristianty@corp.bri.co.id', phone: '0813-7582-3334' },
-  { bank: 'CIMB Niaga', pic: 'Anly / Ibu Ingky (Top-Up)', email: 'anly.anly@cimbniaga.co.id', phone: '0819-0505-6755' },
+  { bank: 'CIMB Niaga', pic: 'Anly / Ms. Ingky (Top-Up)', email: 'anly.anly@cimbniaga.co.id', phone: '0819-0505-6755' },
   { bank: 'Danamon', pic: 'Indah Ayuni / Anne Ardiane', email: 'indah.ayuni@danamon.co.id', phone: '0812-9238-252' },
   { bank: 'DBS', pic: 'Ella Tjandrawinata / Jenniver', email: 'ellat@dbs.com', phone: '0818-0612-3232' },
   { bank: 'HSBC', pic: 'Rhomal Hadiyana / Dinno', email: 'installment.support@hsbc.co.id', phone: '0818-223-466' },
@@ -46,176 +32,41 @@ export const BANK_CONTACTS: BankContact[] = [
   { bank: 'Permata', pic: 'Sandy Febryanto', email: 'Permata.Installment.SPA@permatabank.co.id', phone: '0811-2937-593' },
 ];
 
-export interface BankBrandDetail {
-  code: string;
-  shortName: string;
-  logoText: string;
-  badgeStyle: string;
-  gradient?: string;
-  tagline: string;
-  sopSteps: string[];
-  exclusions: string[];
-}
-
-export const BANK_BRAND_DETAILS: Record<string, BankBrandDetail> = {
-  'BCA': {
-    code: 'BCA',
-    shortName: 'BCA',
-    logoText: 'BCA',
-    badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
-    tagline: 'EDC Utama Butik & Kenaikan Limit Instan UPK',
-    sopSteps: [
-      'Pilih menu Cicilan 0% pada mesin EDC BCA.',
-      'Geser kartu BCA (Visa, Mastercard, BCA Card).',
-      'Pilih tenor yang disepakati (3, 6, 12, 24, atau 36 bulan).',
-      'Nominal: min. Rp 10 Jt untuk 3 bln, min. Rp 30 Jt untuk 6-36 bln.',
-      'Struk cicilan otomatis tercetak langsung dari mesin EDC.'
-    ],
-    exclusions: ['BCA Smartcash', 'BCA Corporate Card', 'Kartu Debit BCA']
-  },
-  'AMEX': {
-    code: 'AMEX',
-    shortName: 'AMEX BCA',
-    logoText: 'AMEX',
-    badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
-    tagline: 'Fasilitas Cicilan Kartu American Express via EDC BCA',
-    sopSteps: [
-      'Pilih menu AMEX Installment pada mesin EDC BCA.',
-      'Geser kartu American Express terbitan BCA.',
-      'Pilih tenor 3, 6, atau 12 bulan (MDR flat 5.0%).',
-      'Min. transaksi Rp 30.000.000.'
-    ],
-    exclusions: ['Kartu AMEX terbitan luar negeri (Non-BCA)']
-  },
-  'Mandiri': {
-    code: 'Mandiri',
-    shortName: 'Mandiri',
-    logoText: 'MANDIRI',
-    badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
-    tagline: 'EDC Mandiri Power Installment 0%',
-    sopSteps: [
-      'Gunakan EDC Mandiri, buka menu Power Installment / Cicilan 0%.',
-      'Masukkan nominal transaksi (min. Rp 30.000.000).',
-      'Pilih tenor 6, 12, atau 18 bulan.'
-    ],
-    exclusions: ['Mandiri Corporate Card', 'Mandiri Commercial Card', 'Mandiri Syariah']
-  },
-  'BNI': {
-    code: 'BNI',
-    shortName: 'BNI',
-    logoText: 'BNI',
-    badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
-    tagline: 'EDC BNI Cicilan 0% Tenor hingga 24 Bulan',
-    sopSteps: [
-      'Buka mesin EDC BNI, pilih menu BNI Cicilan 0%.',
-      'Masukkan nominal transaksi (min. Rp 30.000.000).',
-      'Pilih tenor yang diinginkan (6, 12, 18, atau 24 bulan).'
-    ],
-    exclusions: ['BNI Hasanah (Syariah)', 'BNI Corporate Card']
-  },
-  'BRI': {
-    code: 'BRI',
-    shortName: 'BRI',
-    logoText: 'BRI',
-    badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
-    tagline: 'MDR 2% - 3% & Promo Diskon Payday tgl 25-30',
-    sopSteps: [
-      'Pilih menu Cicilan 0% pada mesin EDC BRI.',
-      'Masukkan nominal transaksi (min. Rp 30.000.000).',
-      'Pilih tenor 3, 6, 12, 18, atau 24 bulan.'
-    ],
-    exclusions: ['BRI Corporate Card', 'BRI Syariah']
-  },
-  'CIMB Niaga': {
-    code: 'CIMB Niaga',
-    shortName: 'CIMB Niaga',
-    logoText: 'CIMB',
-    badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
-    tagline: 'MDR Flat 1.75% Termurah & Redeem Poin Xtra',
-    sopSteps: [
-      'Gunakan EDC CIMB Niaga, pilih menu Cicilan 0%.',
-      'Masukkan nominal transaksi (min. Rp 50.000.000).',
-      'Tenor tersedia: 6, 12, atau 24 bulan (flat rate 1.75%).',
-      'Kenaikan limit darurat: hubungi PIC CIMB Ibu Ingky (0819-0505-6755).'
-    ],
-    exclusions: ['CIMB Niaga Syariah', 'CIMB Corporate Card']
-  },
-  'Permata': {
-    code: 'Permata',
-    shortName: 'Permata Bank',
-    logoText: 'PERMATA',
-    badgeStyle: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-    tagline: 'Bebas MDR (0%) Tenor 3 & 6 Bulan via Form Manual',
-    sopSteps: [
-      'Lakukan transaksi REGULER di EDC Permata atau EDC BCA.',
-      'Simpan struk asli hasil gesek EDC.',
-      'Isi Formulir Permohonan Cicilan 0% Permata Bank.',
-      'Email struk + form ke: Permata.Installment.SPA@permatabank.co.id.',
-      'Admin Rp 25.000 ditagihkan ke billing nasabah.'
-    ],
-    exclusions: ['Permata Syariah', 'Corporate Card']
-  },
-  'Danamon': {
-    code: 'Danamon',
-    shortName: 'Danamon',
-    logoText: 'DANAMON',
-    badgeStyle: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-    tagline: 'MDR 0% Tenor 3 & 6 Bulan, Tenor 12 Bulan 1.8%',
-    sopSteps: [
-      'Gesek transaksi REGULER di mesin EDC (Full Payment).',
-      'Lengkapi Formulir Aplikasi Cicilan 0% Danamon.',
-      'Email formulir & struk ke PIC: indah.ayuni@danamon.co.id.',
-      'Admin Rp 15.000 ditagihkan ke billing nasabah.'
-    ],
-    exclusions: ['Danamon Syariah', 'Corporate Card']
-  },
-  'DBS': {
-    code: 'DBS',
-    shortName: 'DBS Digibank',
-    logoText: 'DBS',
-    badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
-    tagline: 'Program Cicilan Khusus Butik Plaza Indonesia & Plaza Senayan',
-    sopSteps: [
-      'Khusus butik Plaza Indonesia & Plaza Senayan (Min. Rp 30 Jt).',
-      'Gesek reguler pada EDC, lalu kirim form permohonan ke bank.',
-      'Email: ellat@dbs.com / jennivervictory@dbs.com (Admin Rp 15.000).'
-    ],
-    exclusions: ['Kartu DBS terbitan luar negeri', 'DBS Corporate Card']
-  },
-  'OCBC': {
-    code: 'OCBC',
-    shortName: 'OCBC NISP',
-    logoText: 'OCBC',
-    badgeStyle: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-    tagline: 'MDR 0% Bebas Biaya Komisi dari 3 s/d 24 Bulan Penuh',
-    sopSteps: [
-      'PILIHAN TERBAIK BUTIK: MDR 0.0% (Gratis) untuk semua tenor (3, 6, 12, 18, 24 bln).',
-      'Swipe REGULER di EDC lalu isi Formulir Konversi Cicilan 0% OCBC.',
-      'Email form + struk ke: cicilanocbc@ocbcnisp.com (cc PIC Rigi Dara Negritta).',
-      'Admin fee Rp 15.000 ditagihkan ke billing nasabah.'
-    ],
-    exclusions: ['OCBC Syariah', 'OCBC Corporate Card']
-  },
-  'HSBC': {
-    code: 'HSBC',
-    shortName: 'HSBC',
-    logoText: 'HSBC',
-    badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
-    tagline: 'Fasilitas Cicilan Nasabah Kartu Kredit Premier & Platinum',
-    sopSteps: [
-      'Swipe transaksi REGULER di EDC (Min. Rp 30.000.000).',
-      'Isi Formulir Permohonan Cicilan 0% HSBC.',
-      'Email ke: installment.support@hsbc.co.id (Tenor 6m: 3.5%, 12m: 5.0%).'
-    ],
-    exclusions: ['HSBC Corporate Card', 'Kartu luar negeri']
-  }
+const BANK_EXCLUSIONS: Record<string, string[]> = {
+  BCA: ['BCA Smartcash', 'BCA Corporate Card', 'BCA debit cards'],
+  AMEX: ['AMEX cards issued outside BCA'],
+  Mandiri: ['Mandiri Corporate Card', 'Mandiri Commercial Card', 'Mandiri Syariah'],
+  BNI: ['BNI Hasanah (Sharia)', 'BNI Corporate Card'],
+  BRI: ['BRI Corporate Card', 'BRI Syariah'],
+  'CIMB Niaga': ['CIMB Niaga Syariah', 'CIMB Corporate Card'],
+  Permata: ['Permata Syariah', 'Corporate Card'],
+  Danamon: ['Danamon Syariah', 'Corporate Card'],
+  DBS: ['DBS cards issued overseas', 'DBS Corporate Card'],
+  OCBC: ['OCBC Syariah', 'OCBC Corporate Card'],
+  HSBC: ['HSBC Corporate Card', 'Cards issued overseas'],
 };
-
-const ALL_TENORS: InstallmentOption[] = ['3 mth', '6 mth', '12 mth', '18 mth', '24 mth', '36 mth'];
+function bankDetails(key: string, rule: BankMdrRule) {
+  const manual = rule.processMethod === 'MANUAL_FORM';
+  return {
+    logoText: key, badgeStyle: 'bg-slate-100 text-slate-800 border-slate-200',
+    sopSteps: manual ? [
+      'Process the regular card transaction on the settlement EDC and retain the receipt.',
+      'Complete the bank installment conversion form using an enabled term shown above.',
+      'Submit the form and receipt through the bank contact channel and confirm acceptance.',
+      'The customer admin fee is separate from the merchant commission. Use the current configured fee shown below.',
+    ] : [
+      key === 'AMEX' ? 'Use the AMEX installment menu on the BCA EDC.' : 'Use the installment menu on the issuing bank EDC.',
+      'Choose an enabled term and verify its current minimum amount in the table above.',
+      'Check card and store eligibility, complete the terminal transaction and retain the installment receipt.',
+    ],
+    exclusions: BANK_EXCLUSIONS[key] || [],
+  };
+}
+const ALL_TENORS = GUIDE_TENORS;
 
 interface BankDirectorySectionProps {
   onSimulateBank: (bankKey: string, minAmount: number) => void;
-  customRules?: Record<string, BankMdrRule>;
+  customRules: Record<string, BankMdrRule>;
 }
 
 export default function BankDirectorySection({ onSimulateBank, customRules }: BankDirectorySectionProps) {
@@ -223,14 +74,27 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTag, setFilterTag] = useState<'ALL' | 'EDC' | 'MANUAL' | 'FREE_MDR'>('ALL');
   const [selectedBankModal, setSelectedBankModal] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Copy helper
-  const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setToastMessage(`${label} disalin!`);
-    setTimeout(() => setToastMessage(null), 2500);
-  };
+  const reducedMotion = useReducedMotion();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!selectedBankModal) return;
+    const previous = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedBankModal(null);
+      if (event.key === 'Tab') {
+        const dialog = closeRef.current?.closest('[role="dialog"]');
+        const controls = dialog?.querySelectorAll<HTMLElement>('button, a[href]');
+        if (!controls?.length) return;
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); previous?.focus(); };
+  }, [selectedBankModal]);
 
   // Clean phone for WA
   const cleanPhoneForWa = (phone: string) => {
@@ -242,7 +106,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
 
   // Processed banks
   const processedBanks = useMemo(() => {
-    const activeRules = customRules ?? BANK_MDR_RULES;
+    const activeRules = customRules;
     let entries = Object.entries(activeRules);
 
     if (searchQuery.trim()) {
@@ -263,7 +127,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
     } else if (filterTag === 'MANUAL') {
       entries = entries.filter(([, rule]) => rule.processMethod === 'MANUAL_FORM');
     } else if (filterTag === 'FREE_MDR') {
-      entries = entries.filter(([, rule]) => Object.values(rule.rates).some(r => r === 0));
+      entries = entries.filter(([, rule]) => ALL_TENORS.some(t => rule.rates[t] === 0));
     }
 
     // Default sort by Bank Name
@@ -273,30 +137,15 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
   // Modal active bank
   const activeModalData = useMemo(() => {
     if (!selectedBankModal) return null;
-    const activeRules = customRules ?? BANK_MDR_RULES;
+    const activeRules = customRules;
     const rule = activeRules[selectedBankModal];
     const contact = BANK_CONTACTS.find(c => c.bank.includes(selectedBankModal) || selectedBankModal.includes(c.bank));
-    const meta = BANK_BRAND_DETAILS[selectedBankModal];
-    return { key: selectedBankModal, rule, contact, meta };
+    const meta = rule ? bankDetails(selectedBankModal, rule) : null;
+    return rule ? { key: selectedBankModal, rule, contact, meta } : null;
   }, [selectedBankModal, customRules]);
 
   return (
     <div className="space-y-4">
-
-      {/* Floating Toast Notification */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="fixed bottom-6 right-6 z-[100] bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs font-semibold flex items-center gap-2"
-          >
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>{toastMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Compact Top Bar: Search, Quick Filters & View Switcher */}
       <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -308,13 +157,13 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
             <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Cari bank / PIC..."
+              aria-label="Search bank or contact" placeholder="Find a bank or contact..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-7 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500 bg-slate-50/50"
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs">
+              <button aria-label="Clear bank search" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs">
                 ✕
               </button>
             )}
@@ -329,7 +178,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                 filterTag === 'ALL' ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               )}
             >
-              Semua ({Object.keys(customRules ?? BANK_MDR_RULES).length})
+              All ({Object.keys(customRules).length})
             </button>
             <button
               onClick={() => setFilterTag('EDC')}
@@ -338,7 +187,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                 filterTag === 'EDC' ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
               )}
             >
-              Mesin EDC (6)
+              EDC terminal ({Object.values(customRules).filter(r => r.processMethod === 'EDC').length})
             </button>
             <button
               onClick={() => setFilterTag('MANUAL')}
@@ -347,7 +196,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                 filterTag === 'MANUAL' ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               )}
             >
-              Form Manual (5)
+              Manual form ({Object.values(customRules).filter(r => r.processMethod === 'MANUAL_FORM').length})
             </button>
             <button
               onClick={() => setFilterTag('FREE_MDR')}
@@ -356,7 +205,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                 filterTag === 'FREE_MDR' ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
               )}
             >
-              MDR 0% (3)
+              0% MDR ({Object.values(customRules).filter(r => ALL_TENORS.some(t => r.rates[t] === 0)).length})
             </button>
           </div>
         </div>
@@ -371,7 +220,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
             )}
           >
             <CreditCard className="w-3.5 h-3.5" />
-            <span>Kartu</span>
+            <span>Cards</span>
           </button>
           <button
             onClick={() => setViewMode('matrix')}
@@ -381,7 +230,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
             )}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Matriks MDR</span>
+            <span>MDR matrix</span>
           </button>
           <button
             onClick={() => setViewMode('table')}
@@ -391,22 +240,24 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
             )}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Tabel</span>
+            <span>Table</span>
           </button>
         </div>
 
       </div>
 
+      <p className="text-xs text-slate-500">Rates, enabled terms, fees and processing methods follow the loaded MDR Setup configuration. BCA 3-month installments use the shared engine minimum of IDR 10M; other terms use the configured bank minimum. Unavailable terms are shown as a dash.</p>
+      {processedBanks.length === 0 && <p role="status" className="rounded-xl border bg-white p-8 text-center text-sm text-slate-500">No banks match these filters.</p>}
       {/* VIEW 1: COMPACT CLEAN CARDS */}
       {viewMode === 'cards' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
           {processedBanks.map(([key, rule]) => {
             const contact = BANK_CONTACTS.find(c => c.bank.includes(key) || key.includes(c.bank));
-            const meta = BANK_BRAND_DETAILS[key];
-            const isZeroMdr = Object.values(rule.rates).some(r => r === 0);
+            const meta = bankDetails(key, rule);
+            const isZeroMdr = ALL_TENORS.some(t => rule.rates[t] === 0);
             const waClean = contact ? cleanPhoneForWa(contact.phone) : '';
             const waMessage = encodeURIComponent(
-              `Halo PIC ${rule.bank}, saya Store Manager BVLGARI Store. Mohon info/konfirmasi program cicilan 0% nasabah kami.`
+              `Hello ${rule.bank} team, I am a BVLGARI Store Manager. Please confirm the available 0% installment program for our customer.`
             );
 
             return (
@@ -439,12 +290,12 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                     </span>
                   </div>
 
-                  {/* Min Amount & Admin Fee Row */}
+                  {/* Minimum and admin fee */}
                   <div className="flex items-center gap-2 text-[11px] text-slate-500 pt-1">
-                    <span>Min: <strong className="text-slate-800 font-mono">Rp {formatCurrency(rule.minAmount / 1000000)} Jt</strong></span>
+                    <span>Min: <strong className="text-slate-800 font-mono">Rp <Amt value={rule.minAmount} short /></strong></span>
                     <span>•</span>
                     <span>Admin: <strong className="text-slate-700 font-mono">
-                      {rule.adminFee ? `Rp ${formatCurrency(rule.adminFee)}` : <span className="text-emerald-700 font-bold">Bebas</span>}
+                      {rule.adminFee ? <Amt value={rule.adminFee} /> : <span className="text-emerald-700 font-bold">None</span>}
                     </strong></span>
                     {isZeroMdr && (
                       <span className="ml-auto text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
@@ -457,10 +308,10 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                 {/* Middle: Tenor Rates Pills */}
                 <div>
                   <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Pilihan Tenor & Rate MDR:
+                    Enabled terms & MDR:
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {Object.entries(rule.rates).map(([t, r]) => {
+                    {ALL_TENORS.filter(t => rule.rates[t] !== undefined).map(t => [t, rule.rates[t]!] as const).map(([t, r]) => {
                       const isFree = r === 0;
                       return (
                         <span
@@ -474,7 +325,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                         >
                           <span className="font-semibold text-slate-500 mr-1">{t.replace(' mth', 'm')}:</span>
                           <strong className={isFree ? "text-emerald-700 font-black" : "text-slate-800 font-bold"}>
-                            {isFree ? '0%' : `${((r || 0) * 100).toFixed(1)}%`}
+                            {isFree ? '0%' : `${formatMdrRate(r || 0)}`}
                           </strong>
                         </span>
                       );
@@ -486,7 +337,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
                   {contact ? (
                     <div className="truncate max-w-[130px]">
-                      <div className="text-[9px] text-slate-400 uppercase font-bold">PIC Bank:</div>
+                      <div className="text-[9px] text-slate-400 uppercase font-bold">Bank contact:</div>
                       <div className="font-semibold text-slate-800 text-[11px] truncate" title={contact.pic}>
                         {contact.pic.split('/')[0]}
                       </div>
@@ -501,7 +352,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                         href={`https://wa.me/${waClean}?text=${waMessage}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Chat WA PIC"
+                        title="Open WhatsApp contact"
                         className="p-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition-colors"
                       >
                         <Phone className="w-3.5 h-3.5" />
@@ -521,7 +372,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                       onClick={() => onSimulateBank(key, rule.minAmount)}
                       className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition-colors cursor-pointer"
                     >
-                      Hitung
+                      Calculate
                     </button>
                   </div>
                 </div>
@@ -536,10 +387,10 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
       {viewMode === 'matrix' && (
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <h3 className="font-bold text-slate-900">Matriks Komparasi MDR 11 Bank</h3>
+            <h3 className="font-bold text-slate-900">Bank MDR comparison</h3>
             <div className="flex items-center gap-2 text-[10px] text-slate-500">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span> 0.0% (Gratis)</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-slate-100 border border-slate-300 inline-block"></span> MDR Berbayar</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span> 0.0% (No merchant fee)</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-slate-100 border border-slate-300 inline-block"></span> Merchant fee applies</span>
             </div>
           </div>
 
@@ -547,14 +398,14 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider">
                 <tr>
-                  <th className="py-2 px-3 sticky left-0 bg-slate-900 z-10">Nama Bank</th>
-                  <th className="py-2 px-2 text-center">Jalur</th>
+                  <th className="py-2 px-3 sticky left-0 bg-slate-900 z-10">Bank name</th>
+                  <th className="py-2 px-2 text-center">Processing</th>
                   <th className="py-2 px-2 text-right">Min. TXN</th>
                   {ALL_TENORS.map(t => (
                     <th key={t} className="py-2 px-2 text-center">{t.replace(' mth', 'm')}</th>
                   ))}
                   <th className="py-2 px-2 text-center">Admin</th>
-                  <th className="py-2 px-2 text-center">Aksi</th>
+                  <th className="py-2 px-2 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -572,7 +423,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                       </span>
                     </td>
                     <td className="py-2 px-2 text-right font-mono text-[11px] text-slate-800">
-                      {formatCurrency(rule.minAmount / 1000000)} Jt
+                      <Amt value={rule.minAmount} short />
                     </td>
                     {ALL_TENORS.map(t => {
                       const rate = rule.rates[t];
@@ -588,13 +439,13 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                               ? "bg-emerald-500 text-white font-black"
                               : "bg-slate-100 text-slate-800 font-semibold"
                           )}>
-                            {isFree ? '0%' : `${(rate * 100).toFixed(1)}%`}
+                            {isFree ? '0%' : `${formatMdrRate(rate)}`}
                           </span>
                         </td>
                       );
                     })}
                     <td className="py-2 px-2 text-center font-mono text-[10px]">
-                      {rule.adminFee ? `Rp ${formatCurrency(rule.adminFee)}` : <span className="text-emerald-700 font-bold">Bebas</span>}
+                      {rule.adminFee ? <Amt value={rule.adminFee} /> : <span className="text-emerald-700 font-bold">None</span>}
                     </td>
                     <td className="py-2 px-2 text-center">
                       <button
@@ -620,21 +471,21 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-slate-50 text-[10px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-2.5 px-3">Nama Bank</th>
-                  <th className="py-2.5 px-3">Jalur</th>
+                  <th className="py-2.5 px-3">Bank name</th>
+                  <th className="py-2.5 px-3">Processing</th>
                   <th className="py-2.5 px-3">Min. TXN</th>
-                  <th className="py-2.5 px-3">Tenor & MDR</th>
+                  <th className="py-2.5 px-3">Term & MDR</th>
                   <th className="py-2.5 px-3">Admin</th>
-                  <th className="py-2.5 px-3">PIC & Kontak</th>
-                  <th className="py-2.5 px-3 text-center">Aksi</th>
+                  <th className="py-2.5 px-3">Contact details</th>
+                  <th className="py-2.5 px-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {processedBanks.map(([key, rule]) => {
                   const contact = BANK_CONTACTS.find(c => c.bank.includes(key) || key.includes(c.bank));
                   const waClean = contact ? cleanPhoneForWa(contact.phone) : '';
-                  const tenorsStr = Object.entries(rule.rates)
-                    .map(([t, r]) => `${t.replace(' mth', 'm')}: ${(r! * 100).toFixed(1)}%`)
+                  const tenorsStr = ALL_TENORS.filter(t => rule.rates[t] !== undefined).map(t => [t, rule.rates[t]!] as const)
+                    .map(([t, r]) => `${t.replace(' mth', 'm')}: ${formatMdrRate(r!)}`)
                     .join(', ');
 
                   return (
@@ -648,12 +499,12 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                           {rule.processMethod === 'EDC' ? 'EDC' : 'Manual'}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 font-mono font-bold">Rp {formatCurrency(rule.minAmount)}</td>
+                      <td className="py-2.5 px-3 font-mono font-bold">Rp <Amt value={rule.minAmount} /></td>
                       <td className="py-2.5 px-3 font-mono text-[11px] text-slate-700 max-w-xs truncate" title={tenorsStr}>
                         {tenorsStr}
                       </td>
                       <td className="py-2.5 px-3 font-mono text-[11px]">
-                        {rule.adminFee ? `Rp ${formatCurrency(rule.adminFee)}` : <span className="text-emerald-700 font-bold">Bebas</span>}
+                        {rule.adminFee ? <Amt value={rule.adminFee} /> : <span className="text-emerald-700 font-bold">None</span>}
                       </td>
                       <td className="py-2.5 px-3">
                         {contact ? (
@@ -680,7 +531,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                             onClick={() => onSimulateBank(key, rule.minAmount)}
                             className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer"
                           >
-                            Hitung
+                            Calculate
                           </button>
                         </div>
                       </td>
@@ -698,10 +549,10 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
         {activeModalData && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={reducedMotion ? false : { opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden"
+              exit={{ opacity: 0, scale: reducedMotion ? 1 : 0.95 }}
+              role="dialog" aria-modal="true" aria-label="Bank installment procedures" className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden"
             >
               {/* Header */}
               <div className="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between">
@@ -709,14 +560,14 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                   <h3 className="font-bold text-sm flex items-center gap-2">
                     <span>{activeModalData.rule.bank}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-mono">
-                      {activeModalData.rule.processMethod === 'EDC' ? 'EDC' : 'Form Manual'}
+                      {activeModalData.rule.processMethod === 'EDC' ? 'EDC' : 'Manual form'}
                     </span>
                   </h3>
-                  <div className="text-[10px] text-slate-400 mt-0.5">SOP Operasional & Ketentuan Cicilan 0%</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Operating procedures & installment terms</div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedBankModal(null)}
+                  ref={closeRef} aria-label="Close bank procedures" onClick={() => setSelectedBankModal(null)}
                   className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer text-xs"
                 >
                   ✕
@@ -728,21 +579,22 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                 {/* Rates */}
                 <div>
                   <div className="font-bold text-slate-800 mb-1.5 uppercase text-[10px] tracking-wider">
-                    Rate MDR per Tenor:
+                    MDR by term:
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(activeModalData.rule.rates).map(([t, r]) => (
+                    {ALL_TENORS.filter(t => activeModalData.rule.rates[t] !== undefined).map(t => [t, activeModalData.rule.rates[t]!] as const).map(([t, r]) => (
                       <span key={t} className="px-2.5 py-1 rounded-lg border bg-slate-50 font-mono text-xs">
-                        {t}: <strong className={r === 0 ? "text-emerald-700" : "text-slate-900"}>{r === 0 ? '0% (FREE)' : `${(r! * 100).toFixed(1)}%`}</strong>
+                        {t} / min. <Amt value={getInstallmentMinimum(activeModalData.key, t, activeModalData.rule)} />: <strong className={r === 0 ? "text-emerald-700" : "text-slate-900"}>{r === 0 ? '0% (FREE)' : `${formatMdrRate(r!)}`}</strong>
                       </span>
                     ))}
                   </div>
                 </div>
 
+                <div className="rounded-xl border border-slate-200 p-3 text-slate-600"><p>Customer admin fee: <Amt value={activeModalData.rule.adminFee || 0} /></p><p>Store scope: {activeModalData.rule.validStores || 'All stores'}</p>{activeModalData.rule.notes && <p className="mt-2">Finance notes (as saved): {activeModalData.rule.notes}</p>}</div>
                 {/* SOP Steps */}
                 <div>
                   <div className="font-bold text-slate-800 mb-1.5 uppercase text-[10px] tracking-wider">
-                    Langkah Operasional Kasir (SOP):
+                    Cashier operating steps:
                   </div>
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 text-[11px] text-slate-700">
                     {(activeModalData.meta?.sopSteps || []).map((step, idx) => (
@@ -758,7 +610,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                 {activeModalData.meta?.exclusions && (
                   <div>
                     <div className="font-bold text-rose-800 mb-1 uppercase text-[10px] tracking-wider">
-                      Kartu Tidak Memenuhi Syarat:
+                      Excluded cards (internal reference):
                     </div>
                     <div className="text-[11px] text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
                       {activeModalData.meta.exclusions.join(' • ')}
@@ -792,7 +644,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                   onClick={() => setSelectedBankModal(null)}
                   className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                 >
-                  Tutup
+                  Close
                 </button>
                 <button
                   type="button"
@@ -804,7 +656,7 @@ export default function BankDirectorySection({ onSimulateBank, customRules }: Ba
                   }}
                   className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs"
                 >
-                  Hitung di Simulasi
+                  Open calculator
                 </button>
               </div>
             </motion.div>
