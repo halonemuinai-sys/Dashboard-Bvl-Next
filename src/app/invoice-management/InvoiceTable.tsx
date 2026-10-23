@@ -40,6 +40,7 @@ interface Props {
   onItemCommEdit: (itemId: number, val: string) => void;
   onItemCommBlur: (itemId: number, transNo: string) => void;
   onItemTypeChange: (itemId: number, transNo: string, type: string) => unknown;
+  onInvoiceTypeChange: (transNo: string, type: string) => void;
   onDeleteInvoice: (transNo: string) => void;
   savingItemId: number | null;
   commEdits: Record<number, string>;
@@ -81,6 +82,7 @@ export default function InvoiceTable({
   onItemCommEdit,
   onItemCommBlur,
   onItemTypeChange,
+  onInvoiceTypeChange,
   onDeleteInvoice,
   savingItemId,
   commEdits,
@@ -119,6 +121,11 @@ export default function InvoiceTable({
                 Store {isUnlocked && isAdmin ? '✎' : <Lock className="w-2.5 h-2.5" />}
               </span>
             </th>
+            <th className={isUnlocked ? 'text-amber-600 py-3 px-4' : 'text-slate-400 py-3 px-4'}>
+              <span className="inline-flex items-center gap-1">
+                Type {isUnlocked ? '✎' : <Lock className="w-2.5 h-2.5" />}
+              </span>
+            </th>
             <th className="py-3 px-4 text-center">Item / Qty</th>
             <th className="py-3 px-4 text-right">Gross Sales</th>
             <th className="py-3 px-4 text-right">Discount</th>
@@ -132,7 +139,7 @@ export default function InvoiceTable({
         <tbody className="divide-y divide-slate-100 text-xs">
           {invoices.length === 0 ? (
             <tr>
-              <td colSpan={isAdmin ? 13 : 12} className="py-16 text-center text-slate-400 text-sm">
+              <td colSpan={isAdmin ? 14 : 13} className="py-16 text-center text-slate-400 text-sm">
                 <Receipt size={28} strokeWidth={1.5} className="mx-auto mb-3 text-slate-300" />
                 <p className="font-semibold text-slate-600">No matching invoices</p>
                 <p className="mt-1 text-xs">Try another search, location or reporting period.</p>
@@ -298,6 +305,32 @@ export default function InvoiceTable({
                       )}
                     </td>
 
+                    {/* Regular / SMI for the whole invoice (Mixed when items differ) */}
+                    <td className="py-3 px-4">
+                      {(() => {
+                        const types = [...new Set(inv.items.map(it => it.type || 'Regular'))];
+                        const current = types.length === 1 ? types[0] : 'Mixed';
+                        return isUnlocked ? (
+                          <div className="flex items-center gap-1">
+                            <select
+                              aria-label={`Sales type for ${inv.trans_no}`}
+                              value={current}
+                              disabled={isSavingLoc}
+                              onChange={e => onInvoiceTypeChange(inv.trans_no, e.target.value)}
+                              className={cn('text-[11px] font-bold px-2 py-0.5 rounded-lg border cursor-pointer outline-none transition-all focus:ring-1 focus:ring-amber-400 shadow-2xs', TYPE_COLORS[current] || 'border-amber-300 bg-amber-50 text-amber-900')}
+                            >
+                              {current === 'Mixed' && <option value="Mixed" disabled>Mixed</option>}
+                              <option value="Regular">Regular</option>
+                              <option value="SMI">SMI</option>
+                            </select>
+                            {isSavingLoc && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
+                          </div>
+                        ) : (
+                          <span className={cn('inline-flex rounded-lg border px-2.5 py-1 text-[10px] font-semibold', TYPE_COLORS[current] || 'border-slate-200 bg-slate-50 text-slate-600')} title={current === 'Mixed' ? 'Items have different types. Expand the invoice to see each item.' : undefined}>{current}</span>
+                        );
+                      })()}
+                    </td>
+
                     {/* Item Count & Qty */}
                     <td className="py-3 px-4 text-center">
                       <span className="inline-flex items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50/70 px-2 py-1 text-[10px] font-semibold text-indigo-700">
@@ -381,7 +414,7 @@ export default function InvoiceTable({
                   {/* Sub-Table: Nested Breakdown of Items (when expanded) */}
                   {isExpanded && (
                     <tr className="bg-slate-50/90 border-b-2 border-slate-200">
-                      <td colSpan={isAdmin ? 13 : 12} className="p-3 sm:px-8 py-4">
+                      <td colSpan={isAdmin ? 14 : 13} className="p-3 sm:px-8 py-4">
                         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
                           
                           {/* Sub-table Header */}

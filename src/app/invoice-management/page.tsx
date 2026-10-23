@@ -289,6 +289,24 @@ function InvoiceManagementContent() {
     }
   };
 
+  // Whole-invoice Regular/SMI switch from the table row: updates every item that differs.
+  const handleInvoiceTypeChange = async (transNo: string, newType: string) => {
+    const invoice = invoices.find(inv => inv.trans_no === transNo);
+    if (!invoice) return;
+    setSavingInvoiceNo(transNo);
+    try {
+      for (const item of invoice.items) {
+        if ((item.type || 'Regular') !== newType) await updateInvoiceItemType(item.id, newType, userEmail);
+      }
+      setInvoices(prev => prev.map(inv => inv.trans_no === transNo ? { ...inv, items: inv.items.map(it => ({ ...it, type: newType })) } : inv));
+    } catch (err) {
+      console.error('Error updating invoice type:', err);
+      await fetchData();
+    } finally {
+      setSavingInvoiceNo(null);
+    }
+  };
+
   // Inline Item Comm Edit
   const flashSavedItem = (id: number) => {
     setSavedItemIds(prev => new Set(prev).add(id));
@@ -590,6 +608,7 @@ function InvoiceManagementContent() {
           onItemCommEdit={(itemId, val) => setCommEdits(prev => ({ ...prev, [itemId]: val }))}
           onItemCommBlur={handleItemCommBlur}
           onItemTypeChange={handleItemTypeChange}
+          onInvoiceTypeChange={handleInvoiceTypeChange}
           onDeleteInvoice={transNo => setDeleteTargetTransNo(transNo)}
           savingItemId={savingItemId}
           commEdits={commEdits}
