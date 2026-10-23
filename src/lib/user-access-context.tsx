@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 
 import { DP_TRANSACTION_PATHS } from '@/lib/access-policy';
 
-type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | 'finance' | null;
+type Role = 'super_admin' | 'management_it' | 'operations_sales' | 'crm' | 'finance' | 'merchandise' | null;
 
 interface UserAccessState {
   role: Role;
@@ -133,6 +133,7 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     if (loading) {
       if (role === 'operations_sales') return path === '/operations-sales' || path === '/installment-guide';
       if (role === 'crm') return path === '/crm-profiling' || path === '/advanced-clienteling';
+      if (role === 'merchandise') return path === '/packaging' || path === '/inventory';
       if (role === 'finance') return path === '/operations-sales' || path === '/finance-payment-analytics' || path === '/installment-guide';
       return path === '/';
     }

@@ -1,11 +1,15 @@
-export const ROLES = ['super_admin', 'management_it', 'operations_sales', 'crm', 'finance'] as const;
+export const ROLES = ['super_admin', 'management_it', 'operations_sales', 'crm', 'finance', 'merchandise'] as const;
 export type Role = typeof ROLES[number];
 export interface DashboardUser { id: number; email: string; full_name: string; role: Role; assigned_store: string; is_active: boolean }
 export interface MenuAccess { role: Role; menu_path: string; allowed: boolean }
 export interface AuditLog { id: number; user_email: string; action_type: string; table_name: string; record_id: string | null; created_at: string; old_values: Record<string, unknown> | null; new_values: Record<string, unknown> | null }
-export const ROLE_LABEL: Record<Role, string> = { super_admin: 'Super Admin', management_it: 'Management & IT', operations_sales: 'Operations Sales', crm: 'CRM', finance: 'Finance' };
+export const ROLE_LABEL: Record<Role, string> = { super_admin: 'Super Admin', management_it: 'Management & IT', operations_sales: 'Operations Sales', crm: 'CRM', finance: 'Finance', merchandise: 'Merchandise' };
 export const STORES = ['ALL', 'Plaza Indonesia', 'Plaza Senayan', 'Bali', 'Head Office'] as const;
 export const FINANCE_PATHS = ['/', '/operations-sales', '/finance-reconciliation', '/finance-payment-analytics', '/finance-mdr-setup', '/installment-guide'];
+/** Roles whose menus an administrator chooses in User Access (others follow a fixed policy). */
+export const CONFIGURABLE_ROLES: Role[] = ['operations_sales', 'crm', 'merchandise'];
+/** Menus a new merchandise role starts with; administrators can add or remove menus later. */
+export const MERCHANDISE_DEFAULT_PATHS = ['/packaging', '/inventory'];
 export function isRole(value: unknown): value is Role { return typeof value === 'string' && ROLES.includes(value as Role); }
 export function isAdminRole(role: unknown) { return role === 'super_admin' || role === 'management_it'; }
 export const DP_TRANSACTION_PATHS = ['/monthly-dps-svc', '/monthly-dps-svc/down-payment', '/monthly-dps-svc/service', '/monthly-dps-svc/packaging'];

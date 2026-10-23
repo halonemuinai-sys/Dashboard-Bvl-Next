@@ -46,7 +46,8 @@ export default function MonthlyOverviewPage() {
   const year = String(period.year);
   const periodKey = scope + ':' + year + '-' + period.month;
   const requestKey = periodKey + ':' + revision;
-  const redirecting = role === 'operations_sales' || role === 'finance';
+  const landing = role === 'operations_sales' || role === 'finance' ? '/operations-sales' : role === 'merchandise' ? '/packaging' : '';
+  const redirecting = Boolean(landing);
   const loading = snapshot?.request !== requestKey;
   const data = snapshot?.period === periodKey ? snapshot.data : null;
   const error = snapshot?.request === requestKey ? snapshot.error : '';
@@ -57,8 +58,8 @@ export default function MonthlyOverviewPage() {
   const advisorsLoading = advisorSnapshot?.request !== advisorRequest;
 
   useEffect(() => {
-    if (redirecting) router.replace('/operations-sales');
-  }, [redirecting, router]);
+    if (landing) router.replace(landing);
+  }, [landing, router]);
 
   useEffect(() => {
     if (redirecting || accessLoading || !role) return;

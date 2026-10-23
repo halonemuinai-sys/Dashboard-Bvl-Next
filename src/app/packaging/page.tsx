@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Package, Database, RefreshCw, Search, X, FileDown, Loader2, AlertCircle, Store, Receipt, Layers, ShoppingBag,
-  ChevronUp, ChevronDown, ChevronsUpDown,
+  ChevronUp, ChevronDown, ChevronsUpDown, ShieldOff, ArrowLeft,
 } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import InfoTip from '@/components/InfoTip';
 import { supabase } from '@/lib/supabase';
@@ -42,7 +43,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 }
 
 export default function PackagingPage() {
-  const { assignedStore } = useUserAccess();
+  const { assignedStore, role, canAccess, loading: accessLoading } = useUserAccess();
   // Store managers only see their own boutique.
   const lockedStore = assignedStore && assignedStore !== 'ALL' ? assignedStore : '';
   const today = new Date();
@@ -159,6 +160,24 @@ export default function PackagingPage() {
     { icon: Receipt, tone: 'bg-emerald-50 text-emerald-600', label: 'Invoices', value: units(kpi.invoices), help: 'Distinct sales invoices that used packaging.' },
     { icon: ShoppingBag, tone: 'bg-amber-50 text-amber-600', label: 'Distinct items', value: units(kpi.items), help: 'Different packaging items used.' },
   ];
+
+  if (accessLoading) {
+    return <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-sm text-slate-500"><Loader2 className="h-6 w-6 animate-spin text-blue-600" />Checking access…</div>;
+  }
+  if (!canAccess('/packaging')) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center p-4">
+        <div className="max-w-sm space-y-4 text-center">
+          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 ring-1 ring-rose-100"><ShieldOff className="h-7 w-7 text-rose-500" /></span>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">Access denied</h1>
+            <p className="mt-1 text-sm text-slate-500">Packaging is not available for the <span className="font-semibold text-slate-700">{role || '—'}</span> role.</p>
+          </div>
+          <Link href="/" className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700"><ArrowLeft className="h-4 w-4" />Back to dashboard</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-12">

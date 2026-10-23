@@ -52,6 +52,7 @@ const ROLE_LABEL: Record<string, string> = {
   operations_sales: 'Operations Sales',
   crm:              'CRM',
   finance:          'Finance',
+  merchandise:      'Merchandise',
 };
 
 function getBadgeStyle(badgeColor?: string) {

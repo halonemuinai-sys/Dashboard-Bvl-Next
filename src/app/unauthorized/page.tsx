@@ -8,6 +8,8 @@ const ROLE_LABEL: Record<string, string> = {
   management_it:    'Management & IT All',
   operations_sales: 'Operations Sales',
   crm:              'CRM',
+  finance:          'Finance',
+  merchandise:      'Merchandise',
 };
 
 export default function UnauthorizedPage() {

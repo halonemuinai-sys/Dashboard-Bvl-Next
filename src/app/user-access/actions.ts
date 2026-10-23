@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireAccessAdmin } from '@/lib/server-access';
 import { hashPassword } from '@/utils/auth';
-import { assertUserChange, isRole, isFixedPermission, MENU_GROUPS, STORES, validatePassword, redactAuditValue, type Role, type DashboardUser, type MenuAccess, type AuditLog } from '@/lib/access-policy';
+import { assertUserChange, CONFIGURABLE_ROLES, isRole, isFixedPermission, MENU_GROUPS, STORES, validatePassword, redactAuditValue, type Role, type DashboardUser, type MenuAccess, type AuditLog } from '@/lib/access-policy';
 
 const USER_FIELDS = 'id,email,full_name,role,is_active';
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -181,7 +181,7 @@ export async function deleteUserAction(id: number) {
 export async function savePermissionsAction(role: Role, rows: { menu_path: string; allowed: boolean }[]) {
   return run(async () => {
     const { db } = await requireAccessAdmin();
-    if (role !== 'operations_sales' && role !== 'crm') throw new Error('This role uses a fixed access policy.');
+    if (!CONFIGURABLE_ROLES.includes(role)) throw new Error('This role uses a fixed access policy.');
     const paths = new Set(MENU_GROUPS.flatMap(group => group.items.map(item => item.path)));
     if (!Array.isArray(rows) || rows.length > paths.size) throw new Error('Invalid permission list.');
     if (new Set(rows.map(row => row.menu_path)).size !== rows.length) throw new Error('Duplicate permission paths.');
