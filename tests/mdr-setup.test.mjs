@@ -65,7 +65,7 @@ test('unsupported installments are visibly warned and zero-fee manual programs k
   const c = config(); delete c.rules.BCA.rates['6 mth'];
   c.creditConfig.edcRates.BCA.onUs = .028;
   assert.equal(e.computePaymentMdr({ ...split, installment: '6 mth' }, c.rules, c.debitConfig, c.creditConfig).mdrPct, .028);
-  assert.match(e.computePaymentMdr({ ...split, installment: '6 mth' }, c.rules, c.debitConfig, c.creditConfig).warningNote, /tidak terdaftar/);
+  assert.match(e.computePaymentMdr({ ...split, installment: '6 mth' }, c.rules, c.debitConfig, c.creditConfig).warningNote, /not listed/);
   const manual = e.computePaymentMdr({ ...split, bank: 'OCBC', installment: '6 mth' }, c.rules, c.debitConfig, c.creditConfig);
   assert.equal(manual.cardComm, 0); assert.equal(manual.processMethod, 'MANUAL_FORM');
 });

@@ -116,20 +116,20 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
     minAmount: 30000000,
     rates: { '3 mth': 0.05, '6 mth': 0.05, '12 mth': 0.05 },
     processMethod: 'EDC',
-    notes: 'Min. Rp 30 Jt. Tenor 24/36m dibukakan khusus tactical event.',
+    notes: 'Min. IDR 30M. 24/36-month tenors are opened only for tactical events.',
   },
   'BCA': {
     bank: 'BCA (Visa & Mastercard)',
     minAmount: 30000000,
     rates: {
-      '3 mth': 0.03, // Min 10jt khusus 3 bln
+      '3 mth': 0.03, // Min IDR 10M for the 3-month tenor only
       '6 mth': 0.04,
       '12 mth': 0.05,
       '24 mth': 0.08,
       '36 mth': 0.15,
     },
     processMethod: 'EDC',
-    notes: 'Min. Rp 10 Jt untuk 3 bln, Rp 30 Jt untuk 6 & 12 bln.',
+    notes: 'Min. IDR 10M for 3 months, IDR 30M for 6 & 12 months.',
   },
   'BNI': {
     bank: 'BNI',
@@ -141,7 +141,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
       '24 mth': 0.09,
     },
     processMethod: 'EDC',
-    notes: 'Min. Rp 30 Jt. Exclude Hasanah Card & Corporate Card.',
+    notes: 'Min. IDR 30M. Excludes Hasanah Card & Corporate Card.',
   },
   'BRI': {
     bank: 'BRI',
@@ -154,7 +154,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
       '24 mth': 0.03,
     },
     processMethod: 'EDC',
-    notes: 'Min. Rp 30 Jt. Promo khusus diskon 10% tgl 25-30 setiap bulan.',
+    notes: 'Min. IDR 30M. Special 10% discount promo on the 25th-30th every month.',
   },
   'CIMB Niaga': {
     bank: 'CIMB Niaga',
@@ -165,7 +165,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
       '24 mth': 0.0175,
     },
     processMethod: 'EDC',
-    notes: 'Min. Rp 50 Jt. MDR Flat 1.75%. Save up to 100% with Poin Xtra.',
+    notes: 'Min. IDR 50M. Flat 1.75% MDR. Save up to 100% with Poin Xtra.',
   },
   'Danamon': {
     bank: 'Danamon',
@@ -177,7 +177,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
     },
     processMethod: 'MANUAL_FORM',
     adminFee: 15000,
-    notes: 'Min. Rp 30 Jt. Biaya admin nasabah Rp 15.000. Butuh Form Manual.',
+    notes: 'Min. IDR 30M. Customer admin fee IDR 15,000. Requires a manual form.',
   },
   'DBS': {
     bank: 'DBS (Digibank)',
@@ -190,7 +190,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
     processMethod: 'MANUAL_FORM',
     adminFee: 15000,
     validStores: 'Plaza Indonesia & Plaza Senayan',
-    notes: 'Min. Rp 30 Jt. Admin nasabah Rp 15.000. Khusus Butik PI & PS.',
+    notes: 'Min. IDR 30M. Customer admin fee IDR 15,000. PI & PS boutiques only.',
   },
   'HSBC': {
     bank: 'HSBC',
@@ -200,7 +200,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
       '12 mth': 0.05,
     },
     processMethod: 'MANUAL_FORM',
-    notes: 'Min. Rp 30 Jt. Butuh Form Manual ke Bank.',
+    notes: 'Min. IDR 30M. Requires a manual form sent to the bank.',
   },
   'Mandiri': {
     bank: 'Mandiri',
@@ -211,7 +211,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
       '18 mth': 0.08,
     },
     processMethod: 'EDC',
-    notes: 'Min. Rp 30 Jt. Mesin EDC Mandiri.',
+    notes: 'Min. IDR 30M. Processed on a Mandiri EDC terminal.',
   },
   'OCBC': {
     bank: 'OCBC (NISP)',
@@ -225,7 +225,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
     },
     processMethod: 'MANUAL_FORM',
     adminFee: 15000,
-    notes: 'Min. Rp 30 Jt. Bebas MDR (0%) hingga 24 bln. Form Manual.',
+    notes: 'Min. IDR 30M. 0% MDR up to 24 months. Requires a manual form.',
   },
   'Permata': {
     bank: 'Permata Bank',
@@ -237,7 +237,7 @@ export const BANK_MDR_RULES: Record<string, BankMdrRule> = {
     },
     processMethod: 'MANUAL_FORM',
     adminFee: 25000,
-    notes: 'Min. Rp 30 Jt. Bebas MDR (0%) tenor 3 & 6 bln. Form Manual.',
+    notes: 'Min. IDR 30M. 0% MDR for 3 & 6-month tenors. Requires a manual form.',
   },
 };
 
@@ -411,13 +411,13 @@ export function computePaymentMdr(
         mdrPct: 0.0,
         cardComm: 0,
         processMethod: 'EDC',
-        warningNote: 'Tenor 24/36 bulan tidak diaktifkan pada Payment Link BCA.',
+        warningNote: 'The 24/36-month tenor is not available on BCA Payment Link.',
       };
     }
     const rate = PAYMENT_LINK_RATES[installment] ?? 0.017;
     let warning: string | undefined;
     if (installment !== '--' && amount > 0 && amount < 10000000) {
-      warning = 'Min. transaksi cicilan Payment Link BCA adalah Rp 10.000.000.';
+      warning = 'Min. BCA Payment Link installment transaction is IDR 10,000,000.';
     }
     return {
       mdrPct: rate,
@@ -428,14 +428,14 @@ export function computePaymentMdr(
   }
 
   // 3. QRIS (Dynamic QRIS EDC / Static QRIS)
-  // Regulasi Bank Indonesia (PADG No. 24/1/PADG/2022): MDR 0.70% untuk Kategori Usaha Menengah & Besar (UMB / Retail Mewah).
-  // Limit transaksi standar QRIS BI: Rp 10.000.000 per scan.
+  // Bank Indonesia regulation (PADG No. 24/1/PADG/2022): 0.70% MDR for the Medium & Large Business
+  // category (UMB / luxury retail). Standard BI QRIS transaction limit: IDR 10,000,000 per scan.
   if (paymentType === 'QRIS') {
     const qrisRate = 0.007; // 0.70%
     let warning: string | undefined;
 
     if (amount > 10000000) {
-      warning = 'Regulasi BI: Limit standar transaksi QRIS adalah maks. Rp 10.000.000 per scan. Untuk nominal di atas limit, lakukan split scan QRIS atau pastikan limit harian nasabah mencukupi.';
+      warning = 'BI regulation: the standard QRIS transaction limit is max. IDR 10,000,000 per scan. For amounts above the limit, split the QRIS scan or confirm the daily limit on the customer\'s card is sufficient.';
     }
 
     return {
@@ -479,7 +479,7 @@ export function computePaymentMdr(
     let warning: string | undefined;
 
     if (!isSameBank) {
-      warning = `Kartu Debit ${cardBank} di-settle di EDC ${settleEdc} (Off-Us) dikenakan tarif ${(debitRate * 100).toFixed(2)}%.`;
+      warning = `${cardBank} debit card settled on the ${settleEdc} EDC (Off-Us) is charged ${(debitRate * 100).toFixed(2)}%.`;
     }
 
     return {
@@ -512,7 +512,7 @@ export function computePaymentMdr(
           mdrPct: rate,
           cardComm: Math.round(amount * rate),
           processMethod: 'EDC',
-          warningNote: `Kartu AMEX dikenakan MDR ${(rate * 100).toFixed(2)}% (Wajib diproses di EDC BCA / AMEX).`,
+          warningNote: `AMEX card is charged ${(rate * 100).toFixed(2)}% MDR (must be processed on a BCA / AMEX EDC).`,
         };
       }
 
@@ -523,7 +523,7 @@ export function computePaymentMdr(
           mdrPct: alipayRate,
           cardComm: Math.round(amount * alipayRate),
           processMethod: 'EDC',
-          warningNote: `Transaksi Alipay dikenakan MDR ${(alipayRate * 100).toFixed(2)}% (Settle via EDC BCA / Acquirer).`,
+          warningNote: `Alipay transaction is charged ${(alipayRate * 100).toFixed(2)}% MDR (settled via BCA / Acquirer EDC).`,
         };
       }
 
@@ -534,7 +534,7 @@ export function computePaymentMdr(
           mdrPct: wechatRate,
           cardComm: Math.round(amount * wechatRate),
           processMethod: 'EDC',
-          warningNote: `Transaksi WeChat Pay dikenakan MDR ${(wechatRate * 100).toFixed(2)}% (Settle via EDC BCA / Acquirer).`,
+          warningNote: `WeChat Pay transaction is charged ${(wechatRate * 100).toFixed(2)}% MDR (settled via BCA / Acquirer EDC).`,
         };
       }
 
@@ -545,7 +545,7 @@ export function computePaymentMdr(
           mdrPct: customRate,
           cardComm: Math.round(amount * customRate),
           processMethod: 'EDC',
-          warningNote: `Kartu ${cardTypeNorm} dikenakan MDR ${(customRate * 100).toFixed(2)}% (Settle via EDC ${settleEdc}).`,
+          warningNote: `${cardTypeNorm} card is charged ${(customRate * 100).toFixed(2)}% MDR (settled via ${settleEdc} EDC).`,
         };
       }
 
@@ -562,9 +562,9 @@ export function computePaymentMdr(
       let warning: string | undefined;
 
       if (!isSameBank) {
-        warning = `Kartu Kredit ${cardBank} digesek di EDC ${settleEdc} (Off-Us / Beda EDC) dikenakan tarif ${(rate * 100).toFixed(2)}%.`;
+        warning = `${cardBank} credit card swiped on the ${settleEdc} EDC (Off-Us / different EDC) is charged ${(rate * 100).toFixed(2)}%.`;
       } else {
-        warning = `Kartu Kredit ${cardBank} di EDC ${settleEdc} (On-Us) dikenakan tarif ${(rate * 100).toFixed(2)}%.`;
+        warning = `${cardBank} credit card on the ${settleEdc} EDC (On-Us) is charged ${(rate * 100).toFixed(2)}%.`;
       }
 
       return {
@@ -587,17 +587,17 @@ export function computePaymentMdr(
       // Minimum amount validation
       const minRequired = (targetBank === 'BCA' && installment === '3 mth') ? 10000000 : bankRule.minAmount;
       if (amount > 0 && amount < minRequired) {
-        warning = `Min. transaksi cicilan ${bankRule.bank} (${installment}) adalah Rp ${minRequired.toLocaleString('id-ID')}.`;
+        warning = `Min. ${bankRule.bank} installment transaction (${installment}) is Rp ${minRequired.toLocaleString('id-ID')}.`;
       }
 
       // Check cross-EDC for installment
       if (bankRule.processMethod === 'MANUAL_FORM') {
         const baseNote = bankRule.notes ? `${bankRule.notes} ` : '';
-        const crossNote = `Kartu ${targetBank} cicilan 0% ${installment} diproses melalui Form Manual ke bank (gesek di EDC ${settleEdc}).`;
+        const crossNote = `${targetBank} 0% installment (${installment}) is processed via a manual form to the bank (swiped on ${settleEdc} EDC).`;
         warning = warning ? `${warning} ${crossNote}` : `${baseNote}${crossNote}`.trim();
       } else if (!isSameBank && targetBank !== 'AMEX') {
         // EDC-based installment (e.g. Mandiri, BNI, BRI, CIMB) swiped on different EDC
-        const edcAlert = `Perhatian: Program cicilan 0% ${bankRule.bank} seharusnya digesek di mesin EDC ${targetBank}. Gesek di EDC ${settleEdc} berpotensi gagal cicilan jika terminal tidak mendukung multi-acquirer.`;
+        const edcAlert = `Note: the ${bankRule.bank} 0% installment program should be swiped on a ${targetBank} EDC terminal. Swiping on ${settleEdc} EDC may fail the installment if the terminal does not support multi-acquirer.`;
         warning = warning ? `${warning} ${edcAlert}` : edcAlert;
       }
 
@@ -615,19 +615,19 @@ export function computePaymentMdr(
           mdrPct: fallbackRate,
           cardComm: regular.cardComm,
           processMethod: bankRule.processMethod,
-          warningNote: `Tenor ${installment} tidak terdaftar pada program cicilan 0% ${bankRule.bank}. Menggunakan rate ${isSameBank ? 'On-Us' : 'Off-Us'} ${(fallbackRate * 100).toFixed(2)}%.`,
+          warningNote: `The ${installment} tenor is not listed in the ${bankRule.bank} 0% installment program. Using the ${isSameBank ? 'On-Us' : 'Off-Us'} rate of ${(fallbackRate * 100).toFixed(2)}%.`,
         };
       }
     }
 
-    // Fallback if bank is not in standard installment list
+    // Fallback when the bank is not in the standard installment list
     const regular = computePaymentMdr({ ...split, installment: '--' }, customRules, debitConfig, creditConfig);
     const fallbackRate = regular.mdrPct;
     return {
       mdrPct: fallbackRate,
       cardComm: regular.cardComm,
       processMethod: 'EDC',
-      warningNote: `Bank ${targetBank} belum terdaftar pada program cicilan khusus. Menggunakan standar ${isSameBank ? 'On-Us' : 'Off-Us'} ${(fallbackRate * 100).toFixed(2)}%.`,
+      warningNote: `${targetBank} is not registered in a special installment program. Using the standard ${isSameBank ? 'On-Us' : 'Off-Us'} rate of ${(fallbackRate * 100).toFixed(2)}%.`,
     };
   }
 
