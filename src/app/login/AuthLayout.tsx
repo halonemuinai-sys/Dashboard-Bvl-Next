@@ -15,7 +15,7 @@ export default function AuthLayout({ formLabel, children }: { formLabel: string;
       <section className={styles.formPanel} aria-label={formLabel}>
         <header className={styles.formHeader}><span>VIZIONE | MRA GROUP</span><span className={styles.internalBadge}><LockKeyhole size={12} aria-hidden="true" /> INTERNAL ACCESS</span></header>
         {children}
-        <footer className={styles.formFooter}><span>&copy; 2026 Vizione | MRA Group</span><span>Developed by Aris Setiyono</span></footer>
+        <footer className={styles.formFooter}><span>&copy; 2026 Vizione | MRA Group</span><span>Created by Aris Setiyono | Ideas By Jessica</span></footer>
       </section>
     </main>
   );

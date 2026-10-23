@@ -274,7 +274,7 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
             logout();
           }}><LogOut size={16} /></button>
         </div>
-        {isExpanded && <p className={styles.credit}>&copy; 2026 MRA Retail <span>Created by Aris Setiyono</span></p>}
+        {isExpanded && <p className={styles.credit}>&copy; 2026 Vizione | MRA Group <span>Created by Aris Setiyono | Ideas By Jessica</span></p>}
       </footer>
     </aside>
   );
