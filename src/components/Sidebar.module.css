@@ -1,6 +1,7 @@
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; width: 288px; height: 100dvh; display: flex; flex-direction: column; background: #fff; border-right: 1px solid #e2e8f0; box-shadow: 4px 0 24px #0f172a04; color: #475569; transition: width .2s, transform .2s; }
 .header { position: relative; display: flex; align-items: center; gap: 11px; min-height: 88px; padding: 22px; }
-.brandMark { width: 38px; height: 38px; display: grid; place-items: center; flex-shrink: 0; border-radius: 12px; background: #0f172a; color: #fff; box-shadow: 0 4px 10px #0f172a15; }
+.brandMark { width: 38px; height: 38px; display: grid; place-items: center; flex-shrink: 0; border-radius: 12px; background: radial-gradient(circle at 50% 35%, #1d2d4f, #0f1a31 70%); color: #fff; box-shadow: 0 4px 10px #0f172a15; }
+.brandMark img { width: 26px; height: auto; }
 .brandText { min-width: 0; }
 .brandText > span { display: block; font-family: Georgia, serif; font-size: 21px; line-height: 1.2; letter-spacing: .16em; color: #0f172a; }
 .brandText p { margin-top: 5px; font-size: 7px; letter-spacing: .18em; color: #64748b; }

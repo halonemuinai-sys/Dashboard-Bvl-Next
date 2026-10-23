@@ -6,8 +6,8 @@ import { HideAmountsProvider } from "@/lib/hide-amounts";
 import { UserAccessProvider } from "@/lib/user-access-context";
 
 export const metadata: Metadata = {
-  title: "Bvlgari BI Dashboard",
-  description: "Real-time Business Intelligence for Bvlgari Retail",
+  title: "Vizione | MRA Group",
+  description: "Visualizing Individual Zone Outcomes & Numbers Evaluation",
 };
 
 export default function RootLayout({

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import styles from './Sidebar.module.css';
 import { usePathname } from 'next/navigation';
@@ -192,8 +193,8 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, mobileOpen }: Sid
       className={cn(styles.sidebar, !isExpanded && styles.compact, isMobile && styles.mobile, isMobile && !mobileOpen && styles.mobileClosed)}
     >
       <header className={styles.header}>
-        <div className={styles.brandMark} aria-hidden="true"><Diamond size={21} strokeWidth={1.5} /></div>
-        {isExpanded && <div className={styles.brandText}><span>BVLGARI</span><p>RETAIL INTELLIGENCE</p></div>}
+        <div className={styles.brandMark} aria-hidden="true"><Image src="/brand/vizione-bv.png" alt="" width={555} height={520} sizes="26px" /></div>
+        {isExpanded && <div className={styles.brandText}><span>VIZIONE</span><p>MRA GROUP</p></div>}
         {isMobile ? (
           <button ref={closeRef} type="button" onClick={() => setIsOpen(false)} className={styles.iconButton} aria-label="Close menu"><X size={18} /></button>
         ) : (

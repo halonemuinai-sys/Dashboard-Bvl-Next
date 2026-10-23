@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from "@/components/Sidebar";
@@ -11,7 +12,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
-  const isStandalonePage = pathname === '/login' || pathname === '/m/login' || pathname.startsWith('/public');
+  const isStandalonePage = pathname === '/login' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname === '/m/login' || pathname.startsWith('/public');
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
@@ -66,9 +67,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <Menu className="w-5 h-5 text-indigo-600" />
                 <span className="text-xs font-bold text-slate-800">Menu</span>
               </button>
-              <div className="flex flex-col">
-                <h1 className="text-sm font-extrabold tracking-tight text-slate-900 leading-none">MRA Retail</h1>
-                <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-widest mt-0.5">Bvlgari Intelligence</p>
+              <div className="flex items-center gap-2">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-[radial-gradient(circle_at_50%_35%,#1d2d4f,#0f1a31_70%)]" aria-hidden="true"><Image src="/brand/vizione-bv.png" alt="" width={555} height={520} sizes="20px" className="h-auto w-5" /></span>
+                <div className="flex flex-col">
+                  <h1 className="font-serif text-sm tracking-[0.16em] text-slate-900 leading-none">VIZIONE</h1>
+                  <p className="text-[8px] text-slate-500 font-semibold uppercase tracking-[0.18em] mt-1">MRA Group</p>
+                </div>
               </div>
             </div>
           </div>
