@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
+import DevtoolsGuard from "@/components/DevtoolsGuard";
 import { HideAmountsProvider } from "@/lib/hide-amounts";
 import { UserAccessProvider } from "@/lib/user-access-context";
 
@@ -22,6 +23,7 @@ export default function RootLayout({
             <ClientLayout>
               {children}
             </ClientLayout>
+            <DevtoolsGuard />
           </HideAmountsProvider>
         </UserAccessProvider>
       </body>
