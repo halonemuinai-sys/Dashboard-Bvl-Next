@@ -35,6 +35,9 @@ interface ApiSalesItem {
   // Provided by the POS but still empty (null) as of Oct 2026; stored as soon as it is filled.
   customerCode?: string | null;
   inCharge?: string | null;
+  // Added by the POS in Oct 2026 and filled: servedBy replaces inCharge, crmId replaces customerCode.
+  servedBy?: string | null;
+  crmId?: string | null;
 }
 
 interface SyncResult {
@@ -207,8 +210,8 @@ export async function syncSalesData(month: number, year: number): Promise<SyncRe
         sub_total_discount: discount,
         sub_total_tax: taxAmount,
         net_sales: netSales,
-        customer_code: itm.customerCode?.trim() || null,
-        in_charge: itm.inCharge?.trim() || null
+        customer_code: posCrmId(itm),
+        in_charge: posServedBy(itm)
       });
     }
 
@@ -308,21 +311,26 @@ export const syncService = {
   syncSalesData
 };
 
+/** Served By from the POS: servedBy, falling back to the older inCharge field. */
+export const posServedBy = (item: ApiSalesItem) => item.servedBy?.trim() || item.inCharge?.trim() || null;
+/** CRM Cosmo ID from the POS: crmId (sent as "" when unknown), falling back to customerCode. */
+export const posCrmId = (item: ApiSalesItem) => item.crmId?.trim() || item.customerCode?.trim() || null;
+
 /**
  * Fills in_charge / customer_code on invoices that were synced before the POS started sending them.
  * Only empty (NULL) columns are written, so a re-sync never overwrites a value already stored.
  */
 export async function backfillPosFields(apiData: ApiSalesItem[], existingTxSet: Set<string>): Promise<number> {
   const fields = [
-    { api: 'inCharge', column: 'in_charge' },
-    { api: 'customerCode', column: 'customer_code' },
+    { read: posServedBy, column: 'in_charge' },
+    { read: posCrmId, column: 'customer_code' },
   ] as const;
   let updated = 0;
   for (const field of fields) {
     // value -> invoice numbers, so one UPDATE covers every invoice with the same value
     const byValue = new Map<string, Set<string>>();
     for (const item of apiData) {
-      const value = item[field.api]?.trim();
+      const value = field.read(item);
       if (!value || !item.transactionNo || !existingTxSet.has(item.transactionNo)) continue;
       (byValue.get(value) || byValue.set(value, new Set()).get(value)!).add(item.transactionNo);
     }

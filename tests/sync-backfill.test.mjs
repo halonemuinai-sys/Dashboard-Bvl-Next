@@ -65,3 +65,19 @@ test('backfill fills only empty POS fields on invoices that already exist', asyn
   assert.equal(tables.bvlgari_sales[2].in_charge, null, 'invoices not yet stored are left to the insert path');
   assert.equal(updated, 4);
 });
+
+test('servedBy and crmId take priority over the older inCharge and customerCode fields', async () => {
+  const tables = {
+    bvlgari_sales: [{ id: 1, transaction_no: 'SI-9', in_charge: null, customer_code: null }],
+    clean_master: [{ id: 11, trans_no: 'SI-9', in_charge: null, customer_code: null }],
+  };
+  const sync = loadTS('src/services/syncService.ts', {
+    '@/lib/supabase': { supabase: database(tables) },
+    '@/lib/fetch-all-rows': loadTS('src/lib/fetch-all-rows.ts'),
+  });
+  assert.equal(sync.posCrmId({ crmId: '', customerCode: null }), null, 'an empty crmId is treated as missing');
+  assert.equal(sync.posCrmId({ crmId: null, customerCode: 'OLD-1' }), 'OLD-1');
+  await sync.backfillPosFields([{ transactionNo: 'SI-9', servedBy: 'Siska Nurhalimah', inCharge: 'Old Name', crmId: '13278246', customerCode: null }], new Set(['SI-9']));
+  assert.equal(tables.clean_master[0].in_charge, 'Siska Nurhalimah');
+  assert.equal(tables.clean_master[0].customer_code, '13278246');
+});
