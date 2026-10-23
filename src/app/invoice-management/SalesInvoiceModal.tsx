@@ -351,9 +351,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                 <dl className="divide-y divide-slate-100">
                   <div className={detailClass}><dt className={labelClass}>CRM Cosmo ID</dt><dd className={cn(valueClass, 'font-mono')}>{crmCosmoId(activeInvoice) || '—'}{!activeInvoice.meta.crm_cosmo_id?.trim() && activeInvoice.crm_cosmo && <span className="ml-1.5 font-sans text-[10px] font-normal text-slate-400">from POS</span>}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Entitled advisor</dt><dd className={valueClass}>{activeInvoice.meta.entitle || '\u2014'}</dd></div>
-                  <div className={detailClass}><dt className={labelClass}>DWA approval no.</dt><dd className={cn(valueClass, 'font-mono')}>{activeInvoice.meta.dwa_no || '\u2014'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Discount reason</dt><dd className={valueClass}>{activeInvoice.meta.discount_given_reason || '\u2014'}</dd></div>
-                  <div className={detailClass}><dt className={labelClass}>After-sales support</dt><dd className={valueClass}>{activeInvoice.meta.after_sales_support || 'Standard Bvlgari warranty'}</dd></div>
                   <div className={detailClass}><dt className={labelClass}>Notes</dt><dd className={cn(valueClass, 'whitespace-pre-line font-normal')}>{userNote || '\u2014'}</dd></div>
                 </dl>
                 {activeInvoice.meta.updated_by && <p className="mt-3 border-t border-slate-100 pt-3 text-[10px] leading-relaxed text-slate-400">Updated by {activeInvoice.meta.updated_by}{activeInvoice.meta.updated_at && <> &middot; {new Date(activeInvoice.meta.updated_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</>}</p>}
