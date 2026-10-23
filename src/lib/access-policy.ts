@@ -9,7 +9,7 @@ export const FINANCE_PATHS = ['/', '/operations-sales', '/finance-reconciliation
 /** Roles whose menus an administrator chooses in User Access (others follow a fixed policy). */
 export const CONFIGURABLE_ROLES: Role[] = ['operations_sales', 'crm', 'merchandise'];
 /** Menus a new merchandise role starts with; administrators can add or remove menus later. */
-export const MERCHANDISE_DEFAULT_PATHS = ['/packaging', '/inventory'];
+export const MERCHANDISE_DEFAULT_PATHS = ['/packaging', '/inventory', '/stock-opname'];
 export function isRole(value: unknown): value is Role { return typeof value === 'string' && ROLES.includes(value as Role); }
 export function isAdminRole(role: unknown) { return role === 'super_admin' || role === 'management_it'; }
 export const DP_TRANSACTION_PATHS = ['/monthly-dps-svc', '/monthly-dps-svc/down-payment', '/monthly-dps-svc/service', '/monthly-dps-svc/packaging'];
@@ -70,6 +70,7 @@ export const MENU_GROUPS = [
       { path: '/sales-journal', label: 'Sales Journal' },
       { path: '/inventory', label: 'Inventory Valuation' },
       { path: '/packaging', label: 'Packaging' },
+      { path: '/stock-opname', label: 'Stock Opname' },
       { path: '/crossing-sales',       label: 'Crossing Sales' },
       { path: '/sales',                label: 'Sales Data' },
       { path: '/sales-dps-svc',        label: 'Sales Data (DP/SVC)' },

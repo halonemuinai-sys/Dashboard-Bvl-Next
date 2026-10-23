@@ -133,7 +133,7 @@ export function UserAccessProvider({ children }: { children: ReactNode }) {
     if (loading) {
       if (role === 'operations_sales') return path === '/operations-sales' || path === '/installment-guide';
       if (role === 'crm') return path === '/crm-profiling' || path === '/advanced-clienteling';
-      if (role === 'merchandise') return path === '/packaging' || path === '/inventory';
+      if (role === 'merchandise') return path === '/packaging' || path === '/inventory' || path === '/stock-opname';
       if (role === 'finance') return path === '/operations-sales' || path === '/finance-payment-analytics' || path === '/installment-guide';
       return path === '/';
     }
