@@ -63,6 +63,7 @@ export const MENU_GROUPS = [
       { path: '/heatmap-calendar',     label: 'Heatmap Calendar' },
       { path: '/sales-journal', label: 'Sales Journal' },
       { path: '/inventory', label: 'Inventory Valuation' },
+      { path: '/packaging', label: 'Packaging' },
       { path: '/crossing-sales',       label: 'Crossing Sales' },
       { path: '/sales',                label: 'Sales Data' },
       { path: '/sales-dps-svc',        label: 'Sales Data (DP/SVC)' },

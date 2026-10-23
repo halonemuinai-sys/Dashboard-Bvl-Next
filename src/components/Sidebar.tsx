@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { useHideAmounts } from '@/lib/hide-amounts';
 import {
+  Package,
   LayoutDashboard,
   PieChart,
   BarChart,
@@ -92,6 +93,7 @@ const menuGroups = [
       { name: 'Sales Data',          icon: Database,        href: '/sales', badge: 'SYNC', badgeColor: 'bg-emerald-500' },
       { name: 'Sales Data (DP/SVC)', icon: Database,        href: '/sales-dps-svc', badge: 'SYNC', badgeColor: 'bg-violet-500' },
       { name: 'Inventory Val.',      icon: Boxes,           href: '/inventory', badge: 'NEW', badgeColor: 'bg-blue-500' },
+      { name: 'Packaging',           icon: Package,         href: '/packaging', badge: 'NEW', badgeColor: 'bg-blue-500' },
     ]
   },
   {
