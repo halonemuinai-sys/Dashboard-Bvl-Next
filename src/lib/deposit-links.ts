@@ -21,13 +21,13 @@ export function isDepositWithinInvoicePeriod(depositDate: string, invoiceDate: s
   return deposit >= start && deposit <= end;
 }
 export interface DepositSourceRow {
-  id: number; transaction_no: string; transaction_date: string; customer_name: string;
+  id: number | string; transaction_no: string; transaction_date: string; customer_name: string;
   salesman: string; location: string; collection: string; qty: number; price: number;
   sub_total_discount: number; net_sales: number;
 }
 export interface SalesDeposit {
   transNo: string; date: string; customer: string; salesman: string; location: string;
-  amount: number; netSales: number; sourceIds: number[];
+  amount: number; netSales: number; sourceIds: (number | string)[];
 }
 export interface DepositSearchMatch extends SalesDeposit {
   customerMatch: number | null;
@@ -106,6 +106,9 @@ export function groupSalesDeposits(rows: DepositSourceRow[]): SalesDeposit[] {
       netSales: items.reduce((sum, row) => sum + Number(row.net_sales ?? 0), 0), sourceIds: items.map(row => row.id) }];
   });
 }
+// bvlgari_sales ids are UUIDs; integer ids are still accepted for older rows.
+const isSourceId = (id: unknown) => Number.isSafeInteger(id) || (typeof id === 'string' && id.trim().length > 0 && id.length <= 64);
+
 export function readDepositLink(row: { trans_no: string; other_remarks?: string | null }): DepositLink | null {
   if (!row.trans_no.startsWith(DEPOSIT_LINK_PREFIX)) return null;
   try {
@@ -114,7 +117,7 @@ export function readDepositLink(row: { trans_no: string; other_remarks?: string 
       || typeof value.invoiceNo !== 'string' || !value.invoiceNo || typeof value.amount !== 'number' || !Number.isFinite(value.amount) || value.amount <= 0
       || ![value.invoiceDate, value.date, value.customer, value.salesman, value.location, value.linkedAt, value.linkedBy].every(field => typeof field === 'string')
       || !/^\d{4}-\d{2}-\d{2}/.test(value.date) || !/^\d{4}-\d{2}-\d{2}/.test(value.invoiceDate)
-      || !Array.isArray(value.sourceIds) || !value.sourceIds.length || !value.sourceIds.every(Number.isSafeInteger)) return null;
+      || !Array.isArray(value.sourceIds) || !value.sourceIds.length || !value.sourceIds.every(isSourceId)) return null;
     return value;
   } catch { return null; }
 }

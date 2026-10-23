@@ -215,3 +215,16 @@ test('fuzzy customer matches still exclude claimed, expired, future, cross-store
     assert.equal(found.data.linked.length, 1);
   }
 });
+
+test('saved DP links with UUID source ids (bvlgari_sales.id) are readable', () => {
+  const link = {
+    kind: 'sales_deposit_link', version: 1, transNo: 'SI-PI/2610/38115', invoiceNo: 'INV-PI/2610/03007',
+    invoiceDate: '2026-10-20', date: '2026-10-18', customer: 'Customer', salesman: 'Advisor', location: 'Plaza Indonesia',
+    amount: 5000000, netSales: 4504504, sourceIds: ['85f06d86-af70-41a8-8adb-fc619788d52c'],
+    linkedAt: '2026-10-23T04:05:58.535Z', linkedBy: 'user@example.test',
+  };
+  const row = { trans_no: model.depositLinkKey(link.transNo), other_remarks: JSON.stringify(link) };
+  assert.equal(model.readDepositLink(row)?.invoiceNo, 'INV-PI/2610/03007');
+  assert.equal(model.readDepositLink({ ...row, other_remarks: JSON.stringify({ ...link, sourceIds: [''] }) }), null, 'an empty id is still rejected');
+  assert.equal(model.readDepositLink({ ...row, other_remarks: JSON.stringify({ ...link, sourceIds: [] }) }), null);
+});
