@@ -39,7 +39,7 @@ interface Props {
   onLocationChange: (transNo: string, newLocation: string) => void;
   onItemCommEdit: (itemId: number, val: string) => void;
   onItemCommBlur: (itemId: number, transNo: string) => void;
-  onItemTypeChange: (itemId: number, transNo: string, type: string) => void;
+  onItemTypeChange: (itemId: number, transNo: string, type: string) => unknown;
   onDeleteInvoice: (transNo: string) => void;
   savingItemId: number | null;
   commEdits: Record<number, string>;

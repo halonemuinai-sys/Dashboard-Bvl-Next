@@ -343,7 +343,7 @@ function InvoiceManagementContent() {
   };
 
   // Inline Item Type Edit
-  const handleItemTypeChange = async (itemId: number, transNo: string, newType: string) => {
+  const handleItemTypeChange = async (itemId: number, transNo: string, newType: string): Promise<boolean> => {
     setSavingItemId(itemId);
     try {
       await updateInvoiceItemType(itemId, newType, userEmail);
@@ -355,8 +355,10 @@ function InvoiceManagementContent() {
         return inv;
       }));
       flashSavedItem(itemId);
+      return true;
     } catch (err) {
       console.error('Error updating item type:', err);
+      return false;
     } finally {
       setSavingItemId(null);
     }
@@ -648,6 +650,8 @@ function InvoiceManagementContent() {
         isOpen={Boolean(selectedInvoiceForView)}
         onClose={() => setSelectedInvoiceForView(null)}
         onMetaSaved={handleSaveMeta}
+        editable={isUnlocked}
+        onItemTypeChange={handleItemTypeChange}
         onInvoiceUpdated={(updatedTransNo, newTotalComm) => {
           setInvoices(prev => prev.map(inv => {
             if (inv.trans_no === updatedTransNo) {

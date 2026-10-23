@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Printer, FileText, Copy, Check, Building2, UserRound, CreditCard, FileEdit, Package, Link2, ArrowUpRight } from 'lucide-react';
+import { X, Printer, FileText, Copy, Check, Building2, UserRound, CreditCard, FileEdit, Package, Link2, ArrowUpRight, Loader2 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { InvoiceHeader, InvoiceMeta } from '@/services/dashboard/invoiceService';
 import { crmCosmoId } from '@/lib/crm-cosmo';
@@ -18,6 +18,9 @@ interface Props {
   onClose: () => void;
   onInvoiceUpdated?: (updatedTransNo: string, newTotalComm: number) => void;
   onMetaSaved?: (transNo: string, updatedMeta: InvoiceMeta) => void;
+  /** Invoice Management "Enable editing" state; item type can only change while it is on. */
+  editable?: boolean;
+  onItemTypeChange?: (itemId: number, transNo: string, type: string) => Promise<boolean>;
 }
 
 const STORE_INFO: Record<string, { title: string; subtitle: string; address: string[]; phone: string }> = {
@@ -74,10 +77,22 @@ const formatDateLong = (iso: string) => {
   });
 };
 
-export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceUpdated, onMetaSaved }: Props) {
+export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceUpdated, onMetaSaved, editable = false, onItemTypeChange }: Props) {
   const [copied, setCopied] = useState(false);
+  const [typeSaving, setTypeSaving] = useState<number | null>(null);
+  const [typeError, setTypeError] = useState('');
   const [invoiceOverride, setInvoiceOverride] = useState<{ source: InvoiceHeader | null; value: InvoiceHeader } | null>(null);
   const activeInvoice = invoiceOverride?.source === invoice ? invoiceOverride.value : invoice;
+
+  const changeItemType = async (itemId: number, type: string) => {
+    if (!activeInvoice || !onItemTypeChange) return;
+    setTypeSaving(itemId);
+    setTypeError('');
+    const saved = await onItemTypeChange(itemId, activeInvoice.trans_no, type);
+    if (saved) setInvoiceOverride({ source: invoice, value: { ...activeInvoice, items: activeInvoice.items.map(it => (it.id === itemId ? { ...it, type } : it)) } });
+    else setTypeError('The item type could not be saved. Please try again.');
+    setTypeSaving(null);
+  };
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [copyError, setCopyError] = useState(false);
@@ -225,6 +240,7 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
           #bvlgari-sales-invoice-modal .invoice-total { background: #f0fdfa !important; color: #0f172a !important; }
           #bvlgari-sales-invoice-modal .invoice-total * { color: #0f172a !important; }
           #bvlgari-sales-invoice-modal .no-print-area { display: none !important; }
+          #bvlgari-sales-invoice-modal .print-only { display: inline-flex !important; }
         }
       `}</style>
 
@@ -311,6 +327,8 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                 <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-800"><Package className="h-4 w-4 text-blue-600" /> Purchased items</h3>
                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">{activeInvoice.items.length} items &middot; {activeInvoice.total_qty} pcs</span>
               </div>
+              {typeError && <p role="alert" className="no-print-area rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700">{typeError}</p>}
+              {editable && onItemTypeChange && <p className="no-print-area text-[10px] text-slate-400">Editing is enabled: change an item between Regular and SMI below. Saved immediately.</p>}
               <div className="invoice-table-scroll overflow-x-auto rounded-xl border border-slate-200">
                 <table className="w-full min-w-[700px] text-left text-xs">
                   <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -325,7 +343,18 @@ export default function SalesInvoiceModal({ invoice, isOpen, onClose, onInvoiceU
                           <td className="px-3 py-4">
                             <div className="font-mono font-semibold text-slate-900">{item.sap_code}</div>
                             {item.catalogue_code && item.catalogue_code !== item.sap_code && <div className="mt-1 font-mono text-[10px] text-slate-500">{item.catalogue_code}</div>}
-                            {item.type && <span className={cn('mt-2 inline-flex rounded-md border px-1.5 py-0.5 text-[9px] font-semibold', item.type === 'SMI' ? 'border-violet-100 bg-violet-50 text-violet-700' : 'border-teal-100 bg-teal-50 text-teal-700')}>{item.type}</span>}
+                            {editable && onItemTypeChange ? (
+                              <span className="no-print-area mt-2 inline-flex items-center gap-1.5">
+                                <select aria-label={`Item type for ${item.sap_code}`} value={item.type || 'Regular'} disabled={typeSaving !== null}
+                                  onChange={event => changeItemType(item.id, event.target.value)}
+                                  className={cn('cursor-pointer rounded-md border px-1.5 py-0.5 text-[10px] font-semibold outline-none focus:ring-2 focus:ring-amber-200', item.type === 'SMI' ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-teal-200 bg-teal-50 text-teal-700')}>
+                                  <option value="Regular">Regular</option>
+                                  <option value="SMI">SMI</option>
+                                </select>
+                                {typeSaving === item.id && <Loader2 className="h-3 w-3 animate-spin text-amber-500" />}
+                              </span>
+                            ) : null}
+                            {item.type && <span className={cn('mt-2 inline-flex rounded-md border px-1.5 py-0.5 text-[9px] font-semibold', editable && onItemTypeChange && 'print-only hidden', item.type === 'SMI' ? 'border-violet-100 bg-violet-50 text-violet-700' : 'border-teal-100 bg-teal-50 text-teal-700')}>{item.type}</span>}
                           </td>
                           <td className="px-3 py-4"><div className="font-medium text-slate-800">{item.main_category || '\u2014'}</div><div className="mt-1 text-[10px] text-slate-500">{item.collection || '\u2014'}</div></td>
                           <td className="px-3 py-4 text-center font-semibold tabular-nums">{item.qty}</td>
