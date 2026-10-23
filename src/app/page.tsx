@@ -4,9 +4,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { RefreshCw, LayoutDashboard, Store, CalendarDays, AlertCircle, Clock3 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { dashboardService, type MonthlyOverviewData } from '@/services/dashboardService';
-import MultiYearChart from '@/components/MultiYearChart';
-import DailySalesChart from '@/components/DailySalesChart';
+import { getMonthlyOverview } from '@/services/dashboard/overviewService';
+import { getAdvisorPerformance } from '@/services/dashboard/advisorService';
+import type { MonthlyOverviewData, AdvisorRecord } from '@/services/dashboard/types';
+import { createRequestCache } from '@/lib/request-cache';
+import { businessDate } from '@/lib/sales-chart-data';
+import dynamic from 'next/dynamic';
+
+
 import StorePerformanceTable from '@/components/StorePerformanceTable';
 import CrossingSalesWidget from '@/components/CrossingSalesWidget';
 import TopAdvisorsWidget from '@/components/TopAdvisorsWidget';
@@ -14,6 +19,10 @@ import MonthYearPicker, { type MonthPeriod } from '@/components/MonthYearPicker'
 import { useUserAccess } from '@/lib/user-access-context';
 import MonthlyMetrics from './MonthlyMetrics';
 import styles from './MonthlyOverview.module.css';
+
+function ChartPlaceholder() { return <div role="status" aria-label="Loading chart" className="h-96 animate-pulse rounded-2xl border border-slate-200 bg-white motion-reduce:animate-none" />; }
+const MultiYearChart = dynamic(() => import('@/components/MultiYearChart'), { loading: ChartPlaceholder });
+const DailySalesChart = dynamic(() => import('@/components/DailySalesChart'), { loading: ChartPlaceholder });
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 interface OverviewSnapshot {
@@ -25,37 +34,37 @@ interface OverviewSnapshot {
 }
 
 export default function MonthlyOverviewPage() {
-  const { role } = useUserAccess();
+  const { role, userEmail, assignedStore, loading: accessLoading } = useUserAccess();
+  const scope = [userEmail, role, assignedStore].join(':');
+  const scopedCache = useMemo(() => ({ scope, cache: createRequestCache() }), [scope]);
+  const cache = scopedCache.cache;
   const router = useRouter();
-  const [period, setPeriod] = useState<MonthPeriod>(() => ({ month: new Date().getMonth(), year: new Date().getFullYear() }));
+  const [period, setPeriod] = useState<MonthPeriod>(() => { const [year, month] = businessDate().split('-').map(Number); return { month: month - 1, year }; });
   const [revision, setRevision] = useState(0);
   const [snapshot, setSnapshot] = useState<OverviewSnapshot | null>(null);
   const month = MONTHS[period.month];
   const year = String(period.year);
-  const periodKey = year + '-' + period.month;
+  const periodKey = scope + ':' + year + '-' + period.month;
   const requestKey = periodKey + ':' + revision;
   const redirecting = role === 'operations_sales' || role === 'finance';
   const loading = snapshot?.request !== requestKey;
   const data = snapshot?.period === periodKey ? snapshot.data : null;
   const error = snapshot?.request === requestKey ? snapshot.error : '';
-  const refresh = () => setRevision(value => value + 1);
+  const refresh = () => { cache.clear(); setRevision(value => value + 1); };
+  const [advisorSnapshot, setAdvisorSnapshot] = useState<{ request: string; advisors: AdvisorRecord[]; error: string } | null>(null);
+  const [advisorRetry, setAdvisorRetry] = useState(0);
+  const advisorRequest = requestKey + ':' + advisorRetry;
+  const advisorsLoading = advisorSnapshot?.request !== advisorRequest;
 
   useEffect(() => {
     if (redirecting) router.replace('/operations-sales');
   }, [redirecting, router]);
 
   useEffect(() => {
-    if (redirecting) return;
+    if (redirecting || accessLoading || !role) return;
     let cancelled = false;
-    Promise.all([
-      dashboardService.getMonthlyOverview(month, period.year),
-      dashboardService.getAdvisorPerformance(month, period.year),
-    ]).then(([overview, advisorRes]) => {
-      if (!cancelled) setSnapshot({
-        period: periodKey, request: requestKey,
-        data: { ...overview, advisorData: advisorRes.advisors },
-        error: '', updatedAt: Date.now(),
-      });
+    getMonthlyOverview(month, period.year, cache).then(overview => {
+      if (!cancelled) setSnapshot({ period: periodKey, request: requestKey, data: overview, error: '', updatedAt: Date.now() });
     }).catch(() => {
       if (!cancelled) setSnapshot(previous => ({
         period: periodKey, request: requestKey,
@@ -65,7 +74,19 @@ export default function MonthlyOverviewPage() {
       }));
     });
     return () => { cancelled = true; };
-  }, [month, period.year, periodKey, requestKey, redirecting]);
+  }, [month, period.year, periodKey, requestKey, redirecting, accessLoading, role, cache]);
+
+  // Advisor requests must not block KPIs or turn a partial failure into a blank report.
+  useEffect(() => {
+    if (redirecting || accessLoading || !role) return;
+    let cancelled = false;
+    cache.read('advisor-results:' + businessDate() + ':' + periodKey, () => getAdvisorPerformance(month, period.year)).then(result => {
+      if (!cancelled) setAdvisorSnapshot({ request: advisorRequest, advisors: result.advisors, error: '' });
+    }).catch(() => {
+      if (!cancelled) setAdvisorSnapshot({ request: advisorRequest, advisors: [], error: 'Advisor results could not be loaded.' });
+    });
+    return () => { cancelled = true; };
+  }, [month, period.year, periodKey, advisorRequest, redirecting, accessLoading, role, cache]);
 
   const activeStores = useMemo(() =>
     data?.storeData.filter(store => !store.store.toLowerCase().includes('head office')).sort((a, b) => b.actual - a.actual) || []
@@ -123,7 +144,7 @@ export default function MonthlyOverviewPage() {
           <div className="grid gap-5 xl:grid-cols-3">
             <div className="min-w-0 space-y-5 xl:col-span-2">
               <StorePerformanceTable stores={activeStores} month={month} year={year} />
-              <TopAdvisorsWidget advisors={data.advisorData} />
+              {advisorsLoading ? <div role="status" className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500"><RefreshCw size={16} className="mr-2 inline animate-spin motion-reduce:animate-none" />Loading advisor results...</div> : advisorSnapshot?.error ? <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-xs text-amber-800">{advisorSnapshot.error}<button className="ml-3 rounded-lg bg-white px-3 py-2 font-semibold" onClick={() => setAdvisorRetry(value => value + 1)}>Retry advisors</button></div> : <TopAdvisorsWidget advisors={advisorSnapshot?.advisors || []} />}
             </div>
             {crossingSummary && <div className="min-w-0"><CrossingSalesWidget summary={crossingSummary} /></div>}
           </div>

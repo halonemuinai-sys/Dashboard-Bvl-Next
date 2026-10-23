@@ -18,6 +18,7 @@ function loadTS(relative, mocks = {}) {
 const charts = loadTS('src/lib/sales-chart-data.ts');
 const attribution = loadTS('src/lib/report-attribution.ts');
 const pager = loadTS('src/lib/fetch-all-rows.ts');
+const { createRequestCache } = loadTS('src/lib/request-cache.ts');
 const constants = loadTS('src/services/dashboard/constants.ts');
 function service(db = {}) {
   return loadTS('src/services/dashboard/overviewService.ts', {
@@ -132,17 +133,17 @@ function database(tables, failTable) {
   const calls = [];
   return { calls, from(table) {
     const filters = [];
-    let start = 0, end = Infinity;
+    let start = 0, end = Infinity, columns = '', fromDate = '';
     const q = {
-      select() { return q; }, order() { return q; },
-      gte(key, value) { filters.push(row => cmp(row[key], value) >= 0); return q; },
+      select(value) { columns = value; return q; }, order() { return q; },
+      gte(key, value) { if (key === 'transaction_date') fromDate = value; filters.push(row => cmp(row[key], value) >= 0); return q; },
       lte(key, value) { filters.push(row => cmp(row[key], value) <= 0); return q; },
       lt(key, value) { filters.push(row => cmp(row[key], value) < 0); return q; },
       eq(key, value) { filters.push(row => row[key] === value); return q; },
       range(from, to) { start = from; end = to; return q; },
       then(resolve, reject) {
-        calls.push({ table, start, end });
-        return Promise.resolve(table === failTable ? { data: null, error: { message: 'Source unavailable' } } : { data: (tables[table] || []).filter(row => filters.every(filter => filter(row))).slice(start, end + 1), error: null }).then(resolve, reject);
+        calls.push({ table, start, end, columns, fromDate });
+        return Promise.resolve(table === failTable ? { data: null, error: { message: 'Source unavailable' } } : { data: (tables[table] || []).filter(row => filters.every(filter => filter(row))).slice(start, end + 1).map(row => Object.fromEntries(columns.split(',').map(key => [key, row[key]]))), error: null }).then(resolve, reject);
       },
     };
     return q;
@@ -154,7 +155,7 @@ test('service paginates beyond API limits instead of truncating sales', async ()
   const result = await service(db).getMonthlyOverview('October', 2024);
   assert.equal(result.kpi.totalNet, 1201);
   assert.equal(result.kpi.mtdTxCurrent, 1201);
-  assert.deepEqual(db.calls.filter(call => call.table === 'clean_master').map(call => call.start), [0, 500, 1000]);
+  assert.deepEqual(db.calls.filter(call => call.table === 'clean_master' && call.fromDate.startsWith('2024-')).map(call => call.start), [0, 500, 1000]);
 });
 
 test('failed target/advisor sources do not silently become zero targets or false crossing', async () => {
@@ -217,4 +218,68 @@ test('legacy 17:00 UTC rows count in the Jakarta month, not the previous UTC day
   ] }, now);
   assert.equal(data.multiYearStats[2026][9], 800);
   assert.equal(data.multiYearStats[2026][8], 0);
+});
+
+
+test('changing month reuses sales history and targets; refresh forces all sources to reload', async () => {
+  const db = database({ clean_master: [sale({ transaction_date: '2024-10-01', net_sales: 200 }), sale({ transaction_date: '2024-11-01', net_sales: 300 })] });
+  const api = service(db); const cache = createRequestCache();
+  assert.equal((await api.getMonthlyOverview('October', 2024, cache)).kpi.totalNet, 200);
+  const first = db.calls.length;
+  assert.equal((await api.getMonthlyOverview('November', 2024, cache)).kpi.totalNet, 300);
+  assert.deepEqual(db.calls.slice(first).map(call => call.table), ['advisor_rotations']);
+  const second = db.calls.length;
+  cache.clear(); await api.getMonthlyOverview('November', 2024, cache);
+  assert.ok(db.calls.slice(second).some(call => call.table === 'clean_master'));
+});
+
+test('historical chart years use three columns while comparison years retain full detail', async () => {
+  const db = database({ clean_master: [sale({ transaction_date: '2023-10-01', net_sales: 250 }), sale({ transaction_date: '2025-10-01', net_sales: 500 }), sale({ transaction_date: '2026-10-01', net_sales: 1000 })] });
+  const data = await service(db).getMonthlyOverview('October', 2026);
+  assert.equal(db.calls.find(c => c.fromDate.startsWith('2023-')).columns, 'transaction_date,location,net_sales');
+  assert.ok(db.calls.find(c => c.fromDate.startsWith('2025-')).columns.includes('trans_no'));
+  assert.ok(db.calls.find(c => c.fromDate.startsWith('2026-')).columns.includes('cost'));
+  assert.equal(data.multiYearStats[2023][9], 250);
+  assert.equal(data.kpi.mtdSalesPrevYear, 500);
+});
+
+test('cache deduplicates in-flight loads, expires and retries errors', async () => {
+  let time = 0, calls = 0;
+  const cache = createRequestCache(60, 2, () => time);
+  const loader = async () => ++calls;
+  assert.deepEqual(await Promise.all([cache.read('a', loader), cache.read('a', loader)]), [1, 1]);
+  time = 59; assert.equal(await cache.read('a', loader), 1);
+  time = 60; assert.equal(await cache.read('a', loader), 2);
+  await assert.rejects(cache.read('bad', async () => { throw Error('offline'); }));
+  assert.equal(await cache.read('bad', loader), 3);
+  await cache.read('third', loader);
+  assert.equal(await cache.read('a', loader), 5);
+});
+
+test('clearing during an in-flight load cannot repopulate the refreshed cache', async () => {
+  const cache = createRequestCache(); let finish;
+  const stale = cache.read('key', () => new Promise(resolve => { finish = resolve; }));
+  await Promise.resolve(); cache.clear();
+  assert.equal(await cache.read('key', async () => 'fresh'), 'fresh');
+  finish('old'); assert.equal(await stale, 'old');
+  assert.equal(await cache.read('key', async () => 'wrong'), 'fresh');
+});
+
+test('cold sales loading overlaps requests but never exceeds three year workers', async () => {
+  const db = database({}); const originalFrom = db.from;
+  let active = 0, peak = 0;
+  db.from = table => {
+    const query = originalFrom(table);
+    if (table !== 'clean_master') return query;
+    const then = query.then;
+    query.then = (resolve, reject) => {
+      active++; peak = Math.max(peak, active);
+      return new Promise(done => setTimeout(done, 5))
+        .then(() => then(value => value))
+        .finally(() => { active--; }).then(resolve, reject);
+    };
+    return query;
+  };
+  await service(db).getMonthlyOverview('October', 2026);
+  assert.equal(peak, 3); assert.equal(active, 0);
 });

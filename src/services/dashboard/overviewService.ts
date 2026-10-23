@@ -4,6 +4,7 @@ import { advisorHomeResolver, normalizeReportStore, isReportCrossing, type Advis
 import { businessDate, salesDate } from '@/lib/sales-chart-data';
 import type { MonthlyOverviewData, CategoryTrendData, StorePerformanceRow } from './types';
 import { MONTH_NAMES } from './constants';
+import type { RequestCache } from '@/lib/request-cache';
 
 const isHeadOffice = (value: string) => {
   const key = (value || '').trim().toLowerCase();
@@ -22,23 +23,47 @@ export interface OverviewSources {
   advisors: AdvisorHome[];
   rotations: AdvisorRotation[];
 }
-export async function getMonthlyOverview(month: string, year: number): Promise<MonthlyOverviewData> {
+export async function getMonthlyOverview(month: string, year: number, cache?: RequestCache): Promise<MonthlyOverviewData> {
   const monthIndex = MONTH_NAMES.indexOf(month);
   if (monthIndex < 0 || !Number.isInteger(year) || year < 2000 || year > 2100) throw new Error('Invalid reporting period.');
   const now = new Date();
   const currentYear = Number(businessDate(now).slice(0, 4));
   const fromYear = Math.min(2023, year - 1);
   const toYear = Math.max(currentYear, year);
+  const read = <T>(key: string, loader: () => Promise<T>) => cache ? cache.read(`${businessDate(now)}:${key}`, loader) : loader();
+  // Only the selected and previous year need invoice-level details. Other years
+  // feed the annual chart, so transfer just date, store and net sales.
+  const years = Array.from({ length: toYear - fromYear + 1 }, (_, i) => fromYear + i);
+  const salesByYear: OverviewSale[][] = new Array(years.length);
+  let nextYear = 0;
+  async function loadSales() {
+    let failed = false;
+    await Promise.all(Array.from({ length: Math.min(3, years.length) }, async () => {
+      while (!failed && nextYear < years.length) {
+        const index = nextYear++;
+        const salesYear = years[index];
+        const detailed = salesYear === year || salesYear === year - 1;
+        try {
+          salesByYear[index] = await read(`sales:${salesYear}:${detailed}`, async () => {
+            const rows = await fetchAllRows((from, to) => supabase.from('clean_master')
+              .select(detailed ? 'transaction_date,location,net_sales,gross_sales,val_disc,cost,qty,main_category,trans_no,customer,salesman,comm' : 'transaction_date,location,net_sales')
+              .gte('transaction_date', salesYear + '-01-01T00:00:00+07:00')
+              .lt('transaction_date', (salesYear + 1) + '-01-01T00:00:00+07:00').order('id').range(from, to));
+            // Non-detail years are consumed only by multiYearStats below.
+            return rows as unknown as OverviewSale[];
+          });
+        } catch (error) { failed = true; throw error; }
+      }
+    }));
+    return salesByYear.flat();
+  }
   const [sales, targets, advisors, rotations] = await Promise.all([
-    fetchAllRows((from, to) => supabase.from('clean_master')
-      .select('transaction_date,location,net_sales,gross_sales,val_disc,cost,qty,main_category,trans_no,customer,salesman,comm')
-      .gte('transaction_date', fromYear + '-01-01T00:00:00+07:00')
-      .lt('transaction_date', (toYear + 1) + '-01-01T00:00:00+07:00').order('id').range(from, to)),
-    fetchAllRows((from, to) => supabase.from('targets').select('year,month_number,target_value,store_name')
-      .gte('year', fromYear).lte('year', toYear).order('year').order('month_number').order('store_name').range(from, to)),
-    fetchAllRows((from, to) => supabase.from('advisors').select('name,home_location').order('name').range(from, to)),
-    fetchAllRows((from, to) => supabase.from('advisor_rotations').select('advisor_name,assigned_location')
-      .eq('year', year).eq('month_number', monthIndex + 1).order('advisor_name').range(from, to)),
+    loadSales(),
+    read(`targets:${fromYear}:${toYear}`, () => fetchAllRows((from, to) => supabase.from('targets').select('year,month_number,target_value,store_name')
+      .gte('year', fromYear).lte('year', toYear).order('year').order('month_number').order('store_name').range(from, to))),
+    read('advisors', () => fetchAllRows((from, to) => supabase.from('advisors').select('name,home_location').order('name').range(from, to))),
+    read(`rotations:${year}:${monthIndex}`, () => fetchAllRows((from, to) => supabase.from('advisor_rotations').select('advisor_name,assigned_location')
+      .eq('year', year).eq('month_number', monthIndex + 1).order('advisor_name').range(from, to))),
   ]);
   return aggregateMonthlyOverview(month, year, { sales, targets, advisors, rotations }, now);
 }
