@@ -81,3 +81,8 @@ STRATEGI_PRESENTASI_BVLGARI.md
 *.xlsx
 !/templates/*.xlsx
 !/public/templates/*.xlsx
+
+# Customer photos and ID scans exported from AppSheet (personal data, never commit)
+/*_Images/
+/*_Files/
+/*_Files_/

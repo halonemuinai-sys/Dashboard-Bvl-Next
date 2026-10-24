@@ -9,6 +9,7 @@ import styles from '../crm-workspace.module.css';
 import explorer from '../traffic-history.module.css';
 import Amt from '@/components/Amt';
 import { boutiqueDate } from '@/lib/crm-visit';
+import { mediaUrl } from '@/lib/media';
 import { useTrafficHistory, emptyHistoryFilters, historyPageSize } from '../useTrafficHistory';
 
 export interface IntegratedTrafficItem {
@@ -424,12 +425,12 @@ export function TrafficHistoryTable({ onSelectCustomerForProfiling }: TrafficHis
                   </div>
                 )}
 
-                {detailItem.bukti_chat && (
+                {mediaUrl(detailItem.bukti_chat) && (
                   <div className="p-3 bg-slate-50 rounded-2xl text-xs space-y-2">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">Visit attachment</p>
-                    <div className="w-32 h-32 rounded-xl overflow-hidden border border-slate-200">
-                      <img src={detailItem.bukti_chat} alt="Bukti" className="w-full h-full object-cover" />
-                    </div>
+                    <a href={mediaUrl(detailItem.bukti_chat)!} target="_blank" rel="noreferrer" className="block w-32 h-32 rounded-xl overflow-hidden border border-slate-200">
+                      <img src={mediaUrl(detailItem.bukti_chat)!} alt="Chat proof" className="w-full h-full object-cover" />
+                    </a>
                   </div>
                 )}
               </div>

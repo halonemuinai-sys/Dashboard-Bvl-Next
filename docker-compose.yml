@@ -15,5 +15,7 @@ services:
     volumes:
       - ./public/cdn:/app/public/cdn
       - ./public/uploads:/app/public/uploads
+      # AppSheet customer photos / ID scans: private, served only via /api/media after login
+      - ../vizione-private/appsheet:/app/storage/appsheet:ro
     env_file:
       - .env.local
