@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { requireCdnAdmin } from '@/lib/cdn-access';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': '*',
-};
+// Same-origin only: listing and deleting are for signed-in administrators.
+const CORS_HEADERS = {};
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }
 
 export async function GET(req: Request) {
+  const denied = await requireCdnAdmin();
+  if (denied) return NextResponse.json({ success: false, error: denied }, { status: 401 });
   try {
     const { searchParams } = new URL(req.url);
     const folder = (searchParams.get('folder') || '').replace(/[^a-zA-Z0-9_-]/g, '');
@@ -25,9 +25,10 @@ export async function GET(req: Request) {
     const host = req.headers.get('host') || '202.6.239.245';
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
 
-    const getFiles = (dirPath: string, folderName = ''): any[] => {
+    type CdnFile = { filename: string; folder: string; path: string; url: string; size: number; updatedAt: string };
+    const getFiles = (dirPath: string, folderName = ''): CdnFile[] => {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      let results: any[] = [];
+      let results: CdnFile[] = [];
 
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
@@ -61,7 +62,8 @@ export async function GET(req: Request) {
       { success: true, count: files.length, files },
       { headers: CORS_HEADERS }
     );
-  } catch (error: any) {
+  } catch (caught) {
+    const error = caught instanceof Error ? caught : new Error(String(caught));
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to list CDN files' },
       { status: 500, headers: CORS_HEADERS }
@@ -70,6 +72,8 @@ export async function GET(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const denied = await requireCdnAdmin();
+  if (denied) return NextResponse.json({ success: false, error: denied }, { status: 401 });
   try {
     const { searchParams } = new URL(req.url);
     const filePathParam = searchParams.get('path') || '';
@@ -82,10 +86,10 @@ export async function DELETE(req: Request) {
     }
 
     // Sanitize path to prevent traversal
-    const cleanPath = filePathParam.replace(/^\/cdn\//, '').replace(/\.\./g, '');
-    const absolutePath = path.join(process.cwd(), 'public', 'cdn', cleanPath);
+    const cdnRoot = path.join(process.cwd(), 'public', 'cdn');
+    const absolutePath = path.resolve(cdnRoot, filePathParam.replace(/^\/cdn\//, ''));
 
-    if (!fs.existsSync(absolutePath)) {
+    if (!absolutePath.startsWith(cdnRoot + path.sep) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
       return NextResponse.json(
         { success: false, error: 'File not found' },
         { status: 404, headers: CORS_HEADERS }
@@ -98,7 +102,8 @@ export async function DELETE(req: Request) {
       { success: true, message: 'File deleted successfully from Proxmox CDN' },
       { headers: CORS_HEADERS }
     );
-  } catch (error: any) {
+  } catch (caught) {
+    const error = caught instanceof Error ? caught : new Error(String(caught));
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to delete file' },
       { status: 500, headers: CORS_HEADERS }

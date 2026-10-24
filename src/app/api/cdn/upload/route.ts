@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { CDN_MAX_BYTES, CDN_UPLOAD_FOLDERS, CDN_UPLOAD_TYPES } from '@/lib/cdn-access';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -16,13 +17,25 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
-    const folder = ((formData.get('folder') as string) || 'general').replace(/[^a-zA-Z0-9_-]/g, '');
+    const folder = ((formData.get('folder') as string) || 'bukti_chat').replace(/[^a-zA-Z0-9_-]/g, '');
 
-    if (!file) {
+    if (!file || typeof file === 'string') {
       return NextResponse.json(
         { success: false, error: 'No file provided in form-data key "file"' },
         { status: 400, headers: CORS_HEADERS }
       );
+    }
+    // The mobile app still uploads without a token, so uploads are limited to images and PDFs
+    // in the CRM folders; anything else could be served as a page on this domain.
+    const extension = path.extname(file.name).toLowerCase();
+    if (!(CDN_UPLOAD_FOLDERS as readonly string[]).includes(folder)) {
+      return NextResponse.json({ success: false, error: `Folder must be one of: ${CDN_UPLOAD_FOLDERS.join(', ')}.` }, { status: 400, headers: CORS_HEADERS });
+    }
+    if (!CDN_UPLOAD_TYPES[extension]) {
+      return NextResponse.json({ success: false, error: 'Only JPG, PNG, WEBP, HEIC images and PDF files can be uploaded.' }, { status: 415, headers: CORS_HEADERS });
+    }
+    if (file.size === 0 || file.size > CDN_MAX_BYTES) {
+      return NextResponse.json({ success: false, error: 'The file must be between 1 byte and 10 MB.' }, { status: 413, headers: CORS_HEADERS });
     }
 
     // Prepare target directory
@@ -32,9 +45,8 @@ export async function POST(req: Request) {
     }
 
     // Sanitize filename and append timestamp
-    const ext = path.extname(file.name) || '.bin';
-    const baseName = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filename = `${baseName}_${Date.now()}${ext.toLowerCase()}`;
+    const baseName = path.basename(file.name, path.extname(file.name)).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) || 'file';
+    const filename = `${baseName}_${Date.now()}${extension}`;
     const filePath = path.join(uploadDir, filename);
 
     // Convert file arrayBuffer to Buffer and write
@@ -62,7 +74,8 @@ export async function POST(req: Request) {
       },
       { status: 201, headers: CORS_HEADERS }
     );
-  } catch (error: any) {
+  } catch (caught) {
+    const error = caught instanceof Error ? caught : new Error(String(caught));
     return NextResponse.json(
       { success: false, error: error.message || 'CDN upload error' },
       { status: 500, headers: CORS_HEADERS }
