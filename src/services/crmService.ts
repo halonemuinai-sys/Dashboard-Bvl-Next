@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 
 // Matches existing mirror_traffic schema created by ARES CRM project
 export interface LocationStat {
@@ -107,14 +108,14 @@ export const crmService = {
 
   async getTrafficRows(month: number, year: number): Promise<TrafficRow[]> {
     const { from, to } = dateRange(month, year);
-    const { data, error } = await supabase
+    return fetchAllRows<TrafficRow>((start, end) => supabase
       .from('mirror_traffic')
       .select('*')
       .gte('transaction_date', from)
       .lte('transaction_date', to)
-      .order('transaction_date', { ascending: false });
-    if (error) throw error;
-    return (data || []) as TrafficRow[];
+      .order('transaction_date', { ascending: false })
+      .order('id', { ascending: false })
+      .range(start, end));
   },
 
   computeOverview(rows: TrafficRow[]) {

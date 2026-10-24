@@ -8,6 +8,8 @@ export interface ClientelingRow {
 }
 
 const TIERS = ['Top', 'Elite', 'High Potential', 'Potential', 'Prospect', 'Inactive'];
+export const JOURNEY_STAGES = ['early', 'returning', 'highValue', 'reconnect', 'dormant'] as const;
+export type JourneyStage = typeof JOURNEY_STAGES[number];
 const DAY = 86_400_000;
 const tierFor = (spend: number, days = 0) => days > 730 ? 'Inactive' : spend >= 1_350_000_000 ? 'Top' : spend >= 200_000_000 ? 'Elite' : spend >= 50_000_000 ? 'High Potential' : spend > 0 ? 'Potential' : 'Prospect';
 
@@ -57,6 +59,26 @@ export function buildClientelingData(rows: ClientelingRow[], year: number, now =
   const single = active.filter(c => c.visits === 1);
   const sum = (list: typeof clients) => list.reduce((s, c) => s + c.spend, 0);
   const lapsed = active.filter(c => c.recency >= 180 && c.spend >= 50_000_000).sort((a, b) => b.spend - a.spend);
+  // Assign each client to one current stage, with re-engagement taking priority
+  // over value and frequency. This is a snapshot, not a conversion funnel.
+  const journeyGroups: Record<JourneyStage, typeof clients> = {
+    early: [], returning: [], highValue: [], reconnect: [], dormant: [],
+  };
+  clients.forEach(c => {
+    const stage: JourneyStage = c.recency > 730 ? 'dormant'
+      : c.recency >= 180 && c.spend >= 50_000_000 ? 'reconnect'
+      : c.spend >= 200_000_000 ? 'highValue'
+      : c.visits >= 2 ? 'returning' : 'early';
+    journeyGroups[stage].push(c);
+  });
+  const journey = JOURNEY_STAGES.map(stage => ({
+    stage,
+    count: journeyGroups[stage].length,
+    clients: journeyGroups[stage].sort((a, b) => b.spend - a.spend).slice(0, 12).map(c => ({
+      id: c.id, name: c.name, spend: c.spend, invoices: c.visits,
+      daysSince: c.recency, location: c.location, lastPurchase: c.lastVisit,
+    })),
+  }));
   const tierCounts: Record<string, number> = Object.fromEntries(TIERS.map(t => [t, 0]));
   const tierRevenue: Record<string, number> = { ...tierCounts };
   clients.forEach(c => { tierCounts[c.tier]++; tierRevenue[c.tier] += c.spend; });
@@ -82,6 +104,7 @@ export function buildClientelingData(rows: ClientelingRow[], year: number, now =
     year, asOf, priorCutoff, excludedRows,
     kpi: { totalActive: active.length, retentionRate: pct(repeat.length), avgLtv: active.length ? sum(active) / active.length : 0, lapsedCount: lapsed.length, repeatRevenue: sum(repeat), newRevenue: sum(single), repeatPct: pct(repeat.length), newPct: pct(single.length) },
     tierCounts, tierRevenue,
+    journey,
     topClients: [...clients].sort((a, b) => b.spend - a.spend).slice(0, 50).map(c => ({ id: c.id, name: c.name, spend: c.spend, visits: c.visits, recency: c.recency, tier: c.tier, location: c.location, firstVisit: c.firstVisit, lastVisit: c.lastVisit })),
     lapsedAlerts: lapsed.slice(0, 30).map(c => ({ id: c.id, name: c.name, spend: c.spend, daysSince: c.recency, lastVisit: c.lastVisit, tier: c.tier, location: c.location })),
     recencyBuckets, freqBuckets,

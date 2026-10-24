@@ -35,6 +35,23 @@ test('lapsed boundary and inactive boundary remain distinct', () => {
   const rows = [179,180,730,731].map(days => ({ ...row(new Date(Date.parse('2026-10-23') - days * 86400000).toISOString().slice(0,10), String(days), 50000000), customer: `Client ${days}` }));
   const d = build(rows); assert.equal(d.kpi.lapsedCount, 2); assert.equal(d.kpi.totalActive, 3); assert.equal(d.tierCounts.Inactive, 1);
 });
+test('journey assigns every profile to one actionable stage without double counting', () => {
+  const at = days => new Date(Date.parse('2026-10-23') - days * 86400000).toISOString().slice(0, 10);
+  const named = (name, days, invoice, amount) => ({ ...row(at(days), invoice, amount), customer: name });
+  const d = build([
+    named('Early', 10, 'E', 1_000_000),
+    named('Returning', 20, 'R1', 2_000_000), named('Returning', 10, 'R2', 3_000_000),
+    named('High Value', 15, 'H', 200_000_000),
+    named('Reconnect', 180, 'C', 50_000_000),
+    named('Dormant', 731, 'D', 300_000_000),
+    named('Unknown Invoice', 5, '', 500_000),
+  ]);
+  assert.deepEqual(Object.fromEntries(d.journey.map(stage => [stage.stage, stage.count])), {
+    early: 2, returning: 1, highValue: 1, reconnect: 1, dormant: 1,
+  });
+  assert.equal(d.journey.reduce((sum, stage) => sum + stage.count, 0), 6);
+  assert.equal(d.journey.find(stage => stage.stage === 'reconnect').clients[0].name, 'Reconnect');
+});
 test('annual movement uses comparable prior-year cutoff, not full prior year', () => {
   const d = build([row('2025-03-01', 'A', 10000000), row('2025-12-01', 'B', 2000000000), row('2026-03-01', 'C', 60000000)]);
   assert.equal(d.priorCutoff, '2025-10-23'); assert.equal(d.tierMigration[0].prevSpend, 10000000); assert.equal(d.tierMigration[0].direction, 'up');

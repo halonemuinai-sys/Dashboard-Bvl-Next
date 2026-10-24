@@ -1,456 +1,159 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import {
-  PieChart, Pie, Cell, Tooltip as RechartTooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  LineChart, Line, Legend,
-} from 'recharts';
-import {
-  Users, Search, RefreshCw, Download,
-  TrendingUp, UserCheck, Star, UserPlus,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useEffect, useMemo, useState } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
+import { ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Download, RefreshCw, Search, Star, TrendingUp, UserCheck, UserPlus, X } from 'lucide-react';
 import Amt from '@/components/Amt';
 import CustomerModal from '@/components/CustomerModal';
-import BvlgariLoader from '@/components/BvlgariLoader';
-import {
-  customerService, SEGMENT_ORDER, SEGMENT_CFG,
-  type Segment, type CustomerProfile,
-} from '@/services/customerService';
+import { useHideAmounts } from '@/lib/hide-amounts';
+import { cn } from '@/lib/utils';
+import { customerService, SEGMENT_ORDER, type Segment, type CustomerProfile } from '@/services/customerService';
+import styles from './customer-segment.module.css';
 
 type Overview = Awaited<ReturnType<typeof customerService.getSegmentationOverview>>;
+const PAGE_SIZE = 25;
+const percentage = (value: number) => `${value.toFixed(1)}%`;
+const shortAmount = (value: number) => value >= 1_000_000_000 ? `${(value / 1_000_000_000).toFixed(1)}B` : value >= 1_000_000 ? `${(value / 1_000_000).toFixed(0)}M` : value.toLocaleString('en-US');
 
-const fmtPct   = (n: number) => n.toFixed(1) + '%';
-const fmtShort = (n: number) => {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
-  if (n >= 1_000_000)     return (n / 1_000_000).toFixed(0) + 'M';
-  return n.toLocaleString('id-ID');
-};
+function csvCell(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  const text = String(value ?? '');
+  const safe = /^\s*[=+@-]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
 
-const SEGMENT_BADGE_STYLE: Record<Segment, string> = {
-  'Top':           'bg-slate-900 text-amber-400 border-slate-700',
-  'Elite':         'bg-purple-50  text-purple-700  border-purple-200',
-  'High Potential':'bg-teal-50    text-teal-700    border-teal-200',
-  'Potential':     'bg-blue-50    text-blue-700    border-blue-200',
-  'Prospect':      'bg-slate-100  text-slate-500   border-slate-200',
-  'Inactive':      'bg-rose-50    text-rose-700    border-rose-200',
-};
-
-function SegmentBadge({ seg }: { seg: Segment }) {
-  return (
-    <span className={cn('text-[9px] font-black px-2 py-0.5 rounded-full border', SEGMENT_BADGE_STYLE[seg])}>
-      {seg.toUpperCase()}
-    </span>
-  );
+function SegmentBadge({ segment }: { segment: Segment }) {
+  return <span className={cn(styles.segmentBadge, styles[`tone${segment.replace(/\s/g, '')}`])}>{segment}</span>;
 }
 
 export default function CustomerSegmentPage() {
-  const [year, setYear]           = useState(String(new Date().getFullYear()));
-  const [loading, setLoading]     = useState(true);
-  const [data, setData]           = useState<Overview | null>(null);
-  const [activeSegments, setActiveSegments] = useState<Set<Segment>>(new Set());
-  const [search, setSearch]       = useState('');
-  const [modalName, setModalName] = useState<string | null>(null);
-  const [modalSeg, setModalSeg]   = useState<Segment | null>(null);
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [revision, setRevision] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [data, setData] = useState<Overview | null>(null);
+  const [segments, setSegments] = useState<Set<Segment>>(new Set());
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<CustomerProfile | null>(null);
+  const { hidden } = useHideAmounts();
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await customerService.getSegmentationOverview(parseInt(year));
-        setData(res);
-        setActiveSegments(new Set());
-        setSearch('');
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    })();
-  }, [year]);
+    let active = true;
+    customerService.getSegmentationOverview(year).then(result => {
+      if (!active) return;
+      setData(result);
+      setLoading(false);
+      setError('');
+    }).catch(() => {
+      if (!active) return;
+      setLoading(false);
+      setError('Customer intelligence could not be loaded. Please try again.');
+    });
+    return () => { active = false; };
+  }, [year, revision]);
 
-  const toggleSegment = (seg: Segment) => {
-    setActiveSegments(prev => {
-      const next = new Set(prev);
-      if (next.has(seg)) next.delete(seg);
-      else next.add(seg);
+  const refresh = () => { setError(''); setLoading(true); setRevision(value => value + 1); };
+  const switchYear = (value: number) => { setYear(value); setLoading(true); setError(''); setPage(1); setSegments(new Set()); setSearch(''); setSelected(null); };
+  const toggleSegment = (segment: Segment) => {
+    setSegments(previous => {
+      const next = new Set(previous);
+      if (next.has(segment)) next.delete(segment); else next.add(segment);
       return next;
     });
+    setPage(1);
+  };
+  const filtered = useMemo(() => (data?.customers || []).filter(customer =>
+    (!segments.size || segments.has(customer.segment)) && (!search.trim() || customer.name.toLowerCase().includes(search.trim().toLowerCase()))
+  ), [data, segments, search]);
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pages);
+  const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const exportCsv = () => {
+    const header = ['Customer','Segment','Invoices','Items','Days since last purchase','Lifetime value'];
+    const body = filtered.map(customer => [customer.name, customer.segment, customer.freqInvoice, customer.freqQty, customer.recencyDays, customer.ltv].map(csvCell).join(','));
+    const url = URL.createObjectURL(new Blob(['\uFEFF', header.map(csvCell).join(','), '\r\n', body.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `Customer_Segmentation_${year}.csv`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const filteredCustomers = useMemo((): CustomerProfile[] => {
-    if (!data) return [];
-    return data.customers.filter(c => {
-      const matchSeg = activeSegments.size === 0 || activeSegments.has(c.segment);
-      const matchTxt = !search || c.name.toLowerCase().includes(search.toLowerCase());
-      return matchSeg && matchTxt;
-    });
-  }, [data, activeSegments, search]);
+  const kpi = data?.kpi;
+  const distribution = data?.segmentDistribution || [];
+  const revenue = data?.revenueMix;
+  const trend = data?.growthTrend || [];
+  const customers = data?.customers || [];
+  const hasFilters = !!search || segments.size > 0;
 
-  const exportCSV = () => {
-    if (!data) return;
-    const header = ['Name', 'Segment', 'Freq Invoice', 'Freq Qty', 'Recency (Days)', 'LTV'].join(',');
-    const rows = filteredCustomers.map(c =>
-      [`"${c.name}"`, c.segment, c.freqInvoice, c.freqQty, c.recencyDays, c.ltv].join(',')
-    );
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([[header, ...rows].join('\n')], { type: 'text/csv' }));
-    a.download = `Customer_Segmentation_${year}.csv`;
-    a.click();
-  };
-
-  const openModal = (c: CustomerProfile) => {
-    setModalName(c.name);
-    setModalSeg(c.segment);
-  };
-
-  if (loading || !data) return <BvlgariLoader message="Loading Customer Intelligence..." />;
-
-  const { kpi, segmentDistribution, revenueMix, growthTrend } = data;
-  return (
-    <>
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-
-        {/* ── Header ───────────────────────────────────────────────────── */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <Users className="w-5 h-5 text-blue-600" />
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Intelligence &amp; Segmentation</h1>
-            </div>
-            <p className="text-slate-500 text-sm">Comprehensive analysis of customer purchasing behavior and retention</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              aria-label="Select year"
-              value={year}
-              onChange={e => setYear(e.target.value)}
-              className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-sm font-bold text-slate-700 shadow-sm outline-none cursor-pointer"
-            >
-              {['2026','2025','2024','2023'].map(y => <option key={y} value={y}>{y}</option>)}
+  return <div className={styles.page}>
+    <header className={styles.hero}>
+      <div className={styles.heroTop}>
+        <div className={styles.brand}><div>
+          <p className={styles.eyebrow}>BVLGARI / CLIENT INTELLIGENCE</p>
+          <h1>Customer Intelligence</h1>
+          <p className={styles.subtitle}>Understand your customers, their value and how they return.</p>
+        </div></div>
+        <div className={styles.heroControls}>
+          <label className={styles.yearControl}><CalendarDays size={16} /><span className="sr-only">Analysis year</span>
+            <select aria-label="Analysis year" value={year} onChange={event => switchYear(Number(event.target.value))}>
+              {Array.from({ length: Math.max(1, new Date().getFullYear() - 2023 + 1) }, (_, index) => new Date().getFullYear() - index).map(value => <option key={value}>{value}</option>)}
             </select>
-            <button type="button" onClick={exportCSV}
-              className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm text-xs font-bold text-slate-600 hover:border-slate-300 transition-colors">
-              <Download className="w-4 h-4" /> Export CSV
-            </button>
-          </div>
-        </div>
-
-        {/* ── KPI Cards ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-
-          {/* Active Customers */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-5">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm shadow-blue-200">
-                <UserCheck className="w-4 h-4 text-white" />
-              </div>
-              <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
-                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                Live
-              </div>
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Active Customers</p>
-            <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
-              {kpi.totalActiveCustomers.toLocaleString('id-ID')}
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Last 24 months</p>
-          </div>
-
-          {/* Avg LTV */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-5">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm shadow-purple-200">
-                <TrendingUp className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-[9px] font-bold text-violet-600 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full">
-                Lifetime
-              </span>
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Avg. LTV</p>
-            <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
-              <Amt value={kpi.avgLtv} short />
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Per active customer</p>
-          </div>
-
-          {/* Top Spender */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-5">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm shadow-amber-200">
-                <Star className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
-                #1 Rank
-              </span>
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Top Spender</p>
-            <h3 className="text-base font-black text-slate-900 leading-tight line-clamp-1">
-              {kpi.topSpender.name || '—'}
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">
-              <span className="font-bold text-amber-600"><Amt value={kpi.topSpender.spend} short /></span> lifetime spend
-            </p>
-          </div>
-
-          {/* New Customer Ratio */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-5">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-sm shadow-emerald-200">
-                <UserPlus className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
-                {year}
-              </span>
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">New Customer Ratio</p>
-            <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
-              {fmtPct(kpi.newCustomerRatio)}
-            </h3>
-            <div className="mt-3 pt-3 border-t border-slate-50">
-              <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-1000"
-                  style={{ width: `${Math.min(kpi.newCustomerRatio, 100)}%` }} />
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* ── Segment Filter Badges ─────────────────────────────────────── */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">Filter:</span>
-          {SEGMENT_ORDER.map(seg => {
-            const cnt   = data.customers.filter(c => c.segment === seg).length;
-            const isOn  = activeSegments.has(seg);
-            const cfg   = SEGMENT_CFG[seg];
-            return (
-              <button
-                key={seg}
-                type="button"
-                onClick={() => toggleSegment(seg)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black transition-all',
-                  isOn
-                    ? cn(cfg.bg, cfg.text, cfg.border, 'shadow-sm ring-1 ring-offset-1',
-                        seg === 'Top' ? 'ring-amber-400' : 'ring-current')
-                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                )}
-              >
-                {seg}
-                <span className={cn(
-                  'text-[9px] px-1.5 py-px rounded-full font-black',
-                  isOn ? 'bg-white/20' : 'bg-slate-100 text-slate-400'
-                )}>{cnt}</span>
-              </button>
-            );
-          })}
-          {activeSegments.size > 0 && (
-            <button
-              type="button"
-              onClick={() => setActiveSegments(new Set())}
-              className="ml-2 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors underline"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        {/* ── Charts Row ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* Donut: Segment Distribution */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h3 className="text-xs font-black text-slate-900">Segment Distribution</h3>
-              <p className="text-[10px] text-slate-400">Customer count per tier</p>
-            </div>
-            <div className="p-4 flex flex-col items-center">
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie
-                    data={segmentDistribution.filter(s => s.count > 0)}
-                    cx="50%" cy="50%"
-                    innerRadius={50} outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="count"
-                    nameKey="name"
-                  >
-                    {segmentDistribution.filter(s => s.count > 0).map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartTooltip
-                    contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 11 }}
-                    formatter={((v: unknown) => [String(v), '']) as any}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 w-full px-2">
-                {segmentDistribution.map(s => (
-                  <div key={s.name} className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                    <span className="text-[10px] text-slate-500 truncate">{s.name}</span>
-                    <span className="text-[10px] font-black text-slate-700 ml-auto">{s.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Bar: Revenue Source */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h3 className="text-xs font-black text-slate-900">Revenue Source</h3>
-              <p className="text-[10px] text-slate-400">New vs Repeat customers — {year}</p>
-            </div>
-            <div className="p-4">
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart
-                  data={[
-                    { name: 'New',    value: revenueMix.newRevenue    },
-                    { name: 'Repeat', value: revenueMix.repeatRevenue },
-                  ]}
-                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false}
-                    tickFormatter={v => fmtShort(v)} />
-                  <RechartTooltip
-                    contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 11 }}
-                    formatter={(v: unknown) => [fmtShort(Number(v)), 'Revenue']}
-                  />
-                  <Bar dataKey="value" radius={[6,6,0,0]} maxBarSize={56}>
-                    <Cell fill="#3b82f6" />
-                    <Cell fill="#10b981" />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="text-center">
-                  <p className="text-[9px] text-slate-400 font-bold">NEW</p>
-                  <p className="text-sm font-black text-blue-600"><Amt value={revenueMix.newRevenue} short /></p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[9px] text-slate-400 font-bold">REPEAT</p>
-                  <p className="text-sm font-black text-emerald-600"><Amt value={revenueMix.repeatRevenue} short /></p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Line: Acquisition & Retention Trend */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h3 className="text-xs font-black text-slate-900">Acquisition &amp; Retention Trend</h3>
-              <p className="text-[10px] text-slate-400">Monthly new vs repeat customers — {year}</p>
-            </div>
-            <div className="p-4">
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={growthTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#94a3b8', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <RechartTooltip
-                    contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 11 }}
-                    formatter={((v: unknown, name: unknown) => [String(v), name === 'new' ? 'New' : 'Repeat']) as any}
-                  />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
-                    formatter={(v: string) => v === 'new' ? 'New' : 'Repeat'} />
-                  <Line dataKey="new"    stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
-                  <Line dataKey="repeat" stroke="#10b981" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Customer Table ────────────────────────────────────────────── */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center gap-3">
-            <div className="flex items-center gap-2 flex-1">
-              <div className="w-1 h-4 bg-blue-600 rounded-sm" />
-              <h3 className="text-sm font-black text-slate-900">Detailed Segment Analysis</h3>
-              <span className="text-[10px] font-bold text-slate-400 ml-1">
-                {filteredCustomers.length} customers
-                {activeSegments.size > 0 || search ? ` (filtered)` : ''}
-              </span>
-            </div>
-            <div className="relative w-full md:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search customer name..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 placeholder-slate-400 outline-none focus:border-blue-300 focus:bg-white transition-colors"
-              />
-            </div>
-          </div>
-
-          <div className="overflow-auto max-h-[600px]">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="sticky top-0 bg-slate-50 text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100 shadow-sm">
-                <tr>
-                  <th className="py-3 px-5">#</th>
-                  <th className="py-3 px-5">Customer Name</th>
-                  <th className="py-3 px-5">Segment</th>
-                  <th className="py-3 px-5 text-right">Freq Invoice</th>
-                  <th className="py-3 px-5 text-right">Freq Qty</th>
-                  <th className="py-3 px-5 text-right">Recency (Days)</th>
-                  <th className="py-3 px-5 text-right">Lifetime Value</th>
-                  <th className="py-3 px-5"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredCustomers.map((c, i) => (
-                  <tr key={c.name} className="hover:bg-slate-50 transition-colors group">
-                    <td className="py-3 px-5 text-slate-300 font-bold">{i + 1}</td>
-                    <td className="py-3 px-5 font-bold text-slate-800 group-hover:text-blue-600 transition-colors max-w-[200px] truncate">
-                      {c.name}
-                    </td>
-                    <td className="py-3 px-5">
-                      <SegmentBadge seg={c.segment} />
-                    </td>
-                    <td className="py-3 px-5 text-right font-mono text-slate-700">{c.freqInvoice}</td>
-                    <td className="py-3 px-5 text-right font-mono text-slate-700">{c.freqQty.toLocaleString('id-ID')}</td>
-                    <td className={cn('py-3 px-5 text-right font-bold',
-                      c.recencyDays <= 90  ? 'text-emerald-600' :
-                      c.recencyDays <= 365 ? 'text-amber-500' : 'text-rose-500')}>
-                      {c.recencyDays}
-                    </td>
-                    <td className="py-3 px-5 text-right font-mono font-black text-slate-800">
-                      <Amt value={c.ltv} short />
-                    </td>
-                    <td className="py-3 px-5">
-                      <button
-                        type="button"
-                        onClick={() => openModal(c)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-black px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      >
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {filteredCustomers.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-400 text-sm">
-                      {search || activeSegments.size > 0 ? 'No customers match the current filter.' : 'No customer data available.'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          </label>
+          <button type="button" onClick={refresh} disabled={loading} className={styles.refresh} aria-label="Refresh segmentation"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
+          <button type="button" onClick={exportCsv} disabled={loading || !!error || !filtered.length} className={styles.export}><Download size={15} />Export CSV</button>
         </div>
       </div>
+      <div className={styles.heroBottom}><span className={styles.periodTag}>Analysis year {year}</span><span>Lifetime customer profiles · Annual purchase trends</span></div>
+    </header>
 
-      {/* ── Customer Detail Modal ──────────────────────────────────────── */}
-      <CustomerModal
-        name={modalName}
-        segment={modalSeg}
-        onClose={() => { setModalName(null); setModalSeg(null); }}
-      />
-    </>
-  );
+    {loading ? <div className={styles.loading} role="status"><RefreshCw className="animate-spin" size={22} />Loading customer intelligence...</div> : error || !data || !kpi || !revenue ?
+      <div className={styles.error} role="alert"><p>{error || 'Customer data is unavailable.'}</p><button type="button" onClick={refresh}>Try again</button></div> : <>
+      <section className={styles.kpis} aria-label="Customer overview">
+        <article className={cn(styles.kpi, styles.kpiPrimary)}><span className={styles.kpiIcon}><UserCheck size={18} /></span><p>Active customers</p><strong>{kpi.totalActiveCustomers.toLocaleString('en-US')}</strong><small>Purchased within the last 730 days</small></article>
+        <article className={cn(styles.kpi, styles.kpiPurple)}><span className={styles.kpiIcon}><TrendingUp size={18} /></span><p>Average lifetime value</p><strong><Amt value={kpi.avgLtv} short /></strong><small>Per active customer · IDR</small></article>
+        <article className={cn(styles.kpi, styles.kpiGold)}><span className={styles.kpiIcon}><Star size={18} /></span><p>Top spender</p><strong className={styles.topName} title={kpi.topSpender.name}>{kpi.topSpender.name || '—'}</strong><small><Amt value={kpi.topSpender.spend} short /> lifetime spend</small></article>
+        <article className={cn(styles.kpi, styles.kpiGreen)}><span className={styles.kpiIcon}><UserPlus size={18} /></span><p>New customer ratio</p><strong>{percentage(kpi.newCustomerRatio)}</strong><small>First purchase in {year} among active customers</small><div className={styles.rateTrack}><div style={{ width: `${Math.min(kpi.newCustomerRatio, 100)}%` }} /></div></article>
+      </section>
+
+      <section className={styles.segmentSection} aria-label="Customer segments">
+        <div className={styles.segmentHeading}><div><p className={styles.overline}>CUSTOMER MIX</p><h2>Explore by segment</h2><p>Select one or more tiers to focus the customer register.</p></div><span>{customers.length.toLocaleString('en-US')} profiles</span></div>
+        <div className={styles.segmentGrid}>{SEGMENT_ORDER.map(segment => {
+          const count = distribution.find(item => item.name === segment)?.count || 0;
+          const active = segments.has(segment);
+          return <button key={segment} type="button" aria-pressed={active} onClick={() => toggleSegment(segment)} className={cn(styles.segmentTile, styles[`tone${segment.replace(/\s/g, '')}`], active && styles.segmentActive)}>
+            <span className={styles.segmentDot} /><span className="truncate">{segment}</span><strong>{count.toLocaleString('en-US')}</strong>
+          </button>;
+        })}</div>
+      </section>
+
+      <div className={styles.charts}>
+        <section className={styles.chartPanel} aria-label="Segment distribution"><div className={styles.chartHeading}><p className={styles.overline}>CUSTOMER BASE</p><h2>Segment distribution</h2><p>Customers in each tier</p></div>
+          <div className={styles.donutWrap}><ResponsiveContainer width="100%" height={210}><PieChart><Pie data={distribution.filter(item => item.count > 0)} cx="50%" cy="50%" innerRadius={60} outerRadius={86} paddingAngle={2} dataKey="count" nameKey="name" stroke="none">{distribution.filter(item => item.count > 0).map(item => <Cell key={item.name} fill={item.color} />)}</Pie><Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 11 }} formatter={value => [Number(value).toLocaleString('en-US'), 'Customers']} /></PieChart></ResponsiveContainer><div className={styles.donutCenter}><strong>{customers.length.toLocaleString('en-US')}</strong><span>profiles</span></div></div>
+          <div className={styles.legend}>{distribution.map(item => <div key={item.name}><span className={styles.legendDot} style={{ backgroundColor: item.color }} /><span>{item.name}</span><strong>{item.count.toLocaleString('en-US')}</strong></div>)}</div>
+        </section>
+        <section className={styles.chartPanel} aria-label="Revenue by purchase frequency"><div className={styles.chartHeading}><p className={styles.overline}>ANNUAL SPEND · {year}</p><h2>One-time vs repeat</h2><p>Based on customers with one or multiple invoices</p></div>
+          <div className={styles.chartCanvas}><ResponsiveContainer width="100%" height={205}><BarChart data={[{ name: 'One-time', value: revenue.newRevenue }, { name: 'Repeat', value: revenue.repeatRevenue }]} margin={{ top: 12, right: 6, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" stroke="#edf2f7" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={value => hidden ? '•••' : shortAmount(Number(value))} /><Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 11 }} formatter={value => [hidden ? '••••••' : shortAmount(Number(value)), 'Net sales']} /><Bar dataKey="value" radius={[7,7,0,0]} maxBarSize={62}><Cell fill="#8b5cf6" /><Cell fill="#10b981" /></Bar></BarChart></ResponsiveContainer></div>
+          <div className={styles.revenueLegend}><div><span className={cn(styles.legendDot, styles.purpleDot)} />One-time<strong><Amt value={revenue.newRevenue} short /></strong></div><div><span className={cn(styles.legendDot, styles.greenDot)} />Repeat<strong><Amt value={revenue.repeatRevenue} short /></strong></div></div>
+        </section>
+        <section className={styles.chartPanel} aria-label="Monthly customer trend"><div className={styles.chartHeading}><p className={styles.overline}>CUSTOMER ACTIVITY · {year}</p><h2>First seen & returning</h2><p>Unique customers per month</p></div>
+          <div className={styles.chartCanvas}><ResponsiveContainer width="100%" height={205}><LineChart data={trend} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" stroke="#edf2f7" vertical={false} /><XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} /><Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 11 }} formatter={(value, name) => [Number(value).toLocaleString('en-US'), name === 'new' ? 'First seen' : 'Returning']} /><Line name="new" dataKey="new" stroke="#3b82f6" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} /><Line name="repeat" dataKey="repeat" stroke="#10b981" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} /></LineChart></ResponsiveContainer></div>
+          <div className={styles.trendLegend}><span><i className={styles.blueDot} />First seen this year</span><span><i className={styles.greenDot} />Returning in a later month</span></div>
+        </section>
+      </div>
+
+      <section className={styles.register} aria-label="Segmented customer register">
+        <div className={styles.registerTop}><div><p className={styles.overline}>CUSTOMER REGISTER</p><h2>Customer profiles</h2><p>Review purchase frequency, recency and lifetime value.</p></div><div className={styles.search}><Search size={15} /><input aria-label="Search customer name" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search customer name..." />{search && <button type="button" onClick={() => { setSearch(''); setPage(1); }} aria-label="Clear search"><X size={14} /></button>}</div></div>
+        <div className={styles.resultBar}><span>{filtered.length ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filtered.length)} of ${filtered.length.toLocaleString('en-US')} customers` : 'No matching customers'}</span>{hasFilters && <button type="button" onClick={() => { setSearch(''); setSegments(new Set()); setPage(1); }}>Clear filters</button>}</div>
+        <div className={styles.tableScroll} role="region" aria-label="Scrollable customer records" tabIndex={0}><table><thead><tr><th>Customer</th><th>Segment</th><th className="text-right">Invoices</th><th className="text-right">Items</th><th className="text-right">Days since purchase</th><th className="text-right">Lifetime value</th><th><span className="sr-only">Details</span></th></tr></thead><tbody>
+          {visible.map((customer, index) => <tr key={`${customer.name}-${(currentPage - 1) * PAGE_SIZE + index}`}><td className={styles.customerName} title={customer.name}>{customer.name}</td><td><SegmentBadge segment={customer.segment} /></td><td className="text-right tabular-nums">{customer.freqInvoice}</td><td className="text-right tabular-nums">{customer.freqQty.toLocaleString('en-US')}</td><td className="text-right tabular-nums">{customer.recencyDays}</td><td className="text-right font-semibold tabular-nums"><Amt value={customer.ltv} short /></td><td><button type="button" className={styles.details} onClick={() => setSelected(customer)} aria-label={`View ${customer.name} details`}>View <ArrowUpRight size={14} /></button></td></tr>)}
+          {!visible.length && <tr><td colSpan={7} className={styles.empty}>{hasFilters ? 'No customers match these filters.' : 'No customer data is available.'}</td></tr>}
+        </tbody></table></div>
+        {pages > 1 && <div className={styles.pagination}><span>Page {currentPage} of {pages}</span><div><button type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={16} />Previous</button><button type="button" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>Next<ChevronRight size={16} /></button></div></div>}
+      </section>
+    </>}
+    <CustomerModal name={selected?.name || null} segment={selected?.segment || null} onClose={() => setSelected(null)} />
+  </div>;
 }

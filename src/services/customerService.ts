@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 
 export type Segment = 'Top' | 'Elite' | 'High Potential' | 'Potential' | 'Prospect' | 'Inactive';
 
@@ -69,18 +70,15 @@ export const customerService = {
 
   async getSegmentationOverview(year: number) {
     const today = new Date();
-    const [{ data: allRows, error }, { data: yearRows }] = await Promise.all([
-      supabase
-        .from('clean_master')
-        .select('customer, transaction_date, net_sales, qty, trans_no')
-        .order('transaction_date', { ascending: true }),
-      supabase
-        .from('clean_master')
-        .select('customer, transaction_date, net_sales, trans_no')
-        .gte('transaction_date', `${year}-01-01`)
-        .lte('transaction_date', `${year}-12-31`),
-    ]);
-    if (error) throw error;
+    const allRows = await fetchAllRows((from, to) => supabase
+      .from('clean_master')
+      .select('customer,transaction_date,net_sales,qty,trans_no,id')
+      .order('id', { ascending: true })
+      .range(from, to));
+    const yearRows = allRows.filter(row => {
+      const date = row.transaction_date?.slice(0, 10) || '';
+      return date >= `${year}-01-01` && date <= `${year}-12-31`;
+    });
 
     // ── Build lifetime profiles ──────────────────────────────────────────
     type Profile = {

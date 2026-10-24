@@ -1,420 +1,178 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  Database, RefreshCw, Download, Search, Calendar as CalendarIcon,
-  TrendingUp, Users, CheckCircle, XCircle, Clock, ArrowRight,
-  MapPin, Wifi, Home, UserX,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Database, Download, FilterX, MapPin, RefreshCw, Search, TrendingUp, Users, X } from 'lucide-react';
 import Amt from '@/components/Amt';
-import { crmService, FUNNEL_MAP, STATUS_MAP, type TrafficRow, type LocationStat } from '@/services/crmService';
+import { cn } from '@/lib/utils';
+import { crmService, type TrafficRow } from '@/services/crmService';
+import styles from './app-sheet-crm.module.css';
 
-const MONTHS = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const PAGE_SIZE = 25;
+const funnelLabel: Record<string, string> = { potensial: 'New potential', menunggu: 'Awaiting response', negosiasi: 'In negotiation', berhasil: 'Successful', gagal: 'Unsuccessful' };
+const funnelTone: Record<string, string> = { potensial: styles.blue, menunggu: styles.amber, negosiasi: styles.violet, berhasil: styles.emerald, gagal: styles.rose };
+const statusLabel: Record<string, string> = { walkin: 'Walk-in', followup: 'Follow-up', delivery: 'Delivery & showing', service: 'Service & repair', online: 'Online', inhouse: 'In-house', outsider: 'Outsider', other: 'Other' };
 
-const fmtDate = (s: string) => {
-  if (!s) return '—';
-  const d = new Date(s);
-  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-};
+function formatDate(value: string) {
+  if (!value) return '—';
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
-// ── Funnel card config ──────────────────────────────────────────────────────
-const FUNNEL_CFG: Record<string, { icon: React.ElementType; grad: string; text: string; border: string; badge: string }> = {
-  potensial:  { icon: Users,       grad: 'from-blue-500 to-blue-600',     text: 'text-blue-600',   border: 'border-blue-100',   badge: 'bg-blue-50 text-blue-700 border-blue-100' },
-  menunggu:   { icon: Clock,       grad: 'from-amber-400 to-amber-500',   text: 'text-amber-600',  border: 'border-amber-100',  badge: 'bg-amber-50 text-amber-700 border-amber-100' },
-  negosiasi:  { icon: ArrowRight,  grad: 'from-orange-400 to-orange-500', text: 'text-orange-600', border: 'border-orange-100', badge: 'bg-orange-50 text-orange-700 border-orange-100' },
-  berhasil:   { icon: CheckCircle, grad: 'from-emerald-500 to-emerald-600', text: 'text-emerald-600', border: 'border-emerald-100', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-  gagal:      { icon: XCircle,     grad: 'from-rose-500 to-rose-600',     text: 'text-rose-600',   border: 'border-rose-100',   badge: 'bg-rose-50 text-rose-700 border-rose-100' },
-};
+function csvCell(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  const text = String(value ?? '');
+  const safe = /^\s*[=+@-]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
 
-// ── Status icon config ──────────────────────────────────────────────────────
-const STATUS_CFG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  walkin:   { icon: Users,       color: 'text-blue-600',    bg: 'bg-blue-50 border-blue-100' },
-  followup: { icon: RefreshCw,   color: 'text-violet-600',  bg: 'bg-violet-50 border-violet-100' },
-  delivery: { icon: TrendingUp,  color: 'text-teal-600',    bg: 'bg-teal-50 border-teal-100' },
-  service:  { icon: Database,    color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-100' },
-  online:   { icon: Wifi,        color: 'text-slate-600',   bg: 'bg-slate-50 border-slate-200' },
-  inhouse:  { icon: Home,        color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-  outsider: { icon: UserX,       color: 'text-rose-600',    bg: 'bg-rose-50 border-rose-100' },
-};
-
-// ── Prospect level badge color ──────────────────────────────────────────────
-function ProspekBadge({ level }: { level: string }) {
-  const lower = level.toLowerCase();
-  const cls =
-    lower.includes('berhasil')  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-    lower.includes('gagal')     ? 'bg-rose-50 text-rose-700 border-rose-200' :
-    lower.includes('negosiasi') ? 'bg-orange-50 text-orange-700 border-orange-200' :
-    lower.includes('menunggu')  ? 'bg-amber-50 text-amber-700 border-amber-200' :
-    lower.includes('potensial') ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                   'bg-slate-50 text-slate-600 border-slate-200';
-  return (
-    <span className={cn('text-[9px] font-black px-2 py-0.5 rounded-full border whitespace-nowrap', cls)}>
-      {level || '—'}
-    </span>
-  );
+function prospectTone(value: string) {
+  const lower = (value || '').toLowerCase();
+  if (lower.includes('berhasil')) return styles.emerald;
+  if (lower.includes('gagal')) return styles.rose;
+  if (lower.includes('negosiasi')) return styles.violet;
+  if (lower.includes('menunggu') || lower.includes('respon')) return styles.amber;
+  if (lower.includes('potensial')) return styles.blue;
+  return styles.neutral;
 }
 
 export default function AppSheetCrmPage() {
-  const now = new Date();
-  const [month, setMonth]   = useState(now.getMonth() + 1);
-  const [year, setYear]     = useState(String(now.getFullYear()));
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [revision, setRevision] = useState(0);
+  const [rows, setRows] = useState<TrafficRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rows, setRows]     = useState<TrafficRow[]>([]);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [location, setLocation] = useState('');
+  const [status, setStatus] = useState('');
+  const [prospect, setProspect] = useState('');
+  const [page, setPage] = useState(1);
 
-  // Table filters (client-side)
-  const [search, setSearch]       = useState('');
-  const [filterLoc, setFilterLoc] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterLevel, setFilterLevel]   = useState('');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await crmService.getTrafficRows(month, parseInt(year));
+  useEffect(() => {
+    let active = true;
+    crmService.getTrafficRows(month, year).then(data => {
+      if (!active) return;
       setRows(data);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  }, [month, year]);
+      setError('');
+      setLoading(false);
+    }).catch(() => {
+      if (!active) return;
+      setError('CRM data could not be loaded. Please try again.');
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [month, year, revision]);
 
-  useEffect(() => { load(); }, [load]);
-
-  // Derived: overview computed from all rows (no filter)
+  const refresh = () => { setLoading(true); setError(''); setRevision(value => value + 1); };
+  const changePeriod = (nextMonth: number, nextYear: number) => {
+    setLoading(true); setError(''); setPage(1); setMonth(nextMonth); setYear(nextYear);
+  };
   const overview = useMemo(() => crmService.computeOverview(rows), [rows]);
+  const locations = useMemo(() => [...new Set(rows.map(row => row.location).filter(Boolean))].sort(), [rows]);
+  const statuses = useMemo(() => [...new Set(rows.map(row => row.status || row.akses_masuk).filter(Boolean))].sort(), [rows]);
+  const prospects = useMemo(() => [...new Set(rows.map(row => row.prospect_item).filter(Boolean))].sort(), [rows]);
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return rows.filter(row => (!location || row.location === location) && (!status || (row.status || row.akses_masuk) === status)
+      && (!prospect || row.prospect_item === prospect) && (!term || [row.customer_name, row.served_by, row.location, row.no_hp]
+        .some(value => (value || '').toLowerCase().includes(term))));
+  }, [rows, search, location, status, prospect]);
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pages);
+  const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const success = overview.funnel.find(item => item.key === 'berhasil')?.count ?? 0;
+  const conversion = rows.length ? success / rows.length * 100 : 0;
+  const otherProspects = Math.max(0, rows.length - overview.funnel.reduce((sum, item) => sum + item.count, 0));
+  const otherStatuses = Math.max(0, rows.length - overview.statusBreakdown.reduce((sum, item) => sum + item.count, 0));
+  const hasFilters = !!(search || location || status || prospect);
+  const setTableFilter = (update: () => void) => { update(); setPage(1); };
 
-  // Derived: distinct options from current month data
-  const locations     = useMemo(() => [...new Set(rows.map(r => r.location).filter(Boolean))].sort(), [rows]);
-  const statuses      = useMemo(() => [...new Set(rows.map(r => r.status).filter(Boolean))].sort(), [rows]);
-  const prospekLevels = useMemo(() => [...new Set(rows.map(r => r.prospect_item).filter(Boolean))].sort(), [rows]);
-
-  // Derived: filtered table rows
-  const filtered = useMemo(() => rows.filter(r => {
-    if (filterLoc    && r.location      !== filterLoc)    return false;
-    if (filterStatus && r.status        !== filterStatus) return false;
-    if (filterLevel  && r.prospect_item !== filterLevel)  return false;
-    if (search && !(r.customer_name || '').toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  }), [rows, filterLoc, filterStatus, filterLevel, search]);
-
-  const exportCSV = () => {
-    const header = ['Tanggal','Nama Lengkap','Lokasi','Served By','Status','Prospek Level','Net Sales','No Invoice'].join(',');
-    const body   = filtered.map(r => [
-      r.transaction_date, `"${r.customer_name}"`, r.location,
-      r.served_by, r.status, r.prospect_item,
-      r.net_sales,
-    ].join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([[header, body].join('\n')], { type: 'text/csv' }));
-    a.download = `CRM_Traffic_${year}_${String(month).padStart(2,'0')}.csv`;
-    a.click();
+  const exportCsv = () => {
+    const header = ['Date','Customer','Boutique','Served by','Arrival status','Prospect stage','Net sales'];
+    const data = filtered.map(row => [row.transaction_date, row.customer_name, row.location, row.served_by,
+      row.status || row.akses_masuk, row.prospect_item, row.net_sales].map(csvCell).join(','));
+    const url = URL.createObjectURL(new Blob(['\uFEFF', header.map(csvCell).join(','), '\r\n', data.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `CRM_Traffic_${year}_${String(month).padStart(2, '0')}.csv`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-
-      {/* ── Header ───────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Database className="w-5 h-5 text-blue-600" />
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">App Sheet (CRM Dashboard)</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <p className="text-slate-500 text-sm">Monitoring Prospect Pipeline &amp; Customer Relationship Management</p>
-            <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
-              <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-              Live Connection
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Month */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm">
-            <CalendarIcon className="w-4 h-4 text-blue-600" />
-            <select aria-label="Select month" value={month} onChange={e => setMonth(Number(e.target.value))}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer">
-              {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+  return <div className={styles.page}>
+    <header className={styles.hero}>
+      <div className={styles.heroTop}>
+        <div className={styles.brand}><span className={styles.brandIcon}><Database size={23} /></span><div>
+          <p className={styles.eyebrow}>BVLGARI / CLIENT INTELLIGENCE</p>
+          <h1>AppSheet CRM Dashboard</h1>
+          <p className={styles.subtitle}>A clear view of visits, prospect progress and boutique activity.</p>
+        </div></div>
+        <div className={styles.heroControls}>
+          <label className={styles.periodControl}><CalendarDays size={16} /><span className="sr-only">Month</span>
+            <select aria-label="Select month" value={month} onChange={event => changePeriod(Number(event.target.value), year)}>
+              {MONTHS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
             </select>
-          </div>
-          {/* Year */}
-          <select aria-label="Select year" value={year} onChange={e => setYear(e.target.value)}
-            className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-sm font-bold text-slate-700 shadow-sm outline-none cursor-pointer">
-            {['2026','2025','2024','2023'].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <button type="button" onClick={load}
-            className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm text-xs font-bold text-slate-600 hover:border-slate-300 transition-colors">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
-          <button type="button" onClick={exportCSV}
-            className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm text-xs font-bold text-slate-600 hover:border-slate-300 transition-colors">
-            <Download className="w-4 h-4" /> Excel
-          </button>
+          </label>
+          <label className={styles.periodControl}><span className="sr-only">Year</span>
+            <select aria-label="Select year" value={year} onChange={event => changePeriod(month, Number(event.target.value))}>
+              {Array.from({ length: Math.max(1, new Date().getFullYear() - 2023 + 1) }, (_, index) => new Date().getFullYear() - index).map(value => <option key={value}>{value}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={refresh} disabled={loading} aria-label="Refresh CRM data" className={styles.refresh}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
         </div>
       </div>
+      <div className={styles.heroBottom}><span className={styles.periodTag}>{MONTHS[month - 1]} {year}</span><span>Data from boutique visit records</span></div>
+    </header>
 
-      {loading ? (
-        <div className="h-60 flex flex-col items-center justify-center gap-3">
-          <RefreshCw className="w-7 h-7 text-blue-500 animate-spin" />
-          <p className="text-sm text-slate-400 animate-pulse">Loading CRM data...</p>
+    {loading ? <div className={styles.loading} role="status"><RefreshCw className="animate-spin" size={22} />Loading CRM activity...</div> : error ?
+      <div className={styles.error} role="alert"><p>{error}</p><button type="button" onClick={refresh}>Try again</button></div> : <>
+      <section className={styles.kpis} aria-label="Monthly CRM overview">
+        <article className={cn(styles.kpi, styles.kpiPrimary)}><span className={styles.kpiIcon}><Users size={18} /></span><p>Total visits</p><strong>{rows.length.toLocaleString('en-US')}</strong><small>Recorded this month</small></article>
+        <article className={cn(styles.kpi, styles.kpiGreen)}><span className={styles.kpiIcon}><CheckCircle2 size={18} /></span><p>Successful prospects</p><strong>{success.toLocaleString('en-US')}</strong><small>Marked successful in prospect stage</small></article>
+        <article className={cn(styles.kpi, styles.kpiViolet)}><span className={styles.kpiIcon}><TrendingUp size={18} /></span><p>Success rate</p><strong>{conversion.toFixed(1)}%</strong><small>{success.toLocaleString('en-US')} of {rows.length.toLocaleString('en-US')} visits</small><div className={styles.rateTrack}><div style={{ width: `${Math.min(conversion, 100)}%` }} /></div></article>
+        <article className={cn(styles.kpi, styles.kpiAmber)}><span className={styles.kpiIcon}><Database size={18} /></span><p>Recorded net sales</p><strong><Amt value={overview.kpi.totalRevenue} short /></strong><small>Across visit records</small></article>
+      </section>
+
+      <div className={styles.analytics}>
+        <section className={styles.panel} aria-label="Prospect pipeline">
+          <div className={styles.panelHeading}><div><p className={styles.overline}>PROSPECT JOURNEY</p><h2>Pipeline at a glance</h2></div><span>{rows.length.toLocaleString('en-US')} visits</span></div>
+          <div className={styles.pipeline}>
+            {[...overview.funnel.map(item => ({ ...item, label: funnelLabel[item.key] || item.label })), ...(otherProspects ? [{ key: 'other', label: 'Other / unclassified', count: otherProspects, revenue: 0 }] : [])].map(item =>
+              <div key={item.key} className={styles.pipelineRow}>
+                <span className={cn(styles.toneDot, funnelTone[item.key] || styles.neutral)} /><span className={styles.pipelineLabel}>{item.label}</span>
+                <div className={styles.pipelineTrack}><div className={cn(styles.pipelineFill, funnelTone[item.key] || styles.neutral)} style={{ width: `${rows.length ? item.count / rows.length * 100 : 0}%` }} /></div>
+                <strong>{item.count.toLocaleString('en-US')}</strong><span className={styles.pipelinePercent}>{rows.length ? (item.count / rows.length * 100).toFixed(0) : 0}%</span>
+              </div>)}
+          </div>
+        </section>
+        <section className={styles.panel} aria-label="Arrival status">
+          <div className={styles.panelHeading}><div><p className={styles.overline}>VISIT MIX</p><h2>Arrival status</h2></div><MapPin size={18} className="text-slate-400" /></div>
+          <div className={styles.statusGrid}>{[...overview.statusBreakdown.map(item => ({ ...item, label: statusLabel[item.key] || item.label })), ...(otherStatuses ? [{ key: 'other', label: 'Other', count: otherStatuses }] : [])].map(item =>
+            <div key={item.key} className={styles.statusItem}><span>{item.label}</span><strong>{item.count.toLocaleString('en-US')}</strong></div>)}</div>
+          {overview.byLocation.length > 0 && <div className={styles.locationSummary}><p className={styles.overline}>BY BOUTIQUE</p>
+            {[...overview.byLocation].sort((a, b) => b.total - a.total).map(item => <div key={item.name} className={styles.locationRow}><span className="truncate">{item.name}</span><div className={styles.locationTrack}><div style={{ width: `${rows.length ? item.total / rows.length * 100 : 0}%` }} /></div><strong>{item.total}</strong></div>)}
+          </div>}
+        </section>
+      </div>
+
+      <section className={styles.register} aria-label="Customer visit register">
+        <div className={styles.registerTop}><div><p className={styles.overline}>VISIT REGISTER</p><h2>Customer activity</h2><p>Search visits and explore the details behind each prospect.</p></div>
+          <button type="button" onClick={exportCsv} disabled={!filtered.length} className={styles.export}><Download size={15} />Export CSV</button></div>
+        <div className={styles.filters}>
+          <label className={styles.search}><Search size={16} /><span className="sr-only">Search visits</span><input value={search} onChange={event => setTableFilter(() => setSearch(event.target.value))} placeholder="Search customer, advisor, phone or boutique..." />{search && <button type="button" aria-label="Clear search" onClick={() => setTableFilter(() => setSearch(''))}><X size={14} /></button>}</label>
+          <select aria-label="Filter boutique" value={location} onChange={event => setTableFilter(() => setLocation(event.target.value))}><option value="">All boutiques</option>{locations.map(value => <option key={value}>{value}</option>)}</select>
+          <select aria-label="Filter prospect stage" value={prospect} onChange={event => setTableFilter(() => setProspect(event.target.value))}><option value="">All stages</option>{prospects.map(value => <option key={value}>{value}</option>)}</select>
+          <select aria-label="Filter arrival status" value={status} onChange={event => setTableFilter(() => setStatus(event.target.value))}><option value="">All statuses</option>{statuses.map(value => <option key={value}>{value}</option>)}</select>
+          {hasFilters && <button type="button" className={styles.reset} onClick={() => { setSearch(''); setLocation(''); setStatus(''); setProspect(''); setPage(1); }}><FilterX size={14} />Reset</button>}
         </div>
-      ) : (
-        <>
-          {/* ── KPI Summary Cards ────────────────────────────────────── */}
-          {(() => {
-            const berhasil    = overview.funnel.find(f => f.key === 'berhasil');
-            const convRate    = rows.length > 0 ? ((berhasil?.count || 0) / rows.length) * 100 : 0;
-            return (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm shadow-blue-200">
-                      <Users className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">Total</span>
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Kunjungan</p>
-                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">{rows.length.toLocaleString('id-ID')}</h3>
-                  <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">{MONTHS[month-1]} {year}</p>
-                </div>
-
-                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-sm shadow-emerald-200">
-                      <CheckCircle className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Closed</span>
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Penjualan Berhasil</p>
-                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">{(berhasil?.count || 0).toLocaleString('id-ID')}</h3>
-                  <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">dari {rows.length} kunjungan</p>
-                </div>
-
-                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm shadow-purple-200">
-                      <TrendingUp className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="text-[9px] font-bold text-violet-700 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full">Rate</span>
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Conversion Rate</p>
-                  <h3 className={cn('text-3xl font-black tracking-tight',
-                    convRate >= 30 ? 'text-emerald-600' : convRate >= 15 ? 'text-amber-500' : 'text-slate-900')}>
-                    {convRate.toFixed(1)}%
-                  </h3>
-                  <div className="mt-3 pt-3 border-t border-slate-50">
-                    <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div className={cn('h-full rounded-full transition-all duration-1000',
-                        convRate >= 30 ? 'bg-emerald-400' : convRate >= 15 ? 'bg-amber-400' : 'bg-rose-400')}
-                        style={{ width: `${Math.min(convRate, 100)}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm shadow-amber-200">
-                      <Database className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">Revenue</span>
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Revenue</p>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                    <Amt value={overview.kpi.totalRevenue} short />
-                  </h3>
-                  <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-50">Dari transaksi berhasil</p>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* ── Section 1: Traffic Pipeline Funnel ───────────────────── */}
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
-              <div className="w-1 h-4 bg-blue-600 rounded-sm" />
-              <h2 className="text-sm font-black text-slate-900">Traffic Pipeline Analysis</h2>
-              <span className="ml-auto text-xs text-slate-400 font-medium">{MONTHS[month-1]} {year}</span>
-            </div>
-            <div className="p-5 grid grid-cols-2 md:grid-cols-5 gap-3">
-              {overview.funnel.map(f => {
-                const cfg = FUNNEL_CFG[f.key];
-                if (!cfg) return null;
-                const Icon = cfg.icon;
-                return (
-                  <div key={f.key} className={cn('bg-white border rounded-2xl p-4 hover:shadow-md transition-shadow', cfg.border)}>
-                    <div className={cn('p-2 rounded-xl bg-gradient-to-br w-fit mb-3', cfg.grad)}>
-                      <Icon className="w-3.5 h-3.5 text-white" />
-                    </div>
-                    <h3 className={cn('text-3xl font-black tracking-tight', cfg.text)}>{f.count}</h3>
-                    <p className="text-[10px] font-bold text-slate-500 mt-0.5 leading-tight">{f.label}</p>
-                    {f.revenue > 0 && (
-                      <p className="text-[9px] text-slate-400 mt-2 pt-2 border-t border-slate-50">
-                        <Amt value={f.revenue} short />
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* ── Section 2: Status Kedatangan ─────────────────────────── */}
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
-              <div className="w-1 h-4 bg-violet-600 rounded-sm" />
-              <h2 className="text-sm font-black text-slate-900">Status Kedatangan</h2>
-            </div>
-            <div className="p-5 space-y-4">
-              {/* 5 Status pills */}
-              <div className="flex flex-wrap gap-3">
-                {overview.statusBreakdown.map(s => {
-                  const cfg = STATUS_CFG[s.key];
-                  if (!cfg) return null;
-                  const Icon = cfg.icon;
-                  return (
-                    <div key={s.key} className={cn('flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border', cfg.bg)}>
-                      <div className={cn('p-1.5 rounded-lg bg-white shadow-sm')}>
-                        <Icon className={cn('w-3.5 h-3.5', cfg.color)} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-black text-slate-800">{s.count}</p>
-                        <p className="text-[9px] font-bold text-slate-400">{s.label}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Per-location breakdown */}
-              {overview.byLocation.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-                  {(overview.byLocation as LocationStat[]).map(loc => (
-                    <div key={loc.name} className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        <p className="text-xs font-black text-slate-700 truncate">{loc.name}</p>
-                        <span className="ml-auto text-xs font-black text-blue-600">{loc.total}</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {STATUS_MAP.map(s => {
-                          const cnt = loc[s.key as keyof LocationStat] as number || 0;
-                          if (!cnt) return null;
-                          const pct = loc.total > 0 ? (cnt / loc.total) * 100 : 0;
-                          return (
-                            <div key={s.key}>
-                              <div className="flex justify-between text-[9px] font-bold text-slate-500 mb-0.5">
-                                <span>{s.label}</span>
-                                <span>{cnt}</span>
-                              </div>
-                              <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-400 rounded-full transition-all duration-700"
-                                  style={{ width: `${pct}%` }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Section 3: Prospect Detail Table ─────────────────────── */}
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center gap-3">
-              <div className="flex items-center gap-2 flex-1">
-                <div className="w-1 h-4 bg-slate-700 rounded-sm" />
-                <h2 className="text-sm font-black text-slate-900">Prospect Detail Data</h2>
-                <span className="text-[10px] font-bold text-slate-400">
-                  {filtered.length}/{rows.length} records
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                  <input type="text" placeholder="Cari nama..." value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="pl-7 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50 outline-none focus:border-blue-300 focus:bg-white transition-colors w-40" />
-                </div>
-                {/* Location filter */}
-                <select aria-label="Filter lokasi" value={filterLoc} onChange={e => setFilterLoc(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50 outline-none cursor-pointer">
-                  <option value="">All Lokasi</option>
-                  {locations.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-                {/* Prospect level filter */}
-                <select aria-label="Filter prospek level" value={filterLevel} onChange={e => setFilterLevel(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50 outline-none cursor-pointer max-w-[160px]">
-                  <option value="">All Level</option>
-                  {prospekLevels.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-                {/* Status filter */}
-                <select aria-label="Filter status kedatangan" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50 outline-none cursor-pointer max-w-[160px]">
-                  <option value="">All Status</option>
-                  {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {(filterLoc || filterLevel || filterStatus || search) && (
-                  <button type="button"
-                    onClick={() => { setFilterLoc(''); setFilterLevel(''); setFilterStatus(''); setSearch(''); }}
-                    className="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors underline px-1">
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="overflow-auto max-h-[600px]">
-              <table className="w-full text-left text-xs whitespace-nowrap">
-                <thead className="sticky top-0 bg-slate-50 text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100 shadow-sm">
-                  <tr>
-                    <th className="py-3 px-4">#</th>
-                    <th className="py-3 px-4">Tanggal</th>
-                    <th className="py-3 px-4">Nama Lengkap</th>
-                    <th className="py-3 px-4">Lokasi Store</th>
-                    <th className="py-3 px-4">Served By</th>
-                    <th className="py-3 px-4">Status Kedatangan</th>
-                    <th className="py-3 px-4">Prospek Level</th>
-                    <th className="py-3 px-4 text-right">Net Sales</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {filtered.map((r, i) => (
-                    <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2.5 px-4 text-slate-300 font-bold">{i + 1}</td>
-                      <td className="py-2.5 px-4 text-slate-500 font-medium">{fmtDate(r.transaction_date)}</td>
-                      <td className="py-2.5 px-4 font-bold text-slate-800">{r.customer_name || '—'}</td>
-                      <td className="py-2.5 px-4 text-slate-600">{r.location || '—'}</td>
-                      <td className="py-2.5 px-4 text-slate-600">{r.served_by || '—'}</td>
-                      <td className="py-2.5 px-4 text-slate-600">{r.status || '—'}</td>
-                      <td className="py-2.5 px-4">
-                        <ProspekBadge level={r.prospect_item} />
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-mono font-black text-slate-800">
-                        {r.net_sales > 0 ? <Amt value={r.net_sales} short /> : <span className="text-slate-300">—</span>}
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-16 text-center text-slate-400 text-sm">
-                        {rows.length === 0
-                          ? 'Belum ada data untuk periode ini. Jalankan syncTrafficOnly() di GAS terlebih dahulu.'
-                          : 'Tidak ada data yang sesuai filter.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
+        <div className={styles.resultBar}><span>{filtered.length ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filtered.length)} of ${filtered.length.toLocaleString('en-US')} visits` : 'No matching visits'}</span><span>Newest first</span></div>
+        <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Scrollable visit records"><table><thead><tr><th>Date</th><th>Customer</th><th>Boutique</th><th>Served by</th><th>Arrival status</th><th>Prospect stage</th><th className="text-right">Net sales</th></tr></thead><tbody>
+          {visible.map(row => <tr key={row.id}><td>{formatDate(row.transaction_date)}</td><td className={styles.customer}>{row.customer_name || 'Unnamed customer'}</td><td>{row.location || '—'}</td><td>{row.served_by || '—'}</td><td><span className={styles.arrival}>{row.status || row.akses_masuk || '—'}</span></td><td><span className={cn(styles.stage, prospectTone(row.prospect_item))}>{row.prospect_item || 'Unclassified'}</span></td><td className="text-right font-semibold tabular-nums">{row.net_sales ? <Amt value={row.net_sales} short /> : '—'}</td></tr>)}
+          {!visible.length && <tr><td colSpan={7} className={styles.empty}>{rows.length ? 'No visits match the current filters.' : 'No visit records for this period.'}</td></tr>}
+        </tbody></table></div>
+        {pages > 1 && <div className={styles.pagination}><span>Page {currentPage} of {pages}</span><div><button type="button" aria-label="Previous page" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={16} />Previous</button><button type="button" aria-label="Next page" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>Next<ChevronRight size={16} /></button></div></div>}
+      </section>
+    </>}
+  </div>;
 }

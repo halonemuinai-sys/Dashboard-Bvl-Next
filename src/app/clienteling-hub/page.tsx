@@ -5,17 +5,17 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Heart, RefreshCw, Calendar as CalendarIcon, Users, Repeat2, Gem, BellRing, ArrowUpRight } from 'lucide-react';
+import { Heart, RefreshCw, Calendar as CalendarIcon, Users, Repeat2, Gem, BellRing, ArrowUpRight, ShoppingBag, Moon, ArrowRight, Clock3, MapPin, type LucideIcon } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import styles from './clienteling.module.css';
 import { cn } from '@/lib/utils';
 import Amt from '@/components/Amt';
 import BvlgariLoader from '@/components/BvlgariLoader';
 import { dashboardService } from '@/services/dashboardService';
+import type { JourneyStage } from '@/lib/clienteling';
 
 type CData = Awaited<ReturnType<typeof dashboardService.getClientelingData>>;
 
-const MEDALS = ['🥇', '🥈', '🥉'];
 
 const TIER_CFG: Record<string, { icon: string; color: string; bg: string; text: string; border: string }> = {
   'Top':           { icon: '👑', color: '#92400e', bg: 'bg-amber-900',    text: 'text-amber-300',   border: 'border-amber-700' },
@@ -26,6 +26,14 @@ const TIER_CFG: Record<string, { icon: string; color: string; bg: string; text: 
   'Inactive':      { icon: '💤', color: '#e11d48', bg: 'bg-rose-100',     text: 'text-rose-700',    border: 'border-rose-200' },
 };
 const TIER_ORDER = ['Top', 'Elite', 'High Potential', 'Potential', 'Prospect', 'Inactive'];
+
+const JOURNEY_META: Record<JourneyStage, { title: string; signal: string; next: string; icon: LucideIcon; tone: string }> = {
+  early: { title: 'Early relationship', signal: '0–1 known invoices', next: 'Confirm client details and plan a personal follow-up.', icon: ShoppingBag, tone: 'blue' },
+  returning: { title: 'Returning', signal: '2+ invoices, below 200M', next: 'Build on purchase preferences and invite another visit.', icon: Repeat2, tone: 'violet' },
+  highValue: { title: 'High value', signal: '200M+ spend · purchased within 180 days', next: 'Offer tailored service and recognize the relationship.', icon: Gem, tone: 'gold' },
+  reconnect: { title: 'Reconnect', signal: '50M+ spend · 180–730 days away', next: 'Prioritize a thoughtful, relevant reconnection.', icon: BellRing, tone: 'rose' },
+  dormant: { title: 'Dormant', signal: 'More than 730 days away', next: 'Review consent and preferences before outreach.', icon: Moon, tone: 'slate' },
+};
 
 const fmtPct = (n: number) => n.toFixed(1) + '%';
 
@@ -50,6 +58,7 @@ export default function ClientelingHubPage() {
 
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [journeyStage, setJourneyStage] = useState<JourneyStage>('reconnect');
   const reducedMotion = useReducedMotion();
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +87,8 @@ export default function ClientelingHubPage() {
   const rfmRecency = Object.entries(recencyBuckets).map(([label, count]) => ({ label, count }));
   const rfmFreq    = Object.entries(freqBuckets).map(([label, count])    => ({ label, count }));
   const maxRfm     = Math.max(...rfmRecency.map(r => r.count), ...rfmFreq.map(f => f.count), 1);
+  const selectedJourney = data.journey.find(item => item.stage === journeyStage) ?? data.journey[0];
+  const journeyTotal = data.journey.reduce((sum, item) => sum + item.count, 0);
 
   return (
     <div className={styles.page}>
@@ -129,7 +140,34 @@ export default function ClientelingHubPage() {
         </div>
       </div>
 
-      {/* ── Row 2: Tier Pyramid + Monthly Retention ─────────────────── */}
+      <section className={styles.journey} aria-labelledby="journey-title">
+        <div className={styles.journeyHeader}>
+          <div><span className={styles.sectionEyebrow}>THE RELATIONSHIP JOURNEY</span><h2 id="journey-title">Relationship stages at a glance</h2><p>One stage per client as of {data.asOf}, based on purchase frequency, lifetime value and time since the last purchase. This is a snapshot, not a conversion funnel.</p></div>
+          <span className={styles.journeyTotal}>{journeyTotal.toLocaleString('en-US')} known clients</span>
+        </div>
+        <div className={styles.journeySteps} role="group" aria-label="Select a client journey stage">
+          {data.journey.map((item, index) => {
+            const meta = JOURNEY_META[item.stage];
+            const Icon = meta.icon;
+            return <button key={item.stage} type="button" onClick={() => setJourneyStage(item.stage)} aria-pressed={journeyStage === item.stage} className={cn(styles.journeyStep, styles[`journey${meta.tone}`], journeyStage === item.stage && styles.journeySelected)}>
+              <span className={styles.stepTop}><span className={styles.stepIcon}><Icon size={19} /></span><span className={styles.stepNumber}>{String(index + 1).padStart(2, '0')}</span></span>
+              <strong>{meta.title}</strong><span className={styles.stepCount}>{item.count.toLocaleString('en-US')} <small>clients</small></span><span className={styles.stepSignal}>{meta.signal}</span>
+              {index < data.journey.length - 1 && <ArrowRight className={styles.stepArrow} size={16} aria-hidden="true" />}
+            </button>;
+          })}
+        </div>
+        <div className={styles.journeyDetail}>
+          <div className={styles.detailIntro}><div><span className={styles.sectionEyebrow}>SELECTED STAGE</span><h3>{JOURNEY_META[selectedJourney.stage].title}</h3><p>{JOURNEY_META[selectedJourney.stage].signal}. {JOURNEY_META[selectedJourney.stage].next}</p></div><span>{selectedJourney.count.toLocaleString('en-US')} clients</span></div>
+          {selectedJourney.clients.length > 0 ? <><div className={styles.focusList}>
+            {selectedJourney.clients.map(client => <div className={styles.focusClient} key={client.id}>
+              <div className={styles.focusIdentity}><span className={styles.initials}>{client.name.trim().slice(0, 1).toUpperCase()}</span><div><strong title={client.name}>{client.name}</strong><small><MapPin size={11} />{client.location}</small></div></div>
+              <div className={styles.focusStats}><span><Clock3 size={12} />{client.daysSince} days since purchase</span><span>{client.invoices} known invoices</span><b><Amt value={client.spend} short /></b></div>
+            </div>)}
+          </div><p className={styles.sampleNote}>Showing up to 12 clients with the highest lifetime spend in this stage.</p></> : <p className={styles.journeyEmpty}>No clients in this stage for the selected snapshot.</p>}
+        </div>
+      </section>
+
+      {/* Tier Pyramid + Monthly Retention */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Tier Pyramid */}
@@ -148,7 +186,7 @@ export default function ClientelingHubPage() {
                 <div key={tier}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">{cfg.icon}</span>
+                      <span className={styles.tierDot} style={{ backgroundColor: cfg.color }} />
                       <span className="text-xs font-bold text-slate-700">{tier}</span>
                       <span className="text-[9px] text-slate-400">({fmtPct(pct)})</span>
                     </div>
@@ -222,9 +260,7 @@ export default function ClientelingHubPage() {
                 {topClients.map((c, i) => (
                   <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                     <td className="py-2.5 px-4 text-center">
-                      {i < 3
-                        ? <span className="text-sm">{MEDALS[i]}</span>
-                        : <span className="text-slate-300 font-bold">{i + 1}</span>}
+                      <span className={cn(styles.rankBadge, i < 3 && styles[`rank${i + 1}`])}>{i + 1}</span>
                     </td>
                     <td className="py-2.5 px-4">
                       <p className="font-bold text-slate-800 max-w-[140px] truncate">{c.name}</p>
@@ -394,7 +430,7 @@ export default function ClientelingHubPage() {
           </div>
         </div>
       </div>
-      <details className={styles.method}><summary>How these insights are calculated</summary><p>Client identity uses customer code when available; records without a code are grouped by exact name. Inconsistent or missing codes may split a client profile. Lifetime spend includes available sales history through {data.asOf}. Anonymous clients and invalid rows are excluded ({data.excludedRows} rows).</p><p>Active means a purchase within 730 days. Repeat client rate is the share of active clients with at least two distinct invoice numbers. Missing invoice numbers appear as Unknown frequency. This is not cohort retention.</p><p>Top: 1.35B+; Elite: 200M+; High Potential: 50M+; Potential: positive spend below 50M; Prospect: zero or negative net spend. Inactive overrides spend tiers after 730 days.</p><p>Annual spend movement compares purchases through {data.asOf} with the same period through {data.priorCutoff}, for clients with positive spend in both periods. Boutique totals represent the lifetime value of assigned clients, not sales recorded at that store.</p></details>
+      <details className={styles.method}><summary>How these insights are calculated</summary><p>Client identity uses customer code when available; records without a code are grouped by exact name. Inconsistent or missing codes may split a client profile. Lifetime spend includes available sales history through {data.asOf}. Anonymous clients and invalid rows are excluded ({data.excludedRows} rows).</p><p>Active means a purchase within 730 days. Repeat client rate is the share of active clients with at least two distinct invoice numbers. Missing invoice numbers appear as Unknown frequency. This is not cohort retention.</p><p>Journey stages are mutually exclusive. Dormant (over 730 days) takes priority, followed by Reconnect (50M+ lifetime spend and 180–730 days since purchase), High value (200M+ lifetime spend), Returning (at least two known invoices), then Early relationship. Missing invoice numbers count as zero known invoices. The journey is a current-status snapshot, not a conversion funnel.</p><p>Top: 1.35B+; Elite: 200M+; High Potential: 50M+; Potential: positive spend below 50M; Prospect: zero or negative net spend. Inactive overrides spend tiers after 730 days.</p><p>Annual spend movement compares purchases through {data.asOf} with the same period through {data.priorCutoff}, for clients with positive spend in both periods. Boutique totals represent the lifetime value of assigned clients, not sales recorded at that store.</p></details>
       <footer className={styles.footer}><span>BVLGARI &bull; Client intelligence</span><span>Aris Setiyono</span></footer>
     </div>
   );
