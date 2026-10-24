@@ -26,8 +26,9 @@ ENV NODE_OPTIONS="--max-old-space-size=$BUILD_HEAP_MB"
 # Type checking runs before deploy on the developer machine, not inside this build.
 ENV SKIP_BUILD_TYPECHECK=1
 
-# Build the project
-RUN npm run build
+# Build the project. The Turbopack cache stays on the server between deploys, so a small
+# change only recompiles the affected modules (it is not part of the image).
+RUN --mount=type=cache,id=vizione-next-cache,target=/app/.next/cache npm run build
 
 # Stage 2: Production Running Stage
 FROM node:24-alpine AS runner
