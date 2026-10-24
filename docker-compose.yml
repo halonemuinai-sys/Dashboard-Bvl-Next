@@ -2,6 +2,8 @@ version: '3.8'
 
 services:
   dashboard:
+    # Usually built on the developer machine and loaded here by deploy_remote.py.
+    image: dashboard-bvl-dashboard:latest
     build:
       context: .
       dockerfile: Dockerfile
