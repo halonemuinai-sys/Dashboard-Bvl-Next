@@ -18,8 +18,13 @@ ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_CPU_COUNT=2
-ENV NODE_OPTIONS="--max-old-space-size=1536"
+# Build resources follow the server (set by deploy_remote.py); defaults suit a 2.4 GB VM.
+ARG BUILD_CPUS=2
+ARG BUILD_HEAP_MB=1536
+ENV NEXT_CPU_COUNT=$BUILD_CPUS
+ENV NODE_OPTIONS="--max-old-space-size=$BUILD_HEAP_MB"
+# Type checking runs before deploy on the developer machine, not inside this build.
+ENV SKIP_BUILD_TYPECHECK=1
 
 # Build the project
 RUN npm run build

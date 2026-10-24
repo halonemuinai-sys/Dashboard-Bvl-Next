@@ -8,6 +8,8 @@ services:
       args:
         - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
         - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        - BUILD_CPUS=${BUILD_CPUS:-2}
+        - BUILD_HEAP_MB=${BUILD_HEAP_MB:-1536}
     container_name: bvl-intelligence-dashboard
     restart: unless-stopped
     ports:
