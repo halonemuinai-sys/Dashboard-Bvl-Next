@@ -1,0 +1,49 @@
+# Vizione database on the Proxmox VM: Postgres + PostgREST (the API that supabase-js talks to).
+# Runs as its own compose project in ~/vizione-db, separate from app deploys.
+# Secrets come from .env next to this file (never committed).
+services:
+  db:
+    image: postgres:17.10-alpine
+    container_name: vizione-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vizione
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      VIZIONE_OWNER_PASSWORD: ${VIZIONE_OWNER_PASSWORD}
+      AUTHENTICATOR_PASSWORD: ${AUTHENTICATOR_PASSWORD}
+    # Sized for a small VM (2.4 GB RAM shared with the dashboard).
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "effective_cache_size=512MB",
+              "-c", "work_mem=8MB", "-c", "maintenance_work_mem=64MB", "-c", "max_connections=40"]
+    volumes:
+      - ./data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"   # server-local only (backups / admin over SSH)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vizione"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [vizione]
+
+  rest:
+    image: postgrest/postgrest:v13.0.8
+    container_name: vizione-rest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/vizione
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${PGRST_JWT_SECRET}
+      PGRST_DB_MAX_ROWS: "1000"   # same page cap as Supabase; the app pages in 1000-row chunks
+      PGRST_DB_POOL: "10"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3002:3000"   # not public yet; exposed later through the dashboard domain
+    networks: [vizione]
+
+networks:
+  vizione:
+    name: vizione-net
