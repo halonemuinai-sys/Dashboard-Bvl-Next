@@ -1,7 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { generatePasswordResetToken } from '@/utils/auth';
 import { emailService } from '@/services/emailService';
 
@@ -24,7 +24,7 @@ export async function requestPasswordReset(_prevState: unknown, formData: FormDa
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     const { data: dbUser, error } = await supabase
       .from('dashboard_users')
