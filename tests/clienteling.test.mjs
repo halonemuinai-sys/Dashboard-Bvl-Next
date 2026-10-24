@@ -45,7 +45,7 @@ test('service paginates history and propagates later-page failures', async () =>
   const pager = load('src/lib/fetch-all-rows.ts');
   let calls = 0, fail = false;
   const db = { from() { return { select() { return this; }, lt() { return this; }, order() { return this; }, async range(from) { calls++; return fail && from > 0 ? { data: null, error: { message: 'Page failed' } } : { data: from === 0 ? Array.from({ length: 500 }, (_, i) => ({ ...row('2024-01-01', String(i)), customer: `C${i}` })) : from === 500 ? [row('2024-12-31', 'last')] : [], error: null }; } }; } };
-  const service = load('src/services/dashboard/crmDashService.ts', { '@/lib/supabase': { supabase: db }, '@/lib/clienteling': lib, '@/lib/fetch-all-rows': pager });
+  const service = load('src/services/dashboard/crmDashService.ts', { '@/lib/supabase': { supabase: db }, '@/lib/clienteling': lib, '@/lib/fetch-all-rows': pager, '@/lib/crm-profiling-query': load('src/lib/crm-profiling-query.ts') });
   assert.equal((await service.getClientelingData(2024)).kpi.totalActive, 501); assert.equal(calls, 2);
   fail = true; await assert.rejects(service.getClientelingData(2024), /Page failed/);
 });
