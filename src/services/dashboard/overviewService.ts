@@ -17,8 +17,11 @@ export interface OverviewSale {
   val_disc: number; cost: number; qty: number; main_category: string;
   trans_no: string; customer: string; salesman: string; comm: number;
 }
+/** Net sales per Jakarta calendar month, Head Office excluded (view clean_master_monthly_net). */
+export interface MonthlyNetTotal { year: number; month: number; net_sales: number }
 export interface OverviewSources {
   sales: OverviewSale[];
+  monthlyTotals?: MonthlyNetTotal[];
   targets: { year: number; month_number: number; target_value: number; store_name: string }[];
   advisors: AdvisorHome[];
   rotations: AdvisorRotation[];
@@ -31,41 +34,52 @@ export async function getMonthlyOverview(month: string, year: number, cache?: Re
   const fromYear = Math.min(2023, year - 1);
   const toYear = Math.max(currentYear, year);
   const read = <T>(key: string, loader: () => Promise<T>) => cache ? cache.read(`${businessDate(now)}:${key}`, loader) : loader();
-  // Only the selected and previous year need invoice-level details. Other years
-  // feed the annual chart, so transfer just date, store and net sales.
+  // Only the selected and previous year need invoice-level details. Other years feed
+  // only the annual chart, so they come as monthly totals computed by the database.
   const years = Array.from({ length: toYear - fromYear + 1 }, (_, i) => fromYear + i);
-  const salesByYear: OverviewSale[][] = new Array(years.length);
-  let nextYear = 0;
-  async function loadSales() {
-    let failed = false;
-    await Promise.all(Array.from({ length: Math.min(3, years.length) }, async () => {
-      while (!failed && nextYear < years.length) {
-        const index = nextYear++;
-        const salesYear = years[index];
-        const detailed = salesYear === year || salesYear === year - 1;
+  const detailedYears = years.filter(y => y === year || y === year - 1);
+  const chartYears = years.filter(y => !detailedYears.includes(y));
+  async function loadRows(list: number[], workers: number, detailed: boolean) {
+    const byYear: OverviewSale[][] = new Array(list.length);
+    let next = 0, failed = false;
+    await Promise.all(Array.from({ length: Math.min(workers, list.length) }, async () => {
+      while (!failed && next < list.length) {
+        const index = next++;
+        const salesYear = list[index];
         try {
-          salesByYear[index] = await read(`sales:${salesYear}:${detailed}`, async () => {
+          byYear[index] = await read(`sales:${salesYear}:${detailed}`, async () => {
             const rows = await fetchAllRows((from, to) => supabase.from('clean_master')
               .select(detailed ? 'transaction_date,location,net_sales,gross_sales,val_disc,cost,qty,main_category,trans_no,customer,salesman,comm' : 'transaction_date,location,net_sales')
               .gte('transaction_date', salesYear + '-01-01T00:00:00+07:00')
               .lt('transaction_date', (salesYear + 1) + '-01-01T00:00:00+07:00').order('id').range(from, to));
-            // Non-detail years are consumed only by multiYearStats below.
             return rows as unknown as OverviewSale[];
           });
         } catch (error) { failed = true; throw error; }
       }
     }));
-    return salesByYear.flat();
+    return byYear.flat();
   }
-  const [sales, targets, advisors, rotations] = await Promise.all([
-    loadSales(),
+  async function loadChartYears(): Promise<{ rows: OverviewSale[]; totals: MonthlyNetTotal[] }> {
+    if (!chartYears.length) return { rows: [], totals: [] };
+    try {
+      const totals = await read(`monthly-net:${chartYears.join(',')}`, () => fetchAllRows<MonthlyNetTotal>((from, to) => supabase
+        .from('clean_master_monthly_net').select('year,month,net_sales').in('year', chartYears).order('year').order('month').range(from, to)));
+      return { rows: [], totals };
+    } catch {
+      // A database without the view (e.g. the old Supabase project): fall back to raw rows for these years.
+      return { rows: await loadRows(chartYears, 1, false), totals: [] };
+    }
+  }
+  const [detailedRows, chart, targets, advisors, rotations] = await Promise.all([
+    loadRows(detailedYears, 2, true),
+    loadChartYears(),
     read(`targets:${fromYear}:${toYear}`, () => fetchAllRows((from, to) => supabase.from('targets').select('year,month_number,target_value,store_name')
       .gte('year', fromYear).lte('year', toYear).order('year').order('month_number').order('store_name').range(from, to))),
     read('advisors', () => fetchAllRows((from, to) => supabase.from('advisors').select('name,home_location').order('name').range(from, to))),
     read(`rotations:${year}:${monthIndex}`, () => fetchAllRows((from, to) => supabase.from('advisor_rotations').select('advisor_name,assigned_location')
       .eq('year', year).eq('month_number', monthIndex + 1).order('advisor_name').range(from, to))),
   ]);
-  return aggregateMonthlyOverview(month, year, { sales, targets, advisors, rotations }, now);
+  return aggregateMonthlyOverview(month, year, { sales: [...detailedRows, ...chart.rows], monthlyTotals: chart.totals, targets, advisors, rotations }, now);
 }
 
 export function aggregateMonthlyOverview(month: string, year: number, sources: OverviewSources, now = new Date()): MonthlyOverviewData {
@@ -94,6 +108,10 @@ export function aggregateMonthlyOverview(month: string, year: number, sources: O
     if (isHeadOffice(row.location)) return;
     const date = new Date(row.transaction_date.slice(0, 10) + 'T00:00:00Z');
     if (multiYearStats[date.getUTCFullYear()]) multiYearStats[date.getUTCFullYear()][date.getUTCMonth()] += row.net_sales || 0;
+  });
+  // Chart-only years arrive pre-aggregated (Head Office and future days already excluded).
+  sources.monthlyTotals?.forEach(total => {
+    if (multiYearStats[total.year] && total.month >= 1 && total.month <= 12) multiYearStats[total.year][total.month - 1] += Number(total.net_sales) || 0;
   });
   allTargetRows.forEach(target => {
     if (multiYearTargets[target.year] && target.month_number >= 1 && target.month_number <= 12

@@ -140,6 +140,7 @@ function database(tables, failTable) {
       lte(key, value) { filters.push(row => cmp(row[key], value) <= 0); return q; },
       lt(key, value) { filters.push(row => cmp(row[key], value) < 0); return q; },
       eq(key, value) { filters.push(row => row[key] === value); return q; },
+      in(key, values) { filters.push(row => values.includes(row[key])); return q; },
       range(from, to) { start = from; end = to; return q; },
       then(resolve, reject) {
         calls.push({ table, start, end, columns, fromDate });
@@ -233,14 +234,27 @@ test('changing month reuses sales history and targets; refresh forces all source
   assert.ok(db.calls.slice(second).some(call => call.table === 'clean_master'));
 });
 
-test('historical chart years use three columns while comparison years retain full detail', async () => {
-  const db = database({ clean_master: [sale({ transaction_date: '2023-10-01', net_sales: 250 }), sale({ transaction_date: '2025-10-01', net_sales: 500 }), sale({ transaction_date: '2026-10-01', net_sales: 1000 })] });
+test('chart-only years come as database monthly totals while comparison years keep full detail', async () => {
+  const db = database({
+    clean_master: [sale({ transaction_date: '2023-10-01', net_sales: 250 }), sale({ transaction_date: '2025-10-01', net_sales: 500 }), sale({ transaction_date: '2026-10-01', net_sales: 1000 })],
+    clean_master_monthly_net: [{ year: 2023, month: 10, net_sales: 250 }, { year: 2024, month: 3, net_sales: 75 }],
+  });
   const data = await service(db).getMonthlyOverview('October', 2026);
-  assert.equal(db.calls.find(c => c.fromDate.startsWith('2023-')).columns, 'transaction_date,location,net_sales');
+  assert.ok(!db.calls.some(c => c.table === 'clean_master' && /^202[34]-/.test(c.fromDate)), 'no raw rows for chart-only years');
   assert.ok(db.calls.find(c => c.fromDate.startsWith('2025-')).columns.includes('trans_no'));
   assert.ok(db.calls.find(c => c.fromDate.startsWith('2026-')).columns.includes('cost'));
   assert.equal(data.multiYearStats[2023][9], 250);
+  assert.equal(data.multiYearStats[2024][2], 75);
+  assert.equal(data.multiYearStats[2025][9], 500);
   assert.equal(data.kpi.mtdSalesPrevYear, 500);
+});
+
+test('without the monthly view, chart-only years fall back to three-column raw rows', async () => {
+  const db = database({ clean_master: [sale({ transaction_date: '2023-10-01', net_sales: 250 }), sale({ transaction_date: '2023-10-02', location: 'Head Office', net_sales: 999 }), sale({ transaction_date: '2026-10-01', net_sales: 1000 })] }, 'clean_master_monthly_net');
+  const data = await service(db).getMonthlyOverview('October', 2026);
+  assert.equal(db.calls.find(c => c.table === 'clean_master' && c.fromDate.startsWith('2023-')).columns, 'transaction_date,location,net_sales');
+  assert.equal(data.multiYearStats[2023][9], 250);
+  assert.equal(data.kpi.totalNet, 1000);
 });
 
 test('cache deduplicates in-flight loads, expires and retries errors', async () => {
@@ -265,12 +279,12 @@ test('clearing during an in-flight load cannot repopulate the refreshed cache', 
   assert.equal(await cache.read('key', async () => 'wrong'), 'fresh');
 });
 
-test('cold sales loading overlaps requests but never exceeds three year workers', async () => {
+test('cold sales loading overlaps requests but never exceeds three concurrent sales requests', async () => {
   const db = database({}); const originalFrom = db.from;
   let active = 0, peak = 0;
   db.from = table => {
     const query = originalFrom(table);
-    if (table !== 'clean_master') return query;
+    if (table !== 'clean_master' && table !== 'clean_master_monthly_net') return query;
     const then = query.then;
     query.then = (resolve, reject) => {
       active++; peak = Math.max(peak, active);
